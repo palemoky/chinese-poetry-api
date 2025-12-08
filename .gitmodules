@@ -1,0 +1,3 @@
+[submodule "poetry-data"]
+	path = poetry-data
+	url = https://github.com/chinese-poetry/chinese-poetry.git
