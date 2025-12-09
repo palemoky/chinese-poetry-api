@@ -1,0 +1,26 @@
+server:
+  port: 8080
+  mode: release  # debug, release, test
+
+database:
+  type: simplified  # simplified or traditional
+  path: poetry-simplified.db
+  
+rate_limit:
+  enabled: true
+  requests_per_second: 10
+  burst: 20
+
+graphql:
+  playground: false  # Enable GraphQL Playground (set to true for development)
+  introspection: true
+  complexity_limit: 1000
+  requests_per_second: 10
+  burst: 20
+  by_ip: true
+
+search:
+  max_results: 1000
+  default_page_size: 20
+  enable_pinyin: true
+  enable_fuzzy: true
