@@ -1,0 +1,42 @@
+# GraphQL schema location
+schema:
+  - internal/graph/schema.graphqls
+
+# Where should the generated server code go?
+exec:
+  filename: internal/graph/generated/generated.go
+  package: generated
+
+# Where should any generated models go?
+model:
+  filename: internal/graph/model/models_gen.go
+  package: model
+
+# Where should the resolver implementations go?
+resolver:
+  layout: follow-schema
+  dir: internal/graph
+  package: graph
+  filename_template: "{name}.resolvers.go"
+
+# Optional: turn on to not generate the gqlgen entrypoint in server.go
+# skip_mod_tidy: true
+
+# gqlgen will search for any type names in the schema in these go packages
+# if they match it will use them, otherwise it will generate them.
+autobind:
+  - "github.com/palemoky/chinese-poetry-api/internal/database"
+
+# This section declares type mapping between the GraphQL and go type systems
+models:
+  ID:
+    model:
+      - github.com/99designs/gqlgen/graphql.ID
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32
+  Int:
+    model:
+      - github.com/99designs/gqlgen/graphql.Int
+      - github.com/99designs/gqlgen/graphql.Int64
+      - github.com/99designs/gqlgen/graphql.Int32

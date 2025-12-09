@@ -1,0 +1,143 @@
+# GraphQL Schema for Chinese Poetry API
+
+type Query {
+  "Get a single poem by ID"
+  poem(id: ID!): Poem
+  
+  "Get a list of poems with pagination and filters"
+  poems(
+    page: Int = 1
+    pageSize: Int = 20
+    dynastyId: ID
+    authorId: ID
+    typeId: ID
+  ): PoemConnection!
+  
+  "Search poems by query"
+  searchPoems(
+    query: String!
+    searchType: SearchType = ALL
+    page: Int = 1
+    pageSize: Int = 20
+  ): PoemConnection!
+  
+  "Get a random poem"
+  randomPoem(dynastyId: ID, typeId: ID): Poem
+  
+  "Get an author by ID"
+  author(id: ID!): Author
+  
+  "Get a list of authors"
+  authors(
+    page: Int = 1
+    pageSize: Int = 20
+    dynastyId: ID
+  ): AuthorConnection!
+  
+  "Get all dynasties"
+  dynasties: [Dynasty!]!
+  
+  "Get all poetry types"
+  poemTypes: [PoetryType!]!
+  
+  "Get overall statistics"
+  statistics: Statistics!
+}
+
+enum SearchType {
+  ALL
+  TITLE
+  CONTENT
+  AUTHOR
+  PINYIN
+}
+
+type Poem {
+  id: ID!
+  title: String!
+  titlePinyin: String
+  paragraphs: [String!]!
+  author: Author
+  dynasty: Dynasty
+  type: PoetryType
+  rhythmic: String
+  rhythmicPinyin: String
+  createdAt: String!
+}
+
+type Author {
+  id: ID!
+  name: String!
+  namePinyin: String
+  dynasty: Dynasty
+  description: String
+  poems(page: Int = 1, pageSize: Int = 20): PoemConnection!
+  poemCount: Int!
+}
+
+type Dynasty {
+  id: ID!
+  name: String!
+  nameEn: String
+  startYear: Int
+  endYear: Int
+  poemCount: Int!
+  authorCount: Int!
+}
+
+type PoetryType {
+  id: ID!
+  name: String!
+  category: String!
+  lines: Int
+  charsPerLine: Int
+  description: String
+  poemCount: Int!
+}
+
+type PoemConnection {
+  edges: [PoemEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type PoemEdge {
+  node: Poem!
+  cursor: String!
+}
+
+type AuthorConnection {
+  edges: [AuthorEdge!]!
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type AuthorEdge {
+  node: Author!
+  cursor: String!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Statistics {
+  totalPoems: Int!
+  totalAuthors: Int!
+  totalDynasties: Int!
+  poemsByDynasty: [DynastyStats!]!
+  poemsByType: [TypeStats!]!
+}
+
+type DynastyStats {
+  dynasty: Dynasty!
+  count: Int!
+}
+
+type TypeStats {
+  type: PoetryType!
+  count: Int!
+}
