@@ -31,11 +31,57 @@ func (r *authorResolver) Dynasty(ctx context.Context, obj *database.Author) (*da
 
 // Poems is the resolver for the poems field.
 func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *int, pageSize *int) (*database.PoemConnection, error) {
-	// TODO: Implement pagination for author's poems
+	// Default pagination values
+	p := 1
+	if page != nil && *page > 0 {
+		p = *page
+	}
+	ps := 20
+	if pageSize != nil && *pageSize > 0 {
+		ps = *pageSize
+		if ps > 100 {
+			ps = 100 // Limit max page size
+		}
+	}
+
+	offset := (p - 1) * ps
+
+	// Get author's poems with total count
+	poems, totalCount, err := r.Repo.ListAuthorPoems(obj.ID, ps, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build edges
+	edges := make([]database.PoemEdge, len(poems))
+	for i, poem := range poems {
+		edges[i] = database.PoemEdge{
+			Node:   poem,
+			Cursor: strconv.Itoa(offset + i),
+		}
+	}
+
+	// Build page info
+	hasNextPage := offset+len(poems) < totalCount
+	hasPreviousPage := p > 1
+
+	var startCursor, endCursor *string
+	if len(edges) > 0 {
+		start := edges[0].Cursor
+		end := edges[len(edges)-1].Cursor
+		startCursor = &start
+		endCursor = &end
+	}
+
 	return &database.PoemConnection{
-		Edges:      []database.PoemEdge{},
-		PageInfo:   database.PageInfo{HasNextPage: false, HasPreviousPage: false},
-		TotalCount: 0,
+		Edges: edges,
+		PageInfo: database.PageInfo{
+			HasNextPage:     hasNextPage,
+			HasPreviousPage: hasPreviousPage,
+			StartCursor:     startCursor,
+			EndCursor:       endCursor,
+		},
+		TotalCount: totalCount,
 	}, nil
 }
 
@@ -159,11 +205,81 @@ func (r *queryResolver) Poem(ctx context.Context, id string) (*database.Poem, er
 
 // Poems is the resolver for the poems field.
 func (r *queryResolver) Poems(ctx context.Context, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
-	// TODO: Implement filtering and pagination
+	// Default pagination values
+	p := 1
+	if page != nil && *page > 0 {
+		p = *page
+	}
+	ps := 20
+	if pageSize != nil && *pageSize > 0 {
+		ps = *pageSize
+		if ps > 100 {
+			ps = 100 // Limit max page size
+		}
+	}
+
+	offset := (p - 1) * ps
+
+	// Parse filter IDs
+	var dynastyIDInt, authorIDInt, typeIDInt *int64
+	if dynastyID != nil && *dynastyID != "" {
+		id, err := strconv.ParseInt(*dynastyID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		dynastyIDInt = &id
+	}
+	if authorID != nil && *authorID != "" {
+		id, err := strconv.ParseInt(*authorID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		authorIDInt = &id
+	}
+	if typeID != nil && *typeID != "" {
+		id, err := strconv.ParseInt(*typeID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		typeIDInt = &id
+	}
+
+	// Get filtered poems with total count
+	poems, totalCount, err := r.Repo.ListPoemsWithFilter(ps, offset, dynastyIDInt, authorIDInt, typeIDInt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build edges
+	edges := make([]database.PoemEdge, len(poems))
+	for i, poem := range poems {
+		edges[i] = database.PoemEdge{
+			Node:   poem,
+			Cursor: strconv.Itoa(offset + i),
+		}
+	}
+
+	// Build page info
+	hasNextPage := offset+len(poems) < totalCount
+	hasPreviousPage := p > 1
+
+	var startCursor, endCursor *string
+	if len(edges) > 0 {
+		start := edges[0].Cursor
+		end := edges[len(edges)-1].Cursor
+		startCursor = &start
+		endCursor = &end
+	}
+
 	return &database.PoemConnection{
-		Edges:      []database.PoemEdge{},
-		PageInfo:   database.PageInfo{HasNextPage: false, HasPreviousPage: false},
-		TotalCount: 0,
+		Edges: edges,
+		PageInfo: database.PageInfo{
+			HasNextPage:     hasNextPage,
+			HasPreviousPage: hasPreviousPage,
+			StartCursor:     startCursor,
+			EndCursor:       endCursor,
+		},
+		TotalCount: totalCount,
 	}, nil
 }
 
@@ -249,11 +365,67 @@ func (r *queryResolver) Author(ctx context.Context, id string) (*database.Author
 
 // Authors is the resolver for the authors field.
 func (r *queryResolver) Authors(ctx context.Context, page *int, pageSize *int, dynastyID *string) (*database.AuthorConnection, error) {
-	// TODO: Implement pagination
+	// Default pagination values
+	p := 1
+	if page != nil && *page > 0 {
+		p = *page
+	}
+	ps := 20
+	if pageSize != nil && *pageSize > 0 {
+		ps = *pageSize
+		if ps > 100 {
+			ps = 100 // Limit max page size
+		}
+	}
+
+	offset := (p - 1) * ps
+
+	// Parse dynasty filter
+	var dynastyIDInt *int64
+	if dynastyID != nil && *dynastyID != "" {
+		id, err := strconv.ParseInt(*dynastyID, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		dynastyIDInt = &id
+	}
+
+	// Get filtered authors with total count
+	authors, totalCount, err := r.Repo.ListAuthorsWithFilter(ps, offset, dynastyIDInt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Build edges
+	edges := make([]database.AuthorEdge, len(authors))
+	for i, author := range authors {
+		edges[i] = database.AuthorEdge{
+			Node:   author,
+			Cursor: strconv.Itoa(offset + i),
+		}
+	}
+
+	// Build page info
+	hasNextPage := offset+len(authors) < totalCount
+	hasPreviousPage := p > 1
+
+	var startCursor, endCursor *string
+	if len(edges) > 0 {
+		start := edges[0].Cursor
+		end := edges[len(edges)-1].Cursor
+		startCursor = &start
+		endCursor = &end
+	}
+
 	return &database.AuthorConnection{
-		Edges:      []database.AuthorEdge{},
-		PageInfo:   database.PageInfo{HasNextPage: false, HasPreviousPage: false},
-		TotalCount: 0,
+		Edges: edges,
+		PageInfo: database.PageInfo{
+			HasNextPage:     hasNextPage,
+			HasPreviousPage: hasPreviousPage,
+			StartCursor:     startCursor,
+			EndCursor:       endCursor,
+		},
+		TotalCount: totalCount,
 	}, nil
 }
 
