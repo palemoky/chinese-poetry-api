@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -23,6 +24,13 @@ const (
 	channelPressureHigh   = 0.8 // 80% full - reduce batch size
 	channelPressureMedium = 0.5 // 50% full - normal batch size
 	channelPressureLow    = 0.2 // 20% full - increase batch size
+
+	// Error reporting limits
+	MaxErrorsToDisplay = 100 // Maximum number of errors to display
+	MaxErrorsToCollect = 100 // Maximum number of errors to collect
+
+	// Sample error display limit
+	SampleErrorCount = 5 // Number of sample errors to show
 )
 
 // getOptimalConfig returns optimal configuration based on system resources
@@ -55,7 +63,7 @@ func getOptimalConfig() (workBuffer, resultBuffer, errorBuffer, defaultBatch, mi
 
 // Processor handles concurrent poetry data processing
 type Processor struct {
-	repo                 *database.Repository
+	repo                 database.RepositoryInterface
 	workers              int
 	convertToTraditional bool
 	batchSize            int // Base batch size for database insertion
@@ -63,7 +71,7 @@ type Processor struct {
 	maxBatchSize         int // Maximum batch size (for low pressure)
 }
 
-// NewProcessor creates a new processor
+// NewProcessor creates a new processor with caching support
 func NewProcessor(repo *database.Repository, workers int, convertToTraditional bool) *Processor {
 	if workers <= 0 {
 		workers = runtime.NumCPU()
@@ -72,8 +80,11 @@ func NewProcessor(repo *database.Repository, workers int, convertToTraditional b
 	// Get optimal configuration based on system resources
 	_, _, _, defaultBatch, minBatch, maxBatch := getOptimalConfig()
 
+	// Wrap repository with caching for better performance
+	cachedRepo := database.NewCachedRepository(repo)
+
 	return &Processor{
-		repo:                 repo,
+		repo:                 cachedRepo,
 		workers:              workers,
 		convertToTraditional: convertToTraditional,
 		batchSize:            defaultBatch,
@@ -189,7 +200,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	var errors []error
 	for err := range errorCh {
 		errors = append(errors, err)
-		if len(errors) >= 100 {
+		if len(errors) >= MaxErrorsToCollect {
 			break
 		}
 	}
@@ -202,8 +213,8 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 		log.Printf("✓ Successfully processed: %d/%d poems", successCount-failCount, total)
 		log.Printf("✗ Failed: %d poems", failCount)
 		if len(errors) > 0 {
-			log.Printf("Sample errors (showing %d):", min(len(errors), 5))
-			for i := 0; i < min(len(errors), 5); i++ {
+			log.Printf("Sample errors (showing %d):", min(len(errors), SampleErrorCount))
+			for i := 0; i < min(len(errors), SampleErrorCount); i++ {
 				log.Printf("  %d. %v", i+1, errors[i])
 			}
 		}
@@ -300,51 +311,25 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 	// Simplified DB: convert to simplified
 	var err error
 
-	if p.convertToTraditional {
-		// Convert to traditional Chinese
-		title, err = classifier.ToTraditional(title)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert title to traditional: %w", err)
-		}
+	title, err = p.convertText(title, p.convertToTraditional)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert title: %w", err)
+	}
 
-		author, err = classifier.ToTraditional(author)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert author to traditional: %w", err)
-		}
+	author, err = p.convertText(author, p.convertToTraditional)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert author: %w", err)
+	}
 
-		paragraphs, err = classifier.ToTraditionalArray(paragraphs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert paragraphs to traditional: %w", err)
-		}
+	paragraphs, err = p.convertTextArray(paragraphs, p.convertToTraditional)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert paragraphs: %w", err)
+	}
 
-		if rhythmic != "" {
-			rhythmic, err = classifier.ToTraditional(rhythmic)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert rhythmic to traditional: %w", err)
-			}
-		}
-	} else {
-		// Convert to simplified Chinese (ensure consistency)
-		title, err = classifier.ToSimplified(title)
+	if rhythmic != "" {
+		rhythmic, err = p.convertText(rhythmic, p.convertToTraditional)
 		if err != nil {
-			return nil, fmt.Errorf("failed to convert title to simplified: %w", err)
-		}
-
-		author, err = classifier.ToSimplified(author)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert author to simplified: %w", err)
-		}
-
-		paragraphs, err = classifier.ToSimplifiedArray(paragraphs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert paragraphs to simplified: %w", err)
-		}
-
-		if rhythmic != "" {
-			rhythmic, err = classifier.ToSimplified(rhythmic)
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert rhythmic to simplified: %w", err)
-			}
+			return nil, fmt.Errorf("failed to convert rhythmic: %w", err)
 		}
 	}
 
@@ -368,17 +353,9 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 	typeInfo := classifier.ClassifyPoetryType(paragraphs, rhythmic)
 
 	// Convert type name to match database encoding
-	typeName := typeInfo.TypeName
-	if p.convertToTraditional {
-		typeName, err = classifier.ToTraditional(typeName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert type name: %w", err)
-		}
-	} else {
-		typeName, err = classifier.ToSimplified(typeName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert type name: %w", err)
-		}
+	typeName, err := p.convertText(typeInfo.TypeName, p.convertToTraditional)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert type name: %w", err)
 	}
 
 	typeID, err := p.repo.GetPoetryTypeID(typeName)
@@ -393,7 +370,11 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 	if rhythmic != "" && rhythmic != title {
 		// Has rhythmic and it's different from title
 		if title != "" {
-			finalTitle = rhythmic + "·" + title // 词牌名·副标题
+			var builder strings.Builder
+			builder.WriteString(rhythmic)
+			builder.WriteString("·")
+			builder.WriteString(title)
+			finalTitle = builder.String() // 词牌名·副标题
 		} else {
 			finalTitle = rhythmic // Only 词牌名
 		}
@@ -435,4 +416,20 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 	}
 
 	return dbPoem, nil
+}
+
+// convertText converts text to either traditional or simplified Chinese based on the flag
+func (p *Processor) convertText(text string, toTraditional bool) (string, error) {
+	if toTraditional {
+		return classifier.ToTraditional(text)
+	}
+	return classifier.ToSimplified(text)
+}
+
+// convertTextArray converts an array of text to either traditional or simplified Chinese
+func (p *Processor) convertTextArray(texts []string, toTraditional bool) ([]string, error) {
+	if toTraditional {
+		return classifier.ToTraditionalArray(texts)
+	}
+	return classifier.ToSimplifiedArray(texts)
 }
