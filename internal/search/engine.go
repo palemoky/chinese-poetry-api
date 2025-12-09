@@ -113,9 +113,32 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
 
-	// Preload relationships
-	for i := range poems {
-		e.db.Preload("Author").Preload("Dynasty").Preload("Type").First(&poems[i], "id = ?", poems[i].ID)
+	// Batch preload relationships to avoid N+1 query problem
+	if len(poems) > 0 {
+		poemIDs := make([]int64, len(poems))
+		for i, poem := range poems {
+			poemIDs[i] = poem.ID
+		}
+
+		// Load all poems with relationships in a single query
+		var fullPoems []database.Poem
+		if err := e.db.Preload("Author").Preload("Dynasty").Preload("Type").
+			Where("id IN ?", poemIDs).Find(&fullPoems).Error; err != nil {
+			return nil, fmt.Errorf("failed to preload relationships: %w", err)
+		}
+
+		// Create a map for quick lookup and preserve original order
+		poemMap := make(map[int64]database.Poem, len(fullPoems))
+		for _, p := range fullPoems {
+			poemMap[p.ID] = p
+		}
+
+		// Replace poems with fully loaded versions in original order
+		for i, poem := range poems {
+			if fullPoem, ok := poemMap[poem.ID]; ok {
+				poems[i] = fullPoem
+			}
+		}
 	}
 
 	return &SearchResult{
