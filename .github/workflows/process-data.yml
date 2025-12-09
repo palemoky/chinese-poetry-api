@@ -1,0 +1,77 @@
+name: Process and Release Poetry Data
+
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.0'  # Only trigger on v*.*.0 tags (e.g., v0.1.0, v0.2.0, v1.0.0)
+  workflow_dispatch:
+
+jobs:
+  process-data:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+      
+      - name: Install dependencies
+        run: go mod download
+      
+      - name: Build processor
+        run: go build -o processor ./cmd/processor
+      
+      - name: Process poetry data (Simplified)
+        run: |
+          ./processor \
+            --input . \
+            --output-simplified poetry-simplified.db \
+            --output-traditional poetry-traditional.db \
+            --workers 8
+      
+      - name: Compress databases
+        run: |
+          gzip -9 poetry-simplified.db
+          gzip -9 poetry-traditional.db
+          sha256sum *.db.gz > checksums.txt
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            poetry-simplified.db.gz
+            poetry-traditional.db.gz
+            checksums.txt
+          body: |
+            ## 诗词数据库 ${{ github.ref_name }}
+            
+            ### 文件说明
+            - `poetry-simplified.db.gz`: 简体中文数据库
+            - `poetry-traditional.db.gz`: 繁体中文数据库
+            - `checksums.txt`: SHA256校验和
+            
+            ### 数据统计
+            此版本包含唐诗、宋词、元曲等中国古典诗词数据。
+            
+            ### 使用方法
+            ```bash
+            # 下载并解压
+            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/poetry-simplified.db.gz
+            gunzip poetry-simplified.db.gz
+            ```
+            
+            ### Docker 使用
+            ```bash
+            docker run -d -p 8080:8080 \
+              -e GITHUB_REPO=${{ github.repository }} \
+              -e RELEASE_VERSION=${{ github.ref_name }} \
+              your-dockerhub-username/chinese-poetry-api:latest
+            ```
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
