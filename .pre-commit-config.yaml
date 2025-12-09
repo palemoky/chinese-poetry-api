@@ -1,0 +1,103 @@
+# Pre-commit hooks configuration
+# Install: pre-commit install && pre-commit install --hook-type pre-push
+# Run manually: pre-commit run --all-files
+
+repos:
+  # Go linting with golangci-lint (modern, comprehensive)
+  - repo: https://github.com/golangci/golangci-lint
+    rev: v2.7.2
+    hooks:
+      - id: golangci-lint
+        name: Run golangci-lint
+        stages: [pre-commit]
+        args:
+          - --timeout=5m
+          - --config=.golangci.yml
+
+  # Go formatting and tools
+  - repo: local
+    hooks:
+      # Format Go imports
+      - id: goimports
+        name: Format Go imports (goimports)
+        entry: bash -c 'goimports -w $(find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*")'
+        language: system
+        types: [go]
+        stages: [pre-commit]
+        pass_filenames: false
+
+      # Run go mod tidy
+      - id: go-mod-tidy
+        name: Tidy Go modules
+        entry: go mod tidy
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
+
+  # General file checks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      # Remove trailing whitespace
+      - id: trailing-whitespace
+        name: Remove trailing whitespace
+        stages: [pre-commit]
+
+      # Ensure files end with newline
+      - id: end-of-file-fixer
+        name: Fix end of files
+        stages: [pre-commit]
+
+      # Check JSON syntax
+      - id: check-json
+        name: Check JSON syntax
+        stages: [pre-commit]
+
+      # Check YAML syntax
+      - id: check-yaml
+        name: Check YAML syntax
+        stages: [pre-commit]
+        args: ['--unsafe']  # Allow custom tags
+
+      # Check for merge conflicts
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+        stages: [pre-commit]
+
+      # Check for large files
+      - id: check-added-large-files
+        name: Check for large files
+        stages: [pre-commit]
+        args: ['--maxkb=1000']
+
+  # Go unit tests (run on push)
+  - repo: local
+    hooks:
+      - id: go-test
+        name: Run Go unit tests
+        entry: bash -c 'go test -tags "fts5" ./internal/... -cover'
+        language: system
+        stages: [pre-push]
+        pass_filenames: false
+        verbose: true
+
+      # Optional: Run tests on commit for changed packages only
+      - id: go-test-changed
+        name: Run tests for changed packages
+        entry: bash -c 'changed_dirs=$(git diff --cached --name-only --diff-filter=ACM | grep "\.go$" | xargs -I {} dirname {} | sort -u | grep "^internal/" || true); if [ -n "$changed_dirs" ]; then for dir in $changed_dirs; do echo "Testing $dir..."; go test -tags "fts5" ./$dir/... -cover || exit 1; done; fi'
+        language: system
+        stages: [pre-commit]
+        pass_filenames: false
+        verbose: true
+
+  # Optional: Go vet (static analysis)
+  - repo: local
+    hooks:
+      - id: go-vet
+        name: Run go vet
+        entry: go vet
+        language: system
+        types: [go]
+        stages: [pre-commit]
+        pass_filenames: false
+        args: ['./...']

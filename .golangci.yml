@@ -1,0 +1,42 @@
+# golangci-lint configuration v2
+# https://golangci-lint.run/usage/configuration/
+
+version: 2
+
+run:
+  timeout: 5m
+  tests: true
+  build-tags:
+    - fts5
+
+# Use default linters - they are well-tested and compatible
+linters:
+  enable-all: false
+  disable-all: false
+  # Let golangci-lint use its default set of linters
+
+issues:
+  exclude-rules:
+    # 排除测试文件的某些检查
+    - path: _test\.go
+      linters:
+        - errcheck
+        - dupl
+
+    # 排除生成的代码
+    - path: internal/graph/generated/
+      linters:
+        - all
+
+    # 排除 staticcheck QF1003 (tagged switch suggestions)
+    - linters:
+        - staticcheck
+      text: "QF1003"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true
