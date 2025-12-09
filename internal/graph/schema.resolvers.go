@@ -22,9 +22,7 @@ func (r *authorResolver) Dynasty(ctx context.Context, obj *database.Author) (*da
 	}
 
 	var dynasty database.Dynasty
-	err := r.DB.QueryRow(`SELECT id, name, name_en, start_year, end_year, created_at FROM dynasties WHERE id = ?`, *obj.DynastyID).Scan(
-		&dynasty.ID, &dynasty.Name, &dynasty.NameEn, &dynasty.StartYear, &dynasty.EndYear, &dynasty.CreatedAt,
-	)
+	err := r.DB.First(&dynasty, *obj.DynastyID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -43,9 +41,9 @@ func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *
 
 // PoemCount is the resolver for the poemCount field.
 func (r *authorResolver) PoemCount(ctx context.Context, obj *database.Author) (int, error) {
-	var count int
-	err := r.DB.QueryRow(`SELECT COUNT(*) FROM poems WHERE author_id = ?`, obj.ID).Scan(&count)
-	return count, err
+	var count int64
+	err := r.DB.Model(&database.Poem{}).Where("author_id = ?", obj.ID).Count(&count).Error
+	return int(count), err
 }
 
 // Node is the resolver for the node field.
@@ -55,22 +53,22 @@ func (r *authorEdgeResolver) Node(ctx context.Context, obj *database.AuthorEdge)
 
 // PoemCount is the resolver for the poemCount field.
 func (r *dynastyResolver) PoemCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	var count int
-	err := r.DB.QueryRow(`SELECT COUNT(*) FROM poems WHERE dynasty_id = ?`, obj.ID).Scan(&count)
-	return count, err
+	var count int64
+	err := r.DB.Model(&database.Poem{}).Where("dynasty_id = ?", obj.ID).Count(&count).Error
+	return int(count), err
 }
 
 // AuthorCount is the resolver for the authorCount field.
 func (r *dynastyResolver) AuthorCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	var count int
-	err := r.DB.QueryRow(`SELECT COUNT(DISTINCT author_id) FROM poems WHERE dynasty_id = ?`, obj.ID).Scan(&count)
-	return count, err
+	var count int64
+	err := r.DB.Model(&database.Poem{}).Where("dynasty_id = ?", obj.ID).Distinct("author_id").Count(&count).Error
+	return int(count), err
 }
 
 // Paragraphs is the resolver for the paragraphs field.
 func (r *poemResolver) Paragraphs(ctx context.Context, obj *database.Poem) ([]string, error) {
 	var paragraphs []string
-	if err := json.Unmarshal([]byte(obj.Content), &paragraphs); err != nil {
+	if err := json.Unmarshal(obj.Content, &paragraphs); err != nil {
 		return nil, err
 	}
 	return paragraphs, nil
@@ -82,10 +80,13 @@ func (r *poemResolver) Author(ctx context.Context, obj *database.Poem) (*databas
 		return nil, nil
 	}
 
+	// If already loaded via Preload
+	if obj.Author != nil {
+		return obj.Author, nil
+	}
+
 	var author database.Author
-	err := r.DB.QueryRow(`SELECT id, name, name_pinyin, name_pinyin_abbr, dynasty_id, description, created_at FROM authors WHERE id = ?`, *obj.AuthorID).Scan(
-		&author.ID, &author.Name, &author.NamePinyin, &author.NamePinyinAbbr, &author.DynastyID, &author.Description, &author.CreatedAt,
-	)
+	err := r.DB.First(&author, *obj.AuthorID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -98,10 +99,13 @@ func (r *poemResolver) Dynasty(ctx context.Context, obj *database.Poem) (*databa
 		return nil, nil
 	}
 
+	// If already loaded via Preload
+	if obj.Dynasty != nil {
+		return obj.Dynasty, nil
+	}
+
 	var dynasty database.Dynasty
-	err := r.DB.QueryRow(`SELECT id, name, name_en, start_year, end_year, created_at FROM dynasties WHERE id = ?`, *obj.DynastyID).Scan(
-		&dynasty.ID, &dynasty.Name, &dynasty.NameEn, &dynasty.StartYear, &dynasty.EndYear, &dynasty.CreatedAt,
-	)
+	err := r.DB.First(&dynasty, *obj.DynastyID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -114,10 +118,13 @@ func (r *poemResolver) Type(ctx context.Context, obj *database.Poem) (*database.
 		return nil, nil
 	}
 
+	// If already loaded via Preload
+	if obj.Type != nil {
+		return obj.Type, nil
+	}
+
 	var poetryType database.PoetryType
-	err := r.DB.QueryRow(`SELECT id, name, category, lines, chars_per_line, description, created_at FROM poetry_types WHERE id = ?`, *obj.TypeID).Scan(
-		&poetryType.ID, &poetryType.Name, &poetryType.Category, &poetryType.Lines, &poetryType.CharsPerLine, &poetryType.Description, &poetryType.CreatedAt,
-	)
+	err := r.DB.First(&poetryType, *obj.TypeID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -131,14 +138,14 @@ func (r *poemResolver) CreatedAt(ctx context.Context, obj *database.Poem) (strin
 
 // Node is the resolver for the node field.
 func (r *poemEdgeResolver) Node(ctx context.Context, obj *database.PoemEdge) (*database.Poem, error) {
-	return &obj.Node.Poem, nil
+	return &obj.Node, nil
 }
 
 // PoemCount is the resolver for the poemCount field.
 func (r *poetryTypeResolver) PoemCount(ctx context.Context, obj *database.PoetryType) (int, error) {
-	var count int
-	err := r.DB.QueryRow(`SELECT COUNT(*) FROM poems WHERE type_id = ?`, obj.ID).Scan(&count)
-	return count, err
+	var count int64
+	err := r.DB.Model(&database.Poem{}).Where("type_id = ?", obj.ID).Count(&count).Error
+	return int(count), err
 }
 
 // Poem is the resolver for the poem field.
@@ -147,7 +154,7 @@ func (r *queryResolver) Poem(ctx context.Context, id string) (*database.Poem, er
 	if err != nil {
 		return nil, err
 	}
-	return &poem.Poem, nil
+	return poem, nil
 }
 
 // Poems is the resolver for the poems field.
@@ -213,9 +220,8 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, searchTyp
 // RandomPoem is the resolver for the randomPoem field.
 func (r *queryResolver) RandomPoem(ctx context.Context, dynastyID *string, typeID *string) (*database.Poem, error) {
 	// Simple random query
-	query := `SELECT id FROM poems ORDER BY RANDOM() LIMIT 1`
 	var id string
-	if err := r.DB.QueryRow(query).Scan(&id); err != nil {
+	if err := r.DB.Raw(`SELECT id FROM poems ORDER BY RANDOM() LIMIT 1`).Scan(&id).Error; err != nil {
 		return nil, err
 	}
 
@@ -223,7 +229,7 @@ func (r *queryResolver) RandomPoem(ctx context.Context, dynastyID *string, typeI
 	if err != nil {
 		return nil, err
 	}
-	return &poem.Poem, nil
+	return poem, nil
 }
 
 // Author is the resolver for the author field.
@@ -234,9 +240,7 @@ func (r *queryResolver) Author(ctx context.Context, id string) (*database.Author
 	}
 
 	var author database.Author
-	err = r.DB.QueryRow(`SELECT id, name, name_pinyin, name_pinyin_abbr, dynasty_id, description, created_at FROM authors WHERE id = ?`, authorID).Scan(
-		&author.ID, &author.Name, &author.NamePinyin, &author.NamePinyinAbbr, &author.DynastyID, &author.Description, &author.CreatedAt,
-	)
+	err = r.DB.First(&author, authorID).Error
 	if err != nil {
 		return nil, err
 	}
@@ -255,40 +259,22 @@ func (r *queryResolver) Authors(ctx context.Context, page *int, pageSize *int, d
 
 // Dynasties is the resolver for the dynasties field.
 func (r *queryResolver) Dynasties(ctx context.Context) ([]*database.Dynasty, error) {
-	rows, err := r.DB.Query(`SELECT id, name, name_en, start_year, end_year, created_at FROM dynasties ORDER BY id`)
+	var dynasties []*database.Dynasty
+	err := r.DB.Order("id").Find(&dynasties).Error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var dynasties []*database.Dynasty
-	for rows.Next() {
-		var d database.Dynasty
-		if err := rows.Scan(&d.ID, &d.Name, &d.NameEn, &d.StartYear, &d.EndYear, &d.CreatedAt); err != nil {
-			return nil, err
-		}
-		dynasties = append(dynasties, &d)
-	}
-	return dynasties, rows.Err()
+	return dynasties, nil
 }
 
 // PoemTypes is the resolver for the poemTypes field.
 func (r *queryResolver) PoemTypes(ctx context.Context) ([]*database.PoetryType, error) {
-	rows, err := r.DB.Query(`SELECT id, name, category, lines, chars_per_line, description, created_at FROM poetry_types ORDER BY id`)
+	var types []*database.PoetryType
+	err := r.DB.Order("id").Find(&types).Error
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
-	var types []*database.PoetryType
-	for rows.Next() {
-		var t database.PoetryType
-		if err := rows.Scan(&t.ID, &t.Name, &t.Category, &t.Lines, &t.CharsPerLine, &t.Description, &t.CreatedAt); err != nil {
-			return nil, err
-		}
-		types = append(types, &t)
-	}
-	return types, rows.Err()
+	return types, nil
 }
 
 // Statistics is the resolver for the statistics field.

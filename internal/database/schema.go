@@ -5,91 +5,20 @@ const (
 	SchemaVersion = 1
 )
 
-// CreateTablesSQL contains all table creation statements
-var CreateTablesSQL = []string{
-	// Dynasties table
-	`CREATE TABLE IF NOT EXISTS dynasties (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		name_en TEXT,
-		start_year INTEGER,
-		end_year INTEGER,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`,
+// CreateFTSTableSQL contains the FTS5 virtual table creation
+// GORM doesn't support virtual tables, so we create it manually
+var CreateFTSTableSQL = `CREATE VIRTUAL TABLE IF NOT EXISTS poems_fts USING fts5(
+	poem_id UNINDEXED,
+	title,
+	title_pinyin,
+	content,
+	author_name,
+	author_pinyin,
+	content='',
+	tokenize='unicode61'
+)`
 
-	// Authors table
-	`CREATE TABLE IF NOT EXISTS authors (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL,
-		name_pinyin TEXT,
-		name_pinyin_abbr TEXT,
-		dynasty_id INTEGER,
-		description TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (dynasty_id) REFERENCES dynasties(id)
-	)`,
-
-	// Poetry types table
-	`CREATE TABLE IF NOT EXISTS poetry_types (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
-		category TEXT NOT NULL,
-		lines INTEGER,
-		chars_per_line INTEGER,
-		description TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`,
-
-	// Poems table
-	`CREATE TABLE IF NOT EXISTS poems (
-		id TEXT PRIMARY KEY,
-		title TEXT NOT NULL,
-		title_pinyin TEXT,
-		title_pinyin_abbr TEXT,
-		author_id INTEGER,
-		dynasty_id INTEGER,
-		type_id INTEGER,
-		content TEXT NOT NULL,
-		rhythmic TEXT,
-		rhythmic_pinyin TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (author_id) REFERENCES authors(id),
-		FOREIGN KEY (dynasty_id) REFERENCES dynasties(id),
-		FOREIGN KEY (type_id) REFERENCES poetry_types(id)
-	)`,
-
-	// Full-text search virtual table
-	`CREATE VIRTUAL TABLE IF NOT EXISTS poems_fts USING fts5(
-		poem_id UNINDEXED,
-		title,
-		title_pinyin,
-		content,
-		author_name,
-		author_pinyin,
-		content='',
-		tokenize='unicode61'
-	)`,
-
-	// Metadata table for schema version
-	`CREATE TABLE IF NOT EXISTS metadata (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`,
-}
-
-// CreateIndexesSQL contains all index creation statements
-var CreateIndexesSQL = []string{
-	`CREATE INDEX IF NOT EXISTS idx_poems_author ON poems(author_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_poems_dynasty ON poems(dynasty_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_poems_type ON poems(type_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_poems_title_pinyin ON poems(title_pinyin)`,
-	`CREATE INDEX IF NOT EXISTS idx_authors_dynasty ON authors(dynasty_id)`,
-	`CREATE INDEX IF NOT EXISTS idx_authors_name ON authors(name)`,
-	`CREATE INDEX IF NOT EXISTS idx_authors_pinyin ON authors(name_pinyin)`,
-}
-
-// InitialDataSQL contains initial data for dynasties and poetry types
+// InitialDynastiesSQL contains initial data for dynasties
 var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start_year, end_year) VALUES
 	('唐', 'Tang', 618, 907),
 	('宋', 'Song', 960, 1279),
@@ -103,6 +32,7 @@ var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start
 	('清', 'Qing', 1644, 1912),
 	('其他', 'Other', NULL, NULL)`
 
+// InitialPoetryTypesSQL contains initial data for poetry types
 var InitialPoetryTypesSQL = `INSERT OR IGNORE INTO poetry_types (name, category, lines, chars_per_line, description) VALUES
 	('五言绝句', '诗', 4, 5, '四句，每句五字'),
 	('七言绝句', '诗', 4, 7, '四句，每句七字'),
@@ -114,7 +44,7 @@ var InitialPoetryTypesSQL = `INSERT OR IGNORE INTO poetry_types (name, category,
 	('曲', '曲', NULL, NULL, '散曲'),
 	('其他', '其他', NULL, NULL, '不规则或其他形式')`
 
-// TriggerSQL contains triggers for FTS synchronization
+// TriggersSQL contains triggers for FTS synchronization
 var TriggersSQL = []string{
 	// Trigger to update FTS when inserting poems
 	`CREATE TRIGGER IF NOT EXISTS poems_ai AFTER INSERT ON poems BEGIN

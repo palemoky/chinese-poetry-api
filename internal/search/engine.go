@@ -1,7 +1,7 @@
 package search
 
 import (
-	"database/sql"
+	"encoding/json"
 	"fmt"
 	"unicode"
 
@@ -39,7 +39,7 @@ type SearchParams struct {
 
 // SearchResult contains search results
 type SearchResult struct {
-	Poems      []database.PoemWithRelations
+	Poems      []database.Poem
 	TotalCount int
 	HasMore    bool
 }
@@ -103,20 +103,19 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 
 	// Execute count query
 	var totalCount int
-	if err := e.db.QueryRow(countQuery, countArgs...).Scan(&totalCount); err != nil {
+	if err := e.db.Raw(countQuery, countArgs...).Scan(&totalCount).Error; err != nil {
 		return nil, fmt.Errorf("failed to count results: %w", err)
 	}
 
 	// Execute search query
-	rows, err := e.db.Query(query, args...)
-	if err != nil {
+	var poems []database.Poem
+	if err := e.db.Raw(query, args...).Scan(&poems).Error; err != nil {
 		return nil, fmt.Errorf("failed to execute search: %w", err)
 	}
-	defer rows.Close()
 
-	poems, err := e.scanPoems(rows)
-	if err != nil {
-		return nil, err
+	// Preload relationships
+	for i := range poems {
+		e.db.Preload("Author").Preload("Dynasty").Preload("Type").First(&poems[i], "id = ?", poems[i].ID)
 	}
 
 	return &SearchResult{
@@ -262,35 +261,13 @@ func (e *Engine) getBaseQuery() string {
 	`
 }
 
-func (e *Engine) scanPoems(rows *sql.Rows) ([]database.PoemWithRelations, error) {
-	var poems []database.PoemWithRelations
-
-	for rows.Next() {
-		var poem database.PoemWithRelations
-		var author database.Author
-		var dynasty database.Dynasty
-		var poetryType database.PoetryType
-		var contentJSON string
-
-		err := rows.Scan(
-			&poem.ID, &poem.Title, &poem.TitlePinyin, &poem.TitlePinyinAbbr,
-			&contentJSON, &poem.Rhythmic, &poem.RhythmicPinyin, &poem.CreatedAt,
-			&author.ID, &author.Name, &author.NamePinyin, &author.NamePinyinAbbr, &author.CreatedAt,
-			&dynasty.ID, &dynasty.Name, &dynasty.NameEn, &dynasty.StartYear, &dynasty.EndYear, &dynasty.CreatedAt,
-			&poetryType.ID, &poetryType.Name, &poetryType.Category, &poetryType.Lines, &poetryType.CharsPerLine, &poetryType.CreatedAt,
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		poem.Author = &author
-		poem.Dynasty = &dynasty
-		poem.Type = &poetryType
-
-		poems = append(poems, poem)
+// parseContentJSON parses JSON content field
+func parseContentJSON(contentJSON string) ([]string, error) {
+	var content []string
+	if err := json.Unmarshal([]byte(contentJSON), &content); err != nil {
+		return nil, err
 	}
-
-	return poems, rows.Err()
+	return content, nil
 }
 
 // isPinyinQuery checks if a query string is pinyin

@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/spf13/cobra"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/loader"
 	"github.com/palemoky/chinese-poetry-api/internal/processor"
+	"github.com/spf13/cobra"
 )
 
 var (
@@ -103,7 +103,7 @@ func processDatabase(dbPath string, poems []loader.PoemWithMeta, convertToTradit
 
 	// Run migrations
 	log.Println("Creating database schema...")
-	if err := db.Migrate(); err != nil {
+	if err := db.Migrate(convertToTraditional); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
@@ -118,11 +118,11 @@ func processDatabase(dbPath string, poems []loader.PoemWithMeta, convertToTradit
 
 	// Optimize database
 	log.Println("Optimizing database...")
-	if _, err := db.Exec("VACUUM"); err != nil {
+	if err := db.Exec("VACUUM").Error; err != nil {
 		log.Printf("Warning: failed to vacuum database: %v", err)
 	}
 
-	if _, err := db.Exec("ANALYZE"); err != nil {
+	if err := db.Exec("ANALYZE").Error; err != nil {
 		log.Printf("Warning: failed to analyze database: %v", err)
 	}
 

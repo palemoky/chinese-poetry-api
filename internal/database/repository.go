@@ -1,9 +1,9 @@
 package database
 
 import (
-	"database/sql"
-	"encoding/json"
-	"fmt"
+	"gorm.io/gorm/clause"
+
+	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 )
 
 // Repository handles database operations
@@ -16,148 +16,131 @@ func NewRepository(db *DB) *Repository {
 	return &Repository{db: db}
 }
 
-// GetOrCreateDynasty gets or creates a dynasty by name
+// GetOrCreateDynasty gets or creates a dynasty by name in a thread-safe manner
+// Uses ON CONFLICT to handle concurrent inserts gracefully
 func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
-	var id int64
-	err := r.db.QueryRow(`SELECT id FROM dynasties WHERE name = ?`, name).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
+	dynasty := Dynasty{Name: name}
 
-	if err != sql.ErrNoRows {
-		return 0, err
-	}
+	// Try to create the dynasty with ON CONFLICT DO NOTHING
+	err := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoNothing: true, // Ignore if already exists
+	}).Create(&dynasty).Error
 
-	// Dynasty doesn't exist, create it
-	result, err := r.db.Exec(`INSERT INTO dynasties (name) VALUES (?)`, name)
 	if err != nil {
 		return 0, err
 	}
 
-	return result.LastInsertId()
+	// If dynasty.ID is 0, it means the insert was skipped (already exists)
+	// We need to fetch the existing dynasty
+	if dynasty.ID == 0 {
+		err = r.db.Where("name = ?", name).First(&dynasty).Error
+		if err != nil {
+			return 0, err
+		}
+	}
+
+	return dynasty.ID, nil
 }
 
-// GetOrCreateAuthor gets or creates an author
+// GetOrCreateAuthor gets or creates an author in a thread-safe manner
+// Uses stable hash-based ID and ON CONFLICT to handle concurrent inserts
+// Note: Author's dynasty_id is set on first creation and not updated
+// This is because some authors appear in multiple dynasty datasets
 func (r *Repository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error) {
-	var id int64
-	err := r.db.QueryRow(
-		`SELECT id FROM authors WHERE name = ? AND dynasty_id = ?`,
-		name, dynastyID,
-	).Scan(&id)
+	// Generate stable 6-digit ID based on author name
+	authorID := classifier.GenerateStableAuthorID(name)
 
-	if err == nil {
-		return id, nil
+	author := Author{
+		ID:             authorID,
+		Name:           name,
+		NamePinyin:     &namePinyin,
+		NamePinyinAbbr: &namePinyinAbbr,
+		DynastyID:      &dynastyID,
 	}
 
-	if err != sql.ErrNoRows {
-		return 0, err
-	}
+	// Try to create the author with ON CONFLICT DO NOTHING
+	// This handles concurrent inserts gracefully
+	err := r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}}, // Changed from "name" to "id"
+		DoNothing: true,                          // Ignore if already exists
+	}).Create(&author).Error
 
-	// Author doesn't exist, create it
-	result, err := r.db.Exec(
-		`INSERT INTO authors (name, name_pinyin, name_pinyin_abbr, dynasty_id) VALUES (?, ?, ?, ?)`,
-		name, namePinyin, namePinyinAbbr, dynastyID,
-	)
 	if err != nil {
 		return 0, err
 	}
 
-	return result.LastInsertId()
+	// If RowsAffected is 0, it means the insert was skipped (already exists)
+	// The author variable still has the correct ID from our generation
+
+	return author.ID, nil
 }
 
 // GetPoetryTypeID gets the ID of a poetry type by name
 func (r *Repository) GetPoetryTypeID(name string) (int64, error) {
-	var id int64
-	err := r.db.QueryRow(`SELECT id FROM poetry_types WHERE name = ?`, name).Scan(&id)
-	return id, err
+	var poetryType PoetryType
+	err := r.db.Where("name = ?", name).First(&poetryType).Error
+	if err != nil {
+		return 0, err
+	}
+	return poetryType.ID, nil
 }
 
 // InsertPoem inserts a poem into the database
 func (r *Repository) InsertPoem(poem *Poem) error {
-	// Convert paragraphs to JSON
-	contentJSON, err := json.Marshal(poem.Content)
-	if err != nil {
-		return fmt.Errorf("failed to marshal content: %w", err)
-	}
-
-	_, err = r.db.Exec(`
-		INSERT INTO poems (
-			id, title, title_pinyin, title_pinyin_abbr,
-			author_id, dynasty_id, type_id,
-			content, rhythmic, rhythmic_pinyin
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`,
-		poem.ID,
-		poem.Title,
-		poem.TitlePinyin,
-		poem.TitlePinyinAbbr,
-		poem.AuthorID,
-		poem.DynastyID,
-		poem.TypeID,
-		string(contentJSON),
-		poem.Rhythmic,
-		poem.RhythmicPinyin,
-	)
-
-	return err
+	return r.db.Create(poem).Error
 }
 
-// GetPoemByID retrieves a poem by ID
-func (r *Repository) GetPoemByID(id string) (*PoemWithRelations, error) {
-	var poem PoemWithRelations
-	var contentJSON string
-	var author Author
-	var dynasty Dynasty
-	var poetryType PoetryType
+// BatchInsertPoems inserts multiple poems in batches for better performance
+// Handles duplicate IDs by skipping them (ON CONFLICT DO NOTHING)
+func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
+	if len(poems) == 0 {
+		return nil
+	}
 
-	err := r.db.QueryRow(`
-		SELECT 
-			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
-			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
-			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
-			d.id, d.name, d.name_en, d.start_year, d.end_year, d.created_at,
-			t.id, t.name, t.category, t.lines, t.chars_per_line, t.created_at
-		FROM poems p
-		LEFT JOIN authors a ON p.author_id = a.id
-		LEFT JOIN dynasties d ON p.dynasty_id = d.id
-		LEFT JOIN poetry_types t ON p.type_id = t.id
-		WHERE p.id = ?
-	`, id).Scan(
-		&poem.ID, &poem.Title, &poem.TitlePinyin, &poem.TitlePinyinAbbr,
-		&contentJSON, &poem.Rhythmic, &poem.RhythmicPinyin, &poem.CreatedAt,
-		&author.ID, &author.Name, &author.NamePinyin, &author.NamePinyinAbbr, &author.CreatedAt,
-		&dynasty.ID, &dynasty.Name, &dynasty.NameEn, &dynasty.StartYear, &dynasty.EndYear, &dynasty.CreatedAt,
-		&poetryType.ID, &poetryType.Name, &poetryType.Category, &poetryType.Lines, &poetryType.CharsPerLine, &poetryType.CreatedAt,
-	)
+	if batchSize <= 0 {
+		batchSize = 100 // Default batch size
+	}
 
+	// Use GORM's CreateInBatches with OnConflict to handle duplicates
+	// DoNothing: skip duplicate IDs (same as the single insert behavior)
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoNothing: true, // Skip duplicates
+	}).CreateInBatches(poems, batchSize).Error
+}
+
+// UpsertPoem inserts or updates a poem (for handling duplicates)
+func (r *Repository) UpsertPoem(poem *Poem) error {
+	return r.db.Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"title", "content", "author_id", "dynasty_id", "type_id"}),
+	}).Create(poem).Error
+}
+
+// GetPoemByID retrieves a poem by ID with all relations preloaded
+func (r *Repository) GetPoemByID(id string) (*Poem, error) {
+	var poem Poem
+	err := r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		First(&poem, "id = ?", id).Error
 	if err != nil {
 		return nil, err
 	}
-
-	// Parse content JSON
-	if err := json.Unmarshal([]byte(contentJSON), &poem.Content); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal content: %w", err)
-	}
-
-	poem.Author = &author
-	poem.Dynasty = &dynasty
-	poem.Type = &poetryType
-
 	return &poem, nil
 }
 
 // CountPoems returns the total number of poems
 func (r *Repository) CountPoems() (int, error) {
-	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM poems`).Scan(&count)
-	return count, err
+	var count int64
+	err := r.db.Model(&Poem{}).Count(&count).Error
+	return int(count), err
 }
 
 // CountAuthors returns the total number of authors
 func (r *Repository) CountAuthors() (int, error) {
-	var count int
-	err := r.db.QueryRow(`SELECT COUNT(*) FROM authors`).Scan(&count)
-	return count, err
+	var count int64
+	err := r.db.Model(&Author{}).Count(&count).Error
+	return int(count), err
 }
 
 // GetStatistics returns overall statistics
@@ -176,58 +159,98 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 		return nil, err
 	}
 
-	err = r.db.QueryRow(`SELECT COUNT(*) FROM dynasties WHERE name != '其他'`).Scan(&stats.TotalDynasties)
+	var count int64
+	err = r.db.Model(&Dynasty{}).Where("name != ?", "其他").Count(&count).Error
 	if err != nil {
 		return nil, err
 	}
+	stats.TotalDynasties = int(count)
 
 	// Poems by dynasty
-	rows, err := r.db.Query(`
-		SELECT d.id, d.name, d.name_en, d.start_year, d.end_year, COUNT(p.id) as count
-		FROM dynasties d
-		LEFT JOIN poems p ON d.id = p.dynasty_id
-		GROUP BY d.id
-		ORDER BY count DESC
-	`)
+	var dynastyStats []struct {
+		Dynasty
+		PoemCount int `gorm:"column:poem_count"`
+	}
+
+	err = r.db.Model(&Dynasty{}).
+		Select("dynasties.*, COUNT(poems.id) as poem_count").
+		Joins("LEFT JOIN poems ON dynasties.id = poems.dynasty_id").
+		Group("dynasties.id").
+		Order("poem_count DESC").
+		Scan(&dynastyStats).Error
+
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var ds DynastyWithStats
-		err := rows.Scan(
-			&ds.ID, &ds.Name, &ds.NameEn, &ds.StartYear, &ds.EndYear, &ds.PoemCount,
-		)
-		if err != nil {
-			return nil, err
-		}
-		stats.PoemsByDynasty = append(stats.PoemsByDynasty, ds)
+	for _, ds := range dynastyStats {
+		stats.PoemsByDynasty = append(stats.PoemsByDynasty, DynastyWithStats{
+			Dynasty:   ds.Dynasty,
+			PoemCount: ds.PoemCount,
+		})
 	}
 
 	// Poems by type
-	rows, err = r.db.Query(`
-		SELECT t.id, t.name, t.category, t.lines, t.chars_per_line, COUNT(p.id) as count
-		FROM poetry_types t
-		LEFT JOIN poems p ON t.id = p.type_id
-		GROUP BY t.id
-		ORDER BY count DESC
-	`)
+	var typeStats []struct {
+		PoetryType
+		PoemCount int `gorm:"column:poem_count"`
+	}
+
+	err = r.db.Model(&PoetryType{}).
+		Select("poetry_types.*, COUNT(poems.id) as poem_count").
+		Joins("LEFT JOIN poems ON poetry_types.id = poems.type_id").
+		Group("poetry_types.id").
+		Order("poem_count DESC").
+		Scan(&typeStats).Error
+
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var ts PoetryTypeWithStats
-		err := rows.Scan(
-			&ts.ID, &ts.Name, &ts.Category, &ts.Lines, &ts.CharsPerLine, &ts.PoemCount,
-		)
-		if err != nil {
-			return nil, err
-		}
-		stats.PoemsByType = append(stats.PoemsByType, ts)
+	for _, ts := range typeStats {
+		stats.PoemsByType = append(stats.PoemsByType, PoetryTypeWithStats{
+			PoetryType: ts.PoetryType,
+			PoemCount:  ts.PoemCount,
+		})
 	}
 
 	return stats, nil
+}
+
+// ListPoems returns a paginated list of poems
+func (r *Repository) ListPoems(limit, offset int) ([]Poem, error) {
+	var poems []Poem
+	err := r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		Limit(limit).Offset(offset).
+		Find(&poems).Error
+	return poems, err
+}
+
+// SearchPoems searches poems using FTS5
+func (r *Repository) SearchPoems(query string, limit int) ([]Poem, error) {
+	var poemIDs []string
+
+	// Search in FTS table
+	err := r.db.Raw(`
+		SELECT poem_id FROM poems_fts 
+		WHERE poems_fts MATCH ? 
+		ORDER BY rank 
+		LIMIT ?
+	`, query, limit).Scan(&poemIDs).Error
+
+	if err != nil {
+		return nil, err
+	}
+
+	if len(poemIDs) == 0 {
+		return []Poem{}, nil
+	}
+
+	// Get full poem records
+	var poems []Poem
+	err = r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		Where("id IN ?", poemIDs).
+		Find(&poems).Error
+
+	return poems, err
 }

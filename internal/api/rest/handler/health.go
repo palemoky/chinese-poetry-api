@@ -11,7 +11,16 @@ import (
 func HealthHandler(db *database.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check database connection
-		if err := db.Ping(); err != nil {
+		sqlDB, err := db.DB.DB()
+		if err != nil {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status": "unhealthy",
+				"error":  "failed to get database connection",
+			})
+			return
+		}
+
+		if err := sqlDB.Ping(); err != nil {
 			c.JSON(http.StatusServiceUnavailable, gin.H{
 				"status": "unhealthy",
 				"error":  "database connection failed",
