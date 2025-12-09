@@ -6,6 +6,25 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 )
 
+// RepositoryInterface defines the interface for repository operations
+type RepositoryInterface interface {
+	GetOrCreateDynasty(name string) (int64, error)
+	GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error)
+	GetPoetryTypeID(name string) (int64, error)
+	InsertPoem(poem *Poem) error
+	BatchInsertPoems(poems []*Poem, batchSize int) error
+	UpsertPoem(poem *Poem) error
+	GetPoemByID(id string) (*Poem, error)
+	CountPoems() (int, error)
+	CountAuthors() (int, error)
+	GetStatistics() (*Statistics, error)
+	ListPoems(limit, offset int) ([]Poem, error)
+	ListPoemsWithFilter(limit, offset int, dynastyID, authorID, typeID *int64) ([]Poem, int, error)
+	ListAuthorPoems(authorID int64, limit, offset int) ([]Poem, int, error)
+	ListAuthorsWithFilter(limit, offset int, dynastyID *int64) ([]AuthorWithStats, int, error)
+	SearchPoems(query string, limit int) ([]Poem, error)
+}
+
 // Repository handles database operations
 type Repository struct {
 	db *DB
@@ -224,6 +243,99 @@ func (r *Repository) ListPoems(limit, offset int) ([]Poem, error) {
 		Limit(limit).Offset(offset).
 		Find(&poems).Error
 	return poems, err
+}
+
+// ListPoemsWithFilter returns a paginated list of poems with optional filters
+func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID, typeID *int64) ([]Poem, int, error) {
+	query := r.db.Model(&Poem{})
+
+	// Apply filters
+	if dynastyID != nil {
+		query = query.Where("dynasty_id = ?", *dynastyID)
+	}
+	if authorID != nil {
+		query = query.Where("author_id = ?", *authorID)
+	}
+	if typeID != nil {
+		query = query.Where("type_id = ?", *typeID)
+	}
+
+	// Get total count
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	var poems []Poem
+	err := query.Preload("Author").Preload("Dynasty").Preload("Type").
+		Limit(limit).Offset(offset).
+		Order("id DESC").
+		Find(&poems).Error
+
+	return poems, int(totalCount), err
+}
+
+// ListAuthorPoems returns a paginated list of poems by a specific author
+func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem, int, error) {
+	var totalCount int64
+	if err := r.db.Model(&Poem{}).Where("author_id = ?", authorID).Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	var poems []Poem
+	err := r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		Where("author_id = ?", authorID).
+		Limit(limit).Offset(offset).
+		Order("id DESC").
+		Find(&poems).Error
+
+	return poems, int(totalCount), err
+}
+
+// ListAuthorsWithFilter returns a paginated list of authors with optional dynasty filter
+func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) ([]AuthorWithStats, int, error) {
+	query := r.db.Model(&Author{})
+
+	// Apply dynasty filter
+	if dynastyID != nil {
+		query = query.Where("dynasty_id = ?", *dynastyID)
+	}
+
+	// Get total count
+	var totalCount int64
+	if err := query.Count(&totalCount).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get authors with poem counts
+	var results []struct {
+		Author
+		PoemCount int `gorm:"column:poem_count"`
+	}
+
+	err := query.
+		Select("authors.*, COUNT(poems.id) as poem_count").
+		Joins("LEFT JOIN poems ON authors.id = poems.author_id").
+		Group("authors.id").
+		Order("poem_count DESC").
+		Limit(limit).Offset(offset).
+		Scan(&results).Error
+
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Convert to AuthorWithStats
+	authors := make([]AuthorWithStats, len(results))
+	for i, r := range results {
+		authors[i] = AuthorWithStats{
+			Author:    r.Author,
+			PoemCount: r.PoemCount,
+		}
+	}
+
+	return authors, int(totalCount), err
 }
 
 // SearchPoems searches poems using FTS5
