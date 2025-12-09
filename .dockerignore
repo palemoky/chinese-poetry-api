@@ -1,0 +1,38 @@
+# Binaries
+cmd/processor/processor
+cmd/server/server
+
+# Test files
+*.test
+*.out
+
+# Database files
+*.db
+*.db.gz
+
+# Logs
+*.log
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+
+# Git
+.git/
+.github/
+
+# Documentation source (keep compiled docs)
+docs/
+
+# Config
+config.yaml
+config.local.yaml
+
+# Data directories
+data/
+poetry-data/
+
+# Keep only Go source and essential files
