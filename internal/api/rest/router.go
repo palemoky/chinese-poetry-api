@@ -42,7 +42,23 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository,
 		v1.GET("/poems/search", poemHandler.SearchPoems)
 		v1.GET("/random", poemHandler.RandomPoem)
 
-		// TODO: Add more routes (authors, dynasties, types)
+		// Author routes
+		authorHandler := handler.NewAuthorHandler(repo)
+		v1.GET("/authors", authorHandler.ListAuthors)
+		v1.GET("/authors/:id", authorHandler.GetAuthor)
+		v1.GET("/authors/:id/poems", authorHandler.GetAuthorPoems)
+
+		// Dynasty routes
+		dynastyHandler := handler.NewDynastyHandler(repo)
+		v1.GET("/dynasties", dynastyHandler.ListDynasties)
+		v1.GET("/dynasties/:id", dynastyHandler.GetDynasty)
+		v1.GET("/dynasties/:id/poems", dynastyHandler.GetDynastyPoems)
+
+		// Poetry type routes
+		poetryTypeHandler := handler.NewPoetryTypeHandler(repo)
+		v1.GET("/types", poetryTypeHandler.ListPoetryTypes)
+		v1.GET("/types/:id", poetryTypeHandler.GetPoetryType)
+		v1.GET("/types/:id/poems", poetryTypeHandler.GetPoetryTypePoems)
 	}
 
 	return router
