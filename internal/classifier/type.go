@@ -5,6 +5,28 @@ import (
 	"unicode/utf8"
 )
 
+// Poetry type constants
+const (
+	// Categories
+	CategoryPoetry = "诗"
+	CategoryCi     = "词"
+	CategoryOther  = "其他"
+
+	// Specific types
+	TypeWuyanJueju = "五言绝句"
+	TypeQiyanJueju = "七言绝句"
+	TypeWuyanLvshi = "五言律诗"
+	TypeQiyanLvshi = "七言律诗"
+	TypeCi         = "词"
+	TypeOther      = "其他"
+
+	// Structure constraints
+	JuejuLines = 4
+	LvshiLines = 8
+	WuyanChars = 5
+	QiyanChars = 7
+)
+
 // PoetryTypeInfo contains information about a classified poetry type
 type PoetryTypeInfo struct {
 	TypeName     string
@@ -18,15 +40,15 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 	// If it has a rhythmic field, it's ci (词)
 	if rhythmic != "" {
 		return PoetryTypeInfo{
-			TypeName: "词",
-			Category: "词",
+			TypeName: TypeCi,
+			Category: CategoryCi,
 		}
 	}
 
 	if len(paragraphs) == 0 {
 		return PoetryTypeInfo{
-			TypeName: "其他",
-			Category: "其他",
+			TypeName: TypeOther,
+			Category: CategoryOther,
 		}
 	}
 
@@ -36,8 +58,8 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 	// Check if expansion resulted in empty lines
 	if len(expandedLines) == 0 {
 		return PoetryTypeInfo{
-			TypeName: "其他",
-			Category: "其他",
+			TypeName: TypeOther,
+			Category: CategoryOther,
 		}
 	}
 
@@ -55,139 +77,97 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 	if !isUniform(charCounts) {
 		// Irregular structure
 		return PoetryTypeInfo{
-			TypeName: "其他",
-			Category: "其他",
+			TypeName: TypeOther,
+			Category: CategoryOther,
 		}
 	}
 
 	charsPerLine := charCounts[0]
 
 	// Classify based on line count and characters per line
-	switch {
-	case lineCount == 4 && charsPerLine == 5:
-		lines := 4
-		chars := 5
-		return PoetryTypeInfo{
-			TypeName:     "五言绝句",
-			Category:     "诗",
-			Lines:        &lines,
-			CharsPerLine: &chars,
-		}
-	case lineCount == 4 && charsPerLine == 7:
-		lines := 4
-		chars := 7
-		return PoetryTypeInfo{
-			TypeName:     "七言绝句",
-			Category:     "诗",
-			Lines:        &lines,
-			CharsPerLine: &chars,
-		}
-	case lineCount == 8 && charsPerLine == 5:
-		lines := 8
-		chars := 5
-		return PoetryTypeInfo{
-			TypeName:     "五言律诗",
-			Category:     "诗",
-			Lines:        &lines,
-			CharsPerLine: &chars,
-		}
-	case lineCount == 8 && charsPerLine == 7:
-		lines := 8
-		chars := 7
-		return PoetryTypeInfo{
-			TypeName:     "七言律诗",
-			Category:     "诗",
-			Lines:        &lines,
-			CharsPerLine: &chars,
-		}
-	case charsPerLine == 5:
-		chars := 5
-		return PoetryTypeInfo{
-			TypeName:     "五言古诗",
-			Category:     "诗",
-			CharsPerLine: &chars,
-		}
-	case charsPerLine == 7:
-		chars := 7
-		return PoetryTypeInfo{
-			TypeName:     "七言古诗",
-			Category:     "诗",
-			CharsPerLine: &chars,
-		}
-	default:
-		return PoetryTypeInfo{
-			TypeName: "其他",
-			Category: "其他",
-		}
+	typeName, category := classifyByStructure(lineCount, charsPerLine)
+
+	return PoetryTypeInfo{
+		TypeName:     typeName,
+		Category:     category,
+		Lines:        &lineCount,
+		CharsPerLine: &charsPerLine,
 	}
 }
 
-// expandParagraphs splits merged lines based on punctuation
-// e.g., "江南有美人，别后长相忆。" → ["江南有美人", "别后长相忆"]
+// classifyByStructure classifies poetry based on line count and characters per line
+func classifyByStructure(lines, chars int) (typeName, category string) {
+	switch {
+	case lines == JuejuLines && chars == WuyanChars:
+		return TypeWuyanJueju, CategoryPoetry
+	case lines == JuejuLines && chars == QiyanChars:
+		return TypeQiyanJueju, CategoryPoetry
+	case lines == LvshiLines && chars == WuyanChars:
+		return TypeWuyanLvshi, CategoryPoetry
+	case lines == LvshiLines && chars == QiyanChars:
+		return TypeQiyanLvshi, CategoryPoetry
+	default:
+		return TypeOther, CategoryOther
+	}
+}
+
+// isUniform checks if all integers in a slice are equal
+func isUniform(nums []int) bool {
+	if len(nums) == 0 {
+		return true
+	}
+	first := nums[0]
+	for _, n := range nums[1:] {
+		if n != first {
+			return false
+		}
+	}
+	return true
+}
+
+// expandParagraphs splits paragraphs by sentence-ending punctuation
 func expandParagraphs(paragraphs []string) []string {
 	var result []string
 
 	for _, para := range paragraphs {
 		// Split by common sentence-ending punctuation
-		lines := splitByPunctuation(para)
+		// 。！？；are common Chinese sentence enders
+		lines := splitBySentence(para)
 		result = append(result, lines...)
 	}
 
 	return result
 }
 
-// splitByPunctuation splits a string by Chinese punctuation marks
-func splitByPunctuation(s string) []string {
-	// Replace punctuation with a delimiter
-	delimiters := []string{"，", "。", "！", "？", "；", "、"}
-
-	result := s
+// splitBySentence splits text by sentence-ending punctuation
+func splitBySentence(text string) []string {
+	// Replace sentence-ending punctuation with a delimiter
+	delimiters := []string{"。", "！", "？", "；"}
 	for _, delim := range delimiters {
-		result = strings.ReplaceAll(result, delim, "|")
+		text = strings.ReplaceAll(text, delim, "\n")
 	}
 
-	// Split by delimiter and filter empty strings
-	parts := strings.Split(result, "|")
-	var lines []string
-	for _, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if trimmed != "" {
-			lines = append(lines, trimmed)
+	// Split by newline and filter empty strings
+	lines := strings.Split(text, "\n")
+	var result []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			result = append(result, line)
 		}
-	}
-
-	return lines
-}
-
-// removePunctuation removes common Chinese punctuation marks
-func removePunctuation(s string) string {
-	punctuation := []string{
-		"，", "。", "！", "？", "；", "：", "、",
-		",", ".", "!", "?", ";", ":", " ",
-		"「", "」", "『", "』", "（", "）", "《", "》",
-		`"`, `"`, `'`, `'`, "【", "】", "〔", "〕",
-	}
-
-	result := s
-	for _, p := range punctuation {
-		result = strings.ReplaceAll(result, p, "")
 	}
 
 	return result
 }
 
-// isUniform checks if all elements in the slice are the same
-func isUniform(counts []int) bool {
-	if len(counts) == 0 {
-		return true
+// removePunctuation removes all punctuation from text
+func removePunctuation(text string) string {
+	// Common Chinese and English punctuation
+	punctuation := `，。！？；：""''（）《》【】、·—…,.!?;:'"()[]{}/-`
+
+	for _, p := range punctuation {
+		text = strings.ReplaceAll(text, string(p), "")
 	}
 
-	first := counts[0]
-	for _, count := range counts[1:] {
-		if count != first {
-			return false
-		}
-	}
-
-	return true
+	return strings.TrimSpace(text)
 }
