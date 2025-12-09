@@ -6,9 +6,11 @@ import (
 	"github.com/liuzl/gocc"
 )
 
+// s2t and t2s are initialized once in init() and are safe for concurrent use.
+// The underlying gocc.OpenCC.Convert method is thread-safe.
 var (
-	s2t *gocc.OpenCC // Simplified to Traditional
-	t2s *gocc.OpenCC // Traditional to Simplified
+	s2t *gocc.OpenCC // Simplified to Traditional (thread-safe)
+	t2s *gocc.OpenCC // Traditional to Simplified (thread-safe)
 )
 
 func init() {
