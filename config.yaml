@@ -5,7 +5,7 @@ server:
 database:
   type: simplified  # simplified or traditional
   path: poetry-simplified.db
-  
+
 rate_limit:
   enabled: true
   requests_per_second: 10

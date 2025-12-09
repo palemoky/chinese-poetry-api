@@ -28,7 +28,7 @@
 本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，包含:
 
 - 唐诗 5.5万+ 首
-- 宋诗 26万+ 首  
+- 宋诗 26万+ 首
 - 宋词 2.1万+ 首
 - 元曲、五代诗词、诗经、楚辞等
 

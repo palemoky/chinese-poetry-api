@@ -124,15 +124,28 @@ func TestGetPoetryTypeID(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewRepository(db)
 
+	// First, create a poetry type for testing
+	poetryType := &PoetryType{
+		Name:     "五言绝句",
+		Category: "诗",
+	}
+	err := db.Create(poetryType).Error
+	require.NoError(t, err, "Failed to create test poetry type")
+
 	tests := []struct {
 		name     string
 		typeName string
 		wantErr  bool
 	}{
 		{
-			name:     "get type",
+			name:     "get existing type",
 			typeName: "五言绝句",
 			wantErr:  false,
+		},
+		{
+			name:     "get non-existent type",
+			typeName: "不存在的类型",
+			wantErr:  true,
 		},
 	}
 
@@ -173,7 +186,7 @@ func TestCountAuthors(t *testing.T) {
 // Benchmark tests
 func BenchmarkGetOrCreateDynasty(b *testing.B) {
 	gormDB, _ := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	gormDB.AutoMigrate(&Dynasty{})
+	_ = gormDB.AutoMigrate(&Dynasty{})
 	db := &DB{DB: gormDB}
 	repo := NewRepository(db)
 

@@ -62,23 +62,38 @@ func TestNewProcessor(t *testing.T) {
 }
 
 func TestSetBatchSize(t *testing.T) {
-	// Create a processor with mock repo (nil for this test)
-	proc := &Processor{
-		batchSize: 100,
-	}
-
 	tests := []struct {
 		name     string
+		initial  int
 		newSize  int
 		wantSize int
 	}{
-		{"set valid size", 200, 200},
-		{"ignore zero", 0, 100},
-		{"ignore negative", -10, 100},
+		{
+			name:     "set valid size",
+			initial:  100,
+			newSize:  200,
+			wantSize: 200,
+		},
+		{
+			name:     "ignore zero",
+			initial:  100,
+			newSize:  0,
+			wantSize: 100, // Should keep previous value
+		},
+		{
+			name:     "ignore negative",
+			initial:  100,
+			newSize:  -10,
+			wantSize: 100, // Should keep previous value
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Create fresh processor for each test
+			proc := &Processor{
+				batchSize: tt.initial,
+			}
 			proc.SetBatchSize(tt.newSize)
 			assert.Equal(t, tt.wantSize, proc.batchSize)
 		})

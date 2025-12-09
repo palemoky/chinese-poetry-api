@@ -13,10 +13,10 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	gqlparser "github.com/vektah/gqlparser/v2"
-	"github.com/vektah/gqlparser/v2/ast"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/model"
+	gqlparser "github.com/vektah/gqlparser/v2"
+	"github.com/vektah/gqlparser/v2/ast"
 )
 
 // region    ************************** generated!.gotpl **************************
@@ -738,7 +738,7 @@ var sources = []*ast.Source{
 type Query {
   "Get a single poem by ID"
   poem(id: ID!): Poem
-  
+
   "Get a list of poems with pagination and filters"
   poems(
     page: Int = 1
@@ -747,7 +747,7 @@ type Query {
     authorId: ID
     typeId: ID
   ): PoemConnection!
-  
+
   "Search poems by query"
   searchPoems(
     query: String!
@@ -755,26 +755,26 @@ type Query {
     page: Int = 1
     pageSize: Int = 20
   ): PoemConnection!
-  
+
   "Get a random poem"
   randomPoem(dynastyId: ID, typeId: ID): Poem
-  
+
   "Get an author by ID"
   author(id: ID!): Author
-  
+
   "Get a list of authors"
   authors(
     page: Int = 1
     pageSize: Int = 20
     dynastyId: ID
   ): AuthorConnection!
-  
+
   "Get all dynasties"
   dynasties: [Dynasty!]!
-  
+
   "Get all poetry types"
   poemTypes: [PoetryType!]!
-  
+
   "Get overall statistics"
   statistics: Statistics!
 }

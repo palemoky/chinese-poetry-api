@@ -1,7 +1,6 @@
 package search
 
 import (
-	"encoding/json"
 	"fmt"
 	"unicode"
 
@@ -178,7 +177,7 @@ func (e *Engine) buildFTSCountQuery(query string) (string, []interface{}) {
 func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []interface{}) {
 	pattern := "%" + query + "%"
 	sql := `
-		SELECT 
+		SELECT
 			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
 			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
 			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
@@ -188,7 +187,7 @@ func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []in
 		LEFT JOIN authors a ON p.author_id = a.id
 		LEFT JOIN dynasties d ON p.dynasty_id = d.id
 		LEFT JOIN poetry_types t ON p.type_id = t.id
-		WHERE p.title_pinyin LIKE ? 
+		WHERE p.title_pinyin LIKE ?
 			OR p.title_pinyin_abbr LIKE ?
 			OR a.name_pinyin LIKE ?
 			OR a.name_pinyin_abbr LIKE ?
@@ -203,7 +202,7 @@ func (e *Engine) buildPinyinCountQuery(query string) (string, []interface{}) {
 		SELECT COUNT(*)
 		FROM poems p
 		LEFT JOIN authors a ON p.author_id = a.id
-		WHERE p.title_pinyin LIKE ? 
+		WHERE p.title_pinyin LIKE ?
 			OR p.title_pinyin_abbr LIKE ?
 			OR a.name_pinyin LIKE ?
 			OR a.name_pinyin_abbr LIKE ?
@@ -271,7 +270,7 @@ func (e *Engine) buildAuthorPinyinCountQuery(query string) (string, []interface{
 
 func (e *Engine) getBaseQuery() string {
 	return `
-		SELECT 
+		SELECT
 			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
 			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
 			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
@@ -282,15 +281,6 @@ func (e *Engine) getBaseQuery() string {
 		LEFT JOIN dynasties d ON p.dynasty_id = d.id
 		LEFT JOIN poetry_types t ON p.type_id = t.id
 	`
-}
-
-// parseContentJSON parses JSON content field
-func parseContentJSON(contentJSON string) ([]string, error) {
-	var content []string
-	if err := json.Unmarshal([]byte(contentJSON), &content); err != nil {
-		return nil, err
-	}
-	return content, nil
 }
 
 // isPinyinQuery checks if a query string is pinyin

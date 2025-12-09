@@ -418,9 +418,9 @@ func (r *Repository) SearchPoems(query string, limit int) ([]Poem, error) {
 
 	// Search in FTS table
 	err := r.db.Raw(`
-		SELECT poem_id FROM poems_fts 
-		WHERE poems_fts MATCH ? 
-		ORDER BY rank 
+		SELECT poem_id FROM poems_fts
+		WHERE poems_fts MATCH ?
+		ORDER BY rank
 		LIMIT ?
 	`, query, limit).Scan(&poemIDs).Error
 

@@ -49,7 +49,7 @@ var TriggersSQL = []string{
 	// Trigger to update FTS when inserting poems
 	`CREATE TRIGGER IF NOT EXISTS poems_ai AFTER INSERT ON poems BEGIN
 		INSERT INTO poems_fts(poem_id, title, title_pinyin, content, author_name, author_pinyin)
-		SELECT 
+		SELECT
 			NEW.id,
 			NEW.title,
 			NEW.title_pinyin,
@@ -63,7 +63,7 @@ var TriggersSQL = []string{
 	`CREATE TRIGGER IF NOT EXISTS poems_au AFTER UPDATE ON poems BEGIN
 		DELETE FROM poems_fts WHERE poem_id = OLD.id;
 		INSERT INTO poems_fts(poem_id, title, title_pinyin, content, author_name, author_pinyin)
-		SELECT 
+		SELECT
 			NEW.id,
 			NEW.title,
 			NEW.title_pinyin,

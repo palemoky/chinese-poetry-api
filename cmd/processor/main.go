@@ -99,7 +99,7 @@ func processDatabase(dbPath string, poems []loader.PoemWithMeta, convertToTradit
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Run migrations
 	log.Println("Creating database schema...")
@@ -134,7 +134,7 @@ func printStatistics(dbPath, label string) error {
 	if err != nil {
 		return err
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	repo := database.NewRepository(db)
 	stats, err := repo.GetStatistics()

@@ -55,7 +55,7 @@ func NewJSONLoader(configPath string) (*JSONLoader, error) {
 
 	// Determine base path
 	configDir := filepath.Dir(configPath)
-	basePath := configDir
+	var basePath string
 
 	// If cp_path is specified and not current directory, join it
 	if config.CPPath != "" && config.CPPath != "./" && config.CPPath != "." {
