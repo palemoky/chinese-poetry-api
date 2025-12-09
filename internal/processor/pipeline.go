@@ -20,11 +20,6 @@ import (
 )
 
 const (
-	// Dynamic batch sizing thresholds (percentage of channel capacity)
-	channelPressureHigh   = 0.8 // 80% full - reduce batch size
-	channelPressureMedium = 0.5 // 50% full - normal batch size
-	channelPressureLow    = 0.2 // 20% full - increase batch size
-
 	// Error reporting limits
 	MaxErrorsToDisplay = 100 // Maximum number of errors to display
 	MaxErrorsToCollect = 100 // Maximum number of errors to collect
@@ -57,7 +52,7 @@ func getOptimalConfig() (workBuffer, resultBuffer, errorBuffer, defaultBatch, mi
 
 	default:
 		// High-end machines
-		return 300, 5000, 300, 500, 200, 1000
+		return 500, 10000, 500, 1000, 500, 2000
 	}
 }
 
@@ -66,9 +61,7 @@ type Processor struct {
 	repo                 database.RepositoryInterface
 	workers              int
 	convertToTraditional bool
-	batchSize            int // Base batch size for database insertion
-	minBatchSize         int // Minimum batch size (for high pressure)
-	maxBatchSize         int // Maximum batch size (for low pressure)
+	batchSize            int // Batch size for database insertion
 }
 
 // NewProcessor creates a new processor with caching support
@@ -78,7 +71,7 @@ func NewProcessor(repo *database.Repository, workers int, convertToTraditional b
 	}
 
 	// Get optimal configuration based on system resources
-	_, _, _, defaultBatch, minBatch, maxBatch := getOptimalConfig()
+	_, _, _, defaultBatch, _, _ := getOptimalConfig()
 
 	// Wrap repository with caching for better performance
 	cachedRepo := database.NewCachedRepository(repo)
@@ -88,8 +81,6 @@ func NewProcessor(repo *database.Repository, workers int, convertToTraditional b
 		workers:              workers,
 		convertToTraditional: convertToTraditional,
 		batchSize:            defaultBatch,
-		minBatchSize:         minBatch,
-		maxBatchSize:         maxBatch,
 	}
 }
 
@@ -171,7 +162,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	// Start batch inserter goroutine
 	insertDone := make(chan error, 1)
 	go func() {
-		insertDone <- p.batchInserter(resultCh)
+		insertDone <- p.batchInserter(resultCh, progress)
 	}()
 
 	// Send work to workers
@@ -225,69 +216,34 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	return nil
 }
 
-// batchInserter collects poems and inserts them in batches with dynamic sizing
-// Adjusts batch size based on channel pressure to prevent blocking
-func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
-	batch := make([]*database.Poem, 0, p.maxBatchSize)
-	currentBatchSize := p.batchSize // Start with configured batch size
+// batchInserter collects poems and inserts them using large transactions
+// This approach reduces fsync overhead by grouping many inserts into fewer transactions
+func (p *Processor) batchInserter(resultCh <-chan *database.Poem, progress *mpb.Progress) error {
+	// Collect all poems first (they're already processed)
+	allPoems := make([]*database.Poem, 0, cap(resultCh))
 
 	for poem := range resultCh {
-		batch = append(batch, poem)
-
-		// Calculate channel utilization (pressure)
-		channelLen := len(resultCh)
-		channelCap := cap(resultCh)
-		utilization := float64(channelLen) / float64(channelCap)
-
-		// Dynamically adjust batch size based on channel pressure
-		newBatchSize := p.calculateBatchSize(utilization, currentBatchSize)
-
-		// Log batch size changes for debugging
-		if newBatchSize != currentBatchSize {
-			log.Printf("[Batch Inserter] Channel utilization: %.1f%%, adjusting batch size: %d → %d",
-				utilization*100, currentBatchSize, newBatchSize)
-		}
-		currentBatchSize = newBatchSize
-
-		// Insert when batch reaches current size
-		if len(batch) >= currentBatchSize {
-			if err := p.repo.BatchInsertPoems(batch, len(batch)); err != nil {
-				return fmt.Errorf("failed to insert batch of %d poems: %w", len(batch), err)
-			}
-			batch = batch[:0] // Reset batch
-		}
+		allPoems = append(allPoems, poem)
 	}
 
-	// Insert remaining poems
-	if len(batch) > 0 {
-		if err := p.repo.BatchInsertPoems(batch, len(batch)); err != nil {
-			return fmt.Errorf("failed to insert final batch of %d poems: %w", len(batch), err)
-		}
+	if len(allPoems) == 0 {
+		return nil
 	}
 
+	log.Printf("[Batch Inserter] Collected %d poems, starting transaction-based insertion...", len(allPoems))
+
+	// Use large transactions for maximum performance
+	// Transaction size: 20,000 poems per transaction (reduces fsync calls)
+	// Batch size: use current configured batch size for inserts within transaction
+	transactionSize := 20000
+
+	err := p.repo.BatchInsertPoemsWithTransaction(allPoems, transactionSize, p.batchSize, progress)
+	if err != nil {
+		return fmt.Errorf("failed to insert poems with transactions: %w", err)
+	}
+
+	log.Printf("[Batch Inserter] Successfully inserted %d poems using large transactions", len(allPoems))
 	return nil
-}
-
-// calculateBatchSize determines the optimal batch size based on channel utilization
-// Returns the adjusted batch size, or keeps current size for smooth transitions
-func (p *Processor) calculateBatchSize(utilization float64, currentSize int) int {
-	switch {
-	case utilization >= channelPressureHigh:
-		// High pressure (≥80% full): reduce batch size for faster consumption
-		return p.minBatchSize
-
-	case utilization >= channelPressureMedium:
-		// Medium pressure (≥50% full): use base batch size
-		return p.batchSize
-
-	case utilization <= channelPressureLow:
-		// Low pressure (≤20% full): increase batch size for efficiency
-		return p.maxBatchSize
-
-	default:
-		// Between 20-50%: keep current batch size for smooth transition
-		return currentSize
-	}
 }
 
 func min(a, b int) int {

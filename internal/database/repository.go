@@ -1,6 +1,12 @@
 package database
 
 import (
+	"fmt"
+	"log"
+
+	"github.com/vbauerster/mpb/v8"
+	"github.com/vbauerster/mpb/v8/decor"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/palemoky/chinese-poetry-api/internal/classifier"
@@ -13,6 +19,7 @@ type RepositoryInterface interface {
 	GetPoetryTypeID(name string) (int64, error)
 	InsertPoem(poem *Poem) error
 	BatchInsertPoems(poems []*Poem, batchSize int) error
+	BatchInsertPoemsWithTransaction(poems []*Poem, transactionSize, batchSize int, progress *mpb.Progress) error
 	UpsertPoem(poem *Poem) error
 	GetPoemByID(id string) (*Poem, error)
 	CountPoems() (int, error)
@@ -127,6 +134,73 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 		Columns:   []clause.Column{{Name: "id"}},
 		DoNothing: true, // Skip duplicates
 	}).CreateInBatches(poems, batchSize).Error
+}
+
+// BatchInsertPoemsWithTransaction inserts poems in large transactions for maximum performance
+// This reduces fsync overhead by grouping multiple batches into one transaction
+// transactionSize: number of poems per transaction (e.g., 10000)
+// batchSize: number of poems per insert statement (e.g., 1000)
+// progress: progress container for displaying transaction progress
+func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionSize, batchSize int, progress *mpb.Progress) error {
+	if len(poems) == 0 {
+		return nil
+	}
+
+	if transactionSize <= 0 {
+		transactionSize = 20000 // Default: 20k poems per transaction
+	}
+	if batchSize <= 0 {
+		batchSize = 1000 // Default: 1000 poems per insert
+	}
+
+	totalTransactions := (len(poems) + transactionSize - 1) / transactionSize
+	log.Printf("[Database] Starting batch insertion: %d poems in %d transactions (batch size: %d)",
+		len(poems), totalTransactions, batchSize)
+
+	// Create progress bar for transactions
+	var txBar *mpb.Bar
+	if progress != nil {
+		txBar = progress.AddBar(int64(totalTransactions),
+			mpb.PrependDecorators(
+				decor.Name("Inserting: ", decor.WC{W: 12, C: decor.DindentRight}),
+				decor.CountersNoUnit("%d / %d", decor.WCSyncWidth),
+			),
+			mpb.AppendDecorators(
+				decor.Percentage(decor.WC{W: 5}),
+				decor.Name(" | "),
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 6}),
+			),
+		)
+	}
+
+	// Process poems in large transaction chunks
+	for i := 0; i < len(poems); i += transactionSize {
+		end := min(i+transactionSize, len(poems))
+		transactionChunk := poems[i:end]
+
+		// Execute one large transaction
+		err := r.db.Transaction(func(tx *gorm.DB) error {
+			// Within the transaction, insert in smaller batches
+			return tx.Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "id"}},
+				DoNothing: true,
+			}).CreateInBatches(transactionChunk, batchSize).Error
+		})
+
+		if err != nil {
+			txNum := i/transactionSize + 1
+			return fmt.Errorf("failed to insert transaction %d/%d (poems %d-%d): %w",
+				txNum, totalTransactions, i, end, err)
+		}
+
+		// Update progress bar
+		if txBar != nil {
+			txBar.Increment()
+		}
+	}
+
+	log.Printf("[Database] ✓ All %d poems inserted successfully", len(poems))
+	return nil
 }
 
 // UpsertPoem inserts or updates a poem (for handling duplicates)

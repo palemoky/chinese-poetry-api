@@ -33,7 +33,9 @@ func Open(path string) (*DB, error) {
 	// _journal_mode=WAL: Write-Ahead Logging for better concurrency
 	// _synchronous=NORMAL: balance between safety and performance
 	// cache=shared: allow multiple connections to share cache
-	dsn := path + "?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&cache=shared"
+	// _cache_size=-64000: 64MB page cache (negative = KB, positive = pages)
+	// _temp_store=MEMORY: use memory for temporary tables and indices
+	dsn := path + "?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&cache=shared&_cache_size=-64000&_temp_store=MEMORY"
 
 	// Open database with GORM SQLite driver
 	db, err := gorm.Open(sqlite.Open(dsn), config)
