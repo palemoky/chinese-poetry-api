@@ -30,13 +30,24 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 		}
 	}
 
+	// Split merged lines (e.g., "江南有美人，别后长相忆。" → ["江南有美人", "别后长相忆"])
+	expandedLines := expandParagraphs(paragraphs)
+
+	// Check if expansion resulted in empty lines
+	if len(expandedLines) == 0 {
+		return PoetryTypeInfo{
+			TypeName: "其他",
+			Category: "其他",
+		}
+	}
+
 	// Count lines and characters per line
-	lineCount := len(paragraphs)
+	lineCount := len(expandedLines)
 	charCounts := make([]int, lineCount)
 
-	for i, para := range paragraphs {
+	for i, line := range expandedLines {
 		// Remove punctuation and count characters
-		cleaned := removePunctuation(para)
+		cleaned := removePunctuation(line)
 		charCounts[i] = utf8.RuneCountInString(cleaned)
 	}
 
@@ -109,6 +120,43 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 			Category: "其他",
 		}
 	}
+}
+
+// expandParagraphs splits merged lines based on punctuation
+// e.g., "江南有美人，别后长相忆。" → ["江南有美人", "别后长相忆"]
+func expandParagraphs(paragraphs []string) []string {
+	var result []string
+
+	for _, para := range paragraphs {
+		// Split by common sentence-ending punctuation
+		lines := splitByPunctuation(para)
+		result = append(result, lines...)
+	}
+
+	return result
+}
+
+// splitByPunctuation splits a string by Chinese punctuation marks
+func splitByPunctuation(s string) []string {
+	// Replace punctuation with a delimiter
+	delimiters := []string{"，", "。", "！", "？", "；", "、"}
+
+	result := s
+	for _, delim := range delimiters {
+		result = strings.ReplaceAll(result, delim, "|")
+	}
+
+	// Split by delimiter and filter empty strings
+	parts := strings.Split(result, "|")
+	var lines []string
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+
+	return lines
 }
 
 // removePunctuation removes common Chinese punctuation marks
