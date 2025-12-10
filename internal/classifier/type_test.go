@@ -217,18 +217,8 @@ func TestGenerateStableAuthorID(t *testing.T) {
 		wantSame   string // Another name that should generate the same ID
 		wantDiff   string // Another name that should generate different ID
 	}{
-		{
-			name:       "same name generates same ID",
-			authorName: "李白",
-			wantSame:   "李白",
-			wantDiff:   "杜甫",
-		},
-		{
-			name:       "different names generate different IDs",
-			authorName: "白居易",
-			wantSame:   "白居易",
-			wantDiff:   "李商隐",
-		},
+		{"same name generates same ID", "李白", "李白", "杜甫"},
+		{"different names generate different IDs", "白居易", "白居易", "李商隐"},
 	}
 
 	for _, tt := range tests {

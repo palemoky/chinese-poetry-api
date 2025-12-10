@@ -139,16 +139,8 @@ func TestGetPoetryTypeID(t *testing.T) {
 		typeName string
 		wantErr  bool
 	}{
-		{
-			name:     "get existing type",
-			typeName: "五言绝句",
-			wantErr:  false,
-		},
-		{
-			name:     "get non-existent type",
-			typeName: "不存在的类型",
-			wantErr:  true,
-		},
+		{"get existing type", "五言绝句", false},
+		{"get non-existent type", "不存在的类型", true},
 	}
 
 	for _, tt := range tests {

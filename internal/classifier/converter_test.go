@@ -13,31 +13,11 @@ func TestToTraditional(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "simple conversion",
-			input: "中国",
-			want:  "中國",
-		},
-		{
-			name:  "poetry text",
-			input: "春眠不觉晓",
-			want:  "春眠不覺曉",
-		},
-		{
-			name:  "already traditional",
-			input: "詩詞",
-			want:  "詩詞",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "mixed text",
-			input: "李白的诗歌很优美",
-			want:  "李白的詩歌很優美",
-		},
+		{"simple conversion", "中国", "中國"},
+		{"poetry text", "春眠不觉晓", "春眠不覺曉"},
+		{"already traditional", "詩詞", "詩詞"},
+		{"empty string", "", ""},
+		{"mixed text", "李白的诗歌很优美", "李白的詩歌很優美"},
 	}
 
 	for _, tt := range tests {
@@ -55,26 +35,10 @@ func TestToSimplified(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "simple conversion",
-			input: "中國",
-			want:  "中国",
-		},
-		{
-			name:  "poetry text",
-			input: "春眠不覺曉",
-			want:  "春眠不觉晓",
-		},
-		{
-			name:  "already simplified",
-			input: "诗词",
-			want:  "诗词",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
+		{"simple conversion", "中國", "中国"},
+		{"poetry text", "春眠不覺曉", "春眠不觉晓"},
+		{"already simplified", "诗词", "诗词"},
+		{"empty string", "", ""},
 	}
 
 	for _, tt := range tests {
@@ -92,21 +56,9 @@ func TestToTraditionalArray(t *testing.T) {
 		input []string
 		want  []string
 	}{
-		{
-			name:  "convert array",
-			input: []string{"中国", "诗歌"},
-			want:  []string{"中國", "詩歌"},
-		},
-		{
-			name:  "empty array",
-			input: []string{},
-			want:  []string{},
-		},
-		{
-			name:  "single element",
-			input: []string{"春眠不觉晓"},
-			want:  []string{"春眠不覺曉"},
-		},
+		{"convert array", []string{"中国", "诗歌"}, []string{"中國", "詩歌"}},
+		{"empty array", []string{}, []string{}},
+		{"single element", []string{"春眠不觉晓"}, []string{"春眠不覺曉"}},
 	}
 
 	for _, tt := range tests {
@@ -151,26 +103,10 @@ func TestToPinyinNoTone(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "simple Chinese",
-			input: "李白",
-			want:  "li bai",
-		},
-		{
-			name:  "with spaces",
-			input: "李 白",
-			want:  "li bai", // Spaces are normalized
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "English text",
-			input: "Hello",
-			want:  "", // English returns empty string
-		},
+		{"simple Chinese", "李白", "li bai"},
+		{"with spaces", "李 白", "li bai"},
+		{"empty string", "", ""},
+		{"English text", "Hello", ""},
 	}
 
 	for _, tt := range tests {
@@ -187,21 +123,9 @@ func TestToPinyinAbbr(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "simple Chinese",
-			input: "李白",
-			want:  "lb",
-		},
-		{
-			name:  "longer name",
-			input: "白居易",
-			want:  "bjy",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
+		{"simple Chinese", "李白", "lb"},
+		{"longer name", "白居易", "bjy"},
+		{"empty string", "", ""},
 	}
 
 	for _, tt := range tests {
@@ -215,16 +139,16 @@ func TestToPinyinAbbr(t *testing.T) {
 // Benchmark tests
 func BenchmarkToTraditional(b *testing.B) {
 	text := "春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。"
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_, _ = ToTraditional(text)
 	}
 }
 
 func BenchmarkToPinyinNoTone(b *testing.B) {
 	text := "李白"
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+
+	for b.Loop() {
 		_ = ToPinyinNoTone(text)
 	}
 }
