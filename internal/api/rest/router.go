@@ -2,6 +2,7 @@ package rest
 
 import (
 	"github.com/gin-gonic/gin"
+
 	"github.com/palemoky/chinese-poetry-api/internal/api/middleware"
 	"github.com/palemoky/chinese-poetry-api/internal/api/rest/handler"
 	"github.com/palemoky/chinese-poetry-api/internal/config"
@@ -38,9 +39,10 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository,
 
 		// Poem routes
 		poemHandler := handler.NewPoemHandler(repo, searchEngine)
-		v1.GET("/poems/:id", poemHandler.GetPoem)
+		v1.GET("/poems", poemHandler.ListPoems)
+		v1.GET("/poems/random", poemHandler.RandomPoem)
 		v1.GET("/poems/search", poemHandler.SearchPoems)
-		v1.GET("/random", poemHandler.RandomPoem)
+		v1.GET("/poems/:id", poemHandler.GetPoem)
 
 		// Author routes
 		authorHandler := handler.NewAuthorHandler(repo)

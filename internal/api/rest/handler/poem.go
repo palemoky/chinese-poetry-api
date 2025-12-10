@@ -58,6 +58,41 @@ func (h *PoemHandler) GetPoem(c *gin.Context) {
 	}
 }
 
+// ListPoems retrieves a paginated list of poems
+func (h *PoemHandler) ListPoems(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
+	poems, err := h.repo.ListPoems(pageSize, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "failed to retrieve poems",
+		})
+		return
+	}
+
+	// Get total count
+	total, err := h.repo.CountPoems()
+	if err != nil {
+		total = 0
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data":      poems,
+		"page":      page,
+		"page_size": pageSize,
+		"total":     total,
+	})
+}
+
 // SearchPoems searches for poems
 func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	query := c.Query("q")

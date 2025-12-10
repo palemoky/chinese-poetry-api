@@ -6,10 +6,9 @@ package database
 func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, error) {
 	var authors []AuthorWithStats
 
+	// Use subquery for better performance on large datasets
 	err := r.db.Table("authors").
-		Select("authors.*, COUNT(poems.id) as poem_count").
-		Joins("LEFT JOIN poems ON poems.author_id = authors.id").
-		Group("authors.id").
+		Select("authors.*, (SELECT COUNT(*) FROM poems WHERE poems.author_id = authors.id) as poem_count").
 		Order("poem_count DESC").
 		Limit(limit).
 		Offset(offset).
@@ -44,13 +43,11 @@ func (r *Repository) GetPoemsByAuthor(authorID int64, limit, offset int) ([]Poem
 func (r *Repository) GetDynastiesWithStats() ([]DynastyWithStats, error) {
 	var dynasties []DynastyWithStats
 
+	// Use subqueries instead of JOINs for better performance on large datasets
 	err := r.db.Table("dynasties").
 		Select("dynasties.*, " +
-			"COUNT(DISTINCT poems.id) as poem_count, " +
-			"COUNT(DISTINCT authors.id) as author_count").
-		Joins("LEFT JOIN poems ON poems.dynasty_id = dynasties.id").
-		Joins("LEFT JOIN authors ON authors.dynasty_id = dynasties.id").
-		Group("dynasties.id").
+			"(SELECT COUNT(*) FROM poems WHERE poems.dynasty_id = dynasties.id) as poem_count, " +
+			"(SELECT COUNT(*) FROM authors WHERE authors.dynasty_id = dynasties.id) as author_count").
 		Order("poem_count DESC").
 		Find(&dynasties).Error
 
@@ -83,10 +80,9 @@ func (r *Repository) GetPoemsByDynasty(dynastyID int64, limit, offset int) ([]Po
 func (r *Repository) GetPoetryTypesWithStats() ([]PoetryTypeWithStats, error) {
 	var types []PoetryTypeWithStats
 
+	// Use subquery for better performance on large datasets
 	err := r.db.Table("poetry_types").
-		Select("poetry_types.*, COUNT(poems.id) as poem_count").
-		Joins("LEFT JOIN poems ON poems.type_id = poetry_types.id").
-		Group("poetry_types.id").
+		Select("poetry_types.*, (SELECT COUNT(*) FROM poems WHERE poems.type_id = poetry_types.id) as poem_count").
 		Order("poem_count DESC").
 		Find(&types).Error
 
