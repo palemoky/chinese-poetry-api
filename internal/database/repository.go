@@ -416,29 +416,16 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 	return authors, int(totalCount), err
 }
 
-// SearchPoems searches poems using FTS5
+// SearchPoems searches poems using LIKE query across title, content, and author
 func (r *Repository) SearchPoems(query string, limit int) ([]Poem, error) {
-	var poemIDs []string
+	pattern := "%" + query + "%"
 
-	// Search in FTS table
-	err := r.db.Raw(`
-		SELECT poem_id FROM poems_fts
-		WHERE poems_fts MATCH ?
-		ORDER BY rank
-		LIMIT ?
-	`, query, limit).Scan(&poemIDs).Error
-	if err != nil {
-		return nil, err
-	}
-
-	if len(poemIDs) == 0 {
-		return []Poem{}, nil
-	}
-
-	// Get full poem records
 	var poems []Poem
-	err = r.db.Preload("Author").Preload("Dynasty").Preload("Type").
-		Where("id IN ?", poemIDs).
+	err := r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		Joins("LEFT JOIN authors ON poems.author_id = authors.id").
+		Where("poems.title LIKE ? OR poems.content LIKE ? OR authors.name LIKE ?",
+			pattern, pattern, pattern).
+		Limit(limit).
 		Find(&poems).Error
 
 	return poems, err
