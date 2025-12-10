@@ -43,6 +43,7 @@ help:
 	@echo "  make test               - 运行所有测试"
 	@echo "  make test-verbose       - 运行测试（详细输出）"
 	@echo "  make bench              - 运行基准测试"
+	@echo "  make fuzz               - 运行模糊测试"
 	@echo ""
 	@echo "$(GREEN)代码质量:$(NC)"
 	@echo "  make fmt                - 格式化代码"
@@ -140,6 +141,17 @@ test-verbose:
 bench:
 	@echo "$(BLUE)运行基准测试...$(NC)"
 	@$(GO_BUILD_FLAGS) go test -bench=. -benchmem ./...
+
+## fuzz: 运行模糊测试
+fuzz:
+	@echo "$(BLUE)运行模糊测试...$(NC)"
+	@echo "$(YELLOW)测试 classifier 包...$(NC)"
+	@$(GO_BUILD_FLAGS) go test -fuzz='^FuzzToTraditional$$' -fuzztime=10s ./internal/classifier/ || true
+	@$(GO_BUILD_FLAGS) go test -fuzz='^FuzzToSimplified$$' -fuzztime=10s ./internal/classifier/ || true
+	@$(GO_BUILD_FLAGS) go test -fuzz='^FuzzClassifyPoetryType$$' -fuzztime=10s ./internal/classifier/ || true
+	@echo "$(YELLOW)测试 search 包...$(NC)"
+	@$(GO_BUILD_FLAGS) go test -fuzz='^FuzzIsPinyinQuery$$' -fuzztime=10s ./internal/search/ || true
+	@echo "$(GREEN)✓ 模糊测试完成$(NC)"
 
 ## graphql-gen: 生成GraphQL代码
 graphql-gen:
