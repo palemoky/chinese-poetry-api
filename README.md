@@ -302,7 +302,7 @@ go run cmd/processor/main.go \
 
 ### 依赖
 
-- Go 1.23+
+- Go 1.25+
 - SQLite 3
 - Docker (可选)
 
