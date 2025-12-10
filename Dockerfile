@@ -14,9 +14,10 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-# Build the server binary
+# Build the server binary with optimizations
 RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
-    -ldflags "-extldflags '-static'" \
+    -ldflags "-extldflags '-static' -s -w" \
+    -trimpath \
     -o server ./cmd/server
 
 # Runtime stage
