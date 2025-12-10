@@ -4,7 +4,6 @@ server:
 
 database:
   type: simplified  # simplified or traditional
-  path: data/poetry-simplified.db
 
 rate_limit:
   enabled: true

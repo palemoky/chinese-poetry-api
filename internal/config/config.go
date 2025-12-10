@@ -90,7 +90,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "release")
 	v.SetDefault("database.type", "simplified")
-	v.SetDefault("database.path", "data/poetry-simplified.db")
 	v.SetDefault("download.enabled", true)
 	v.SetDefault("download.release_version", "latest")
 	v.SetDefault("rate_limit.enabled", true)
@@ -117,6 +116,9 @@ func bindEnvVars(v *viper.Viper) {
 		v.Set("server.mode", mode)
 	}
 
+	// Hardcoded data directory (matches docker-compose volume mount)
+	dataDir := "data"
+
 	// Database
 	if dbMode := os.Getenv("DATABASE_MODE"); dbMode != "" {
 		// Convert numeric values to string (0=both, 1=simplified, 2=traditional)
@@ -136,8 +138,15 @@ func bindEnvVars(v *viper.Viper) {
 		v.Set("database.type", modeStr)
 		// Update path based on mode (for simplified/traditional only)
 		if modeStr != "both" {
-			v.Set("database.path", fmt.Sprintf("data/poetry-%s.db", modeStr))
+			v.Set("database.path", fmt.Sprintf("%s/poetry-%s.db", dataDir, modeStr))
 		}
+	} else {
+		// Use default path with data directory
+		dbType := v.GetString("database.type")
+		if dbType == "" {
+			dbType = "simplified"
+		}
+		v.Set("database.path", fmt.Sprintf("%s/poetry-%s.db", dataDir, dbType))
 	}
 
 	// Rate Limit

@@ -1,6 +1,9 @@
 #!/bin/sh
 set -e
 
+# Hardcoded data directory (matches docker-compose volume mount)
+DATA_DIR="data"
+
 echo "=== Chinese Poetry API Startup ==="
 echo "Database mode: ${DATABASE_MODE:-1}"
 
@@ -8,7 +11,7 @@ echo "Database mode: ${DATABASE_MODE:-1}"
 download_db() {
     local db_type=$1
     local db_file="poetry-${db_type}.db"
-    local db_path="data/${db_file}"
+    local db_path="${DATA_DIR}/${db_file}"
 
     if [ -f "$db_path" ]; then
         echo "Database found: $db_path"
@@ -16,19 +19,19 @@ download_db() {
     fi
 
     # Create data directory if it doesn't exist
-    mkdir -p data
+    mkdir -p "${DATA_DIR}"
 
     echo "Downloading ${db_type} database..."
     local url="https://github.com/palemoky/chinese-poetry-api/releases/latest/download/${db_file}.gz"
 
-    if ! curl -L -f -o "data/${db_file}.gz" "$url"; then
+    if ! curl -L -f -o "${DATA_DIR}/${db_file}.gz" "$url"; then
         echo "ERROR: Failed to download ${db_type} database"
         echo "URL: $url"
         return 1
     fi
 
     echo "Extracting ${db_file}..."
-    gunzip "data/${db_file}.gz"
+    gunzip "${DATA_DIR}/${db_file}.gz"
     echo "Database ready: $db_path"
 }
 
