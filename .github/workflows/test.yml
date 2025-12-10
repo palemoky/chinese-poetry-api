@@ -27,22 +27,14 @@ jobs:
           go-version: '1.23'
           cache: true
 
-      - name: Install dependencies
-        run: go mod download
-
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.7.2
           args: --timeout=5m --config=.golangci.yml
+          # 使用已有的 Go 模块缓存，不单独缓存
+          skip-pkg-cache: true
+          skip-build-cache: true
 
       - name: Run tests
-        run: go test -tags fts5 -v -coverprofile=coverage.out ./...
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
-        with:
-          files: ./coverage.out
-          fail_ci_if_error: false
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: go test -tags fts5 -v -parallel 4 ./...
