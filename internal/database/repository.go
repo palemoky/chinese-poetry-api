@@ -52,7 +52,6 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 		Columns:   []clause.Column{{Name: "name"}},
 		DoNothing: true, // Ignore if already exists
 	}).Create(&dynasty).Error
-
 	if err != nil {
 		return 0, err
 	}
@@ -91,7 +90,6 @@ func (r *Repository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, 
 		Columns:   []clause.Column{{Name: "id"}}, // Changed from "name" to "id"
 		DoNothing: true,                          // Ignore if already exists
 	}).Create(&author).Error
-
 	if err != nil {
 		return 0, err
 	}
@@ -191,7 +189,6 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 					Columns:   []clause.Column{{Name: "id"}},
 					DoNothing: true,
 				}).Create(&batch).Error
-
 				if err != nil {
 					return err
 				}
@@ -203,7 +200,6 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 			}
 			return nil
 		})
-
 		if err != nil {
 			txNum := i/transactionSize + 1
 			return fmt.Errorf("failed to insert transaction %d/%d (poems %d-%d): %w",
@@ -282,7 +278,6 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 		Group("dynasties.id").
 		Order("poem_count DESC").
 		Scan(&dynastyStats).Error
-
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +301,6 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 		Group("poetry_types.id").
 		Order("poem_count DESC").
 		Scan(&typeStats).Error
-
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +400,6 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 		Order("poem_count DESC").
 		Limit(limit).Offset(offset).
 		Scan(&results).Error
-
 	if err != nil {
 		return nil, 0, err
 	}
@@ -434,7 +427,6 @@ func (r *Repository) SearchPoems(query string, limit int) ([]Poem, error) {
 		ORDER BY rank
 		LIMIT ?
 	`, query, limit).Scan(&poemIDs).Error
-
 	if err != nil {
 		return nil, err
 	}
