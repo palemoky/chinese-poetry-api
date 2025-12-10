@@ -6,6 +6,16 @@ on:
       - 'v*'  # Trigger on all version tags
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOCKER_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -23,19 +33,19 @@ jobs:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          username: ${{ vars.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Extract metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ secrets.DOCKERHUB_USERNAME }}/chinese-poetry-api
+          images: ${{ env.DOCKER_IMAGE }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
 
       - name: Build and push
         uses: docker/build-push-action@v5
@@ -47,3 +57,36 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Update Docker Hub description
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ env.DOCKER_IMAGE }}
+          readme-filepath: ./README.md
+
+      - name: Notify Success
+        if: success() && github.event_name != 'pull_request'
+        run: |
+          if [ -n "${{ vars.SPEAKER_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ vars.SPEAKER_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${{ secrets.SPEAKER_TOKEN }}" \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            -d '{"message": "Ship it! ${{ github.event.repository.name }} is live."}' || true
+          fi
+
+      - name: Notify Failure
+        if: failure() && github.event_name != 'pull_request'
+        run: |
+          if [ -n "${{ vars.SPEAKER_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ vars.SPEAKER_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${{ secrets.SPEAKER_TOKEN }}" \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            -d '{"message": "Mayday! Mayday! ${{ github.event.repository.name }} is broken, I repeat, ${{ github.event.repository.name }} is broken!"}' || true
+          fi
