@@ -165,9 +165,13 @@ func removePunctuation(text string) string {
 	// Common Chinese and English punctuation
 	punctuation := `，。！？；：""''（）《》【】、·—…,.!?;:'"()[]{}/-`
 
-	for _, p := range punctuation {
-		text = strings.ReplaceAll(text, string(p), "")
-	}
+	// Use strings.Map for efficient single-pass filtering
+	result := strings.Map(func(r rune) rune {
+		if strings.ContainsRune(punctuation, r) {
+			return -1 // Remove this character
+		}
+		return r
+	}, text)
 
-	return strings.TrimSpace(text)
+	return strings.TrimSpace(result)
 }
