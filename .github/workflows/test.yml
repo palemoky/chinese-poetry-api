@@ -32,9 +32,8 @@ jobs:
         with:
           version: v2.7.2
           args: --timeout=5m --config=.golangci.yml
-          # 使用已有的 Go 模块缓存，不单独缓存
           skip-pkg-cache: true
           skip-build-cache: true
 
       - name: Run tests
-        run: go test -tags fts5 -v -parallel 4 ./...
+        run: go test -v -parallel 4 ./...

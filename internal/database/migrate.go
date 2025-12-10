@@ -86,18 +86,6 @@ func (db *DB) Migrate(convertToTraditional bool) error {
 		return fmt.Errorf("failed to create metadata table: %w", err)
 	}
 
-	// Create FTS5 virtual table (GORM doesn't support virtual tables)
-	if err := db.Exec(CreateFTSTableSQL).Error; err != nil {
-		return fmt.Errorf("failed to create FTS table: %w", err)
-	}
-
-	// Create triggers for FTS synchronization
-	for _, sql := range TriggersSQL {
-		if err := db.Exec(sql).Error; err != nil {
-			return fmt.Errorf("failed to create trigger: %w", err)
-		}
-	}
-
 	// Prepare initial data SQL (convert if needed)
 	dynastiesSQL := InitialDynastiesSQL
 	poetryTypesSQL := InitialPoetryTypesSQL

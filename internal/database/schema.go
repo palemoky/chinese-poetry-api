@@ -5,19 +5,6 @@ const (
 	SchemaVersion = 1
 )
 
-// CreateFTSTableSQL contains the FTS5 virtual table creation
-// GORM doesn't support virtual tables, so we create it manually
-var CreateFTSTableSQL = `CREATE VIRTUAL TABLE IF NOT EXISTS poems_fts USING fts5(
-	poem_id UNINDEXED,
-	title,
-	title_pinyin,
-	content,
-	author_name,
-	author_pinyin,
-	content='',
-	tokenize='unicode61'
-)`
-
 // InitialDynastiesSQL contains initial data for dynasties
 var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start_year, end_year) VALUES
 	('唐', 'Tang', 618, 907),
@@ -43,38 +30,3 @@ var InitialPoetryTypesSQL = `INSERT OR IGNORE INTO poetry_types (name, category,
 	('词', '词', NULL, NULL, '长短句'),
 	('曲', '曲', NULL, NULL, '散曲'),
 	('其他', '其他', NULL, NULL, '不规则或其他形式')`
-
-// TriggersSQL contains triggers for FTS synchronization
-var TriggersSQL = []string{
-	// Trigger to update FTS when inserting poems
-	`CREATE TRIGGER IF NOT EXISTS poems_ai AFTER INSERT ON poems BEGIN
-		INSERT INTO poems_fts(poem_id, title, title_pinyin, content, author_name, author_pinyin)
-		SELECT
-			NEW.id,
-			NEW.title,
-			NEW.title_pinyin,
-			NEW.content,
-			a.name,
-			a.name_pinyin
-		FROM authors a WHERE a.id = NEW.author_id;
-	END`,
-
-	// Trigger to update FTS when updating poems
-	`CREATE TRIGGER IF NOT EXISTS poems_au AFTER UPDATE ON poems BEGIN
-		DELETE FROM poems_fts WHERE poem_id = OLD.id;
-		INSERT INTO poems_fts(poem_id, title, title_pinyin, content, author_name, author_pinyin)
-		SELECT
-			NEW.id,
-			NEW.title,
-			NEW.title_pinyin,
-			NEW.content,
-			a.name,
-			a.name_pinyin
-		FROM authors a WHERE a.id = NEW.author_id;
-	END`,
-
-	// Trigger to update FTS when deleting poems
-	`CREATE TRIGGER IF NOT EXISTS poems_ad AFTER DELETE ON poems BEGIN
-		DELETE FROM poems_fts WHERE poem_id = OLD.id;
-	END`,
-}

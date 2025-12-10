@@ -1,7 +1,6 @@
 package search
 
 import (
-	"fmt"
 	"unicode"
 
 	"gorm.io/gorm"
@@ -85,8 +84,7 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 		if isPinyin {
 			poems, totalCount = e.searchByPinyin(params.Query, params.PageSize, offset)
 		} else {
-			// FTS5 requires raw SQL
-			return e.searchByFTS(params.Query, params.PageSize, offset)
+			poems, totalCount = e.searchAll(params.Query, params.PageSize, offset)
 		}
 	}
 
@@ -192,61 +190,22 @@ func (e *Engine) searchByPinyin(query string, limit, offset int) ([]database.Poe
 	return poems, count
 }
 
-// searchByFTS uses SQLite FTS5 for full-text search (requires raw SQL)
-func (e *Engine) searchByFTS(query string, limit, offset int) (*SearchResult, error) {
-	// Count query
-	var totalCount int
-	countSQL := `SELECT COUNT(DISTINCT poem_id) FROM poems_fts WHERE poems_fts MATCH ?`
-	if err := e.db.Raw(countSQL, query).Scan(&totalCount).Error; err != nil {
-		return nil, fmt.Errorf("failed to count FTS results: %w", err)
-	}
-
-	// Search query - get poem IDs with ranking
-	var poemIDs []int64
-	searchSQL := `
-		SELECT DISTINCT poem_id
-		FROM poems_fts
-		WHERE poems_fts MATCH ?
-		ORDER BY rank
-		LIMIT ? OFFSET ?
-	`
-	if err := e.db.Raw(searchSQL, query, limit, offset).Scan(&poemIDs).Error; err != nil {
-		return nil, fmt.Errorf("failed to execute FTS search: %w", err)
-	}
-
-	if len(poemIDs) == 0 {
-		return &SearchResult{
-			Poems:      []database.Poem{},
-			TotalCount: totalCount,
-			HasMore:    false,
-		}, nil
-	}
-
-	// Load full poems with relationships, preserving FTS rank order
+// searchAll searches across title, content, and author name using LIKE
+func (e *Engine) searchAll(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
 	var poems []database.Poem
-	if err := e.db.Preload("Author").Preload("Dynasty").Preload("Type").
-		Where("id IN ?", poemIDs).Find(&poems).Error; err != nil {
-		return nil, fmt.Errorf("failed to load poems: %w", err)
-	}
+	var count int64
 
-	// Preserve original FTS rank order
-	poemMap := make(map[int64]database.Poem, len(poems))
-	for _, p := range poems {
-		poemMap[p.ID] = p
-	}
+	db := e.baseQuery().
+		Joins("LEFT JOIN authors ON poems.author_id = authors.id").
+		Where(
+			"poems.title LIKE ? OR poems.content LIKE ? OR authors.name LIKE ?",
+			pattern, pattern, pattern,
+		)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
 
-	orderedPoems := make([]database.Poem, 0, len(poemIDs))
-	for _, id := range poemIDs {
-		if poem, ok := poemMap[id]; ok {
-			orderedPoems = append(orderedPoems, poem)
-		}
-	}
-
-	return &SearchResult{
-		Poems:      orderedPoems,
-		TotalCount: totalCount,
-		HasMore:    offset+len(orderedPoems) < totalCount,
-	}, nil
+	return poems, count
 }
 
 // isPinyinQuery checks if a query string is pinyin
