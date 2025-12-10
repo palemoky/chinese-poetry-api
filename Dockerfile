@@ -14,8 +14,10 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-# Build the server binary with optimizations
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
+# Build the server binary with optimizations and cache
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
     -ldflags "-extldflags '-static' -s -w" \
     -trimpath \
     -o server ./cmd/server

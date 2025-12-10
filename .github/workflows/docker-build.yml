@@ -45,16 +45,41 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !contains(github.ref, 'alpha') && !contains(github.ref, 'beta') && !contains(github.ref, 'rc') }}
 
+      - name: Determine build platforms
+        id: platforms
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+          else
+            echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build start time
+        id: build_start
+        run: echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
+
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            BUILDKIT_INLINE_CACHE=1
+
+      - name: Build time report
+        if: always()
+        run: |
+          BUILD_END=$(date +%s)
+          BUILD_TIME=$((BUILD_END - ${{ steps.build_start.outputs.timestamp }}))
+          BUILD_MIN=$((BUILD_TIME / 60))
+          BUILD_SEC=$((BUILD_TIME % 60))
+          echo "🏗️ Build completed in ${BUILD_MIN}m ${BUILD_SEC}s"
+          echo "Platforms: ${{ steps.platforms.outputs.platforms }}"
 
       - name: Update Docker Hub description
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
