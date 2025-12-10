@@ -141,7 +141,7 @@ test-verbose:
 ## coverage: 生成测试覆盖率报告
 coverage:
 	@echo "$(BLUE)生成测试覆盖率报告...$(NC)"
-	@$(GO_BUILD_FLAGS) go test -coverprofile=coverage.out ./...
+	@$(GO_BUILD_FLAGS) go test -coverprofile=coverage.out $$(go list ./... | grep -v '/generated')
 	@echo ""
 	@echo "$(GREEN)📊 覆盖率详情:$(NC)"
 	@go tool cover -func=coverage.out
@@ -151,6 +151,7 @@ coverage:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo ""
 	@echo "$(GREEN)✓ 覆盖率报告已生成: coverage.html$(NC)"
+	@echo "$(YELLOW)注意: 已排除 generated 目录$(NC)"
 
 ## bench: 运行基准测试
 bench:
