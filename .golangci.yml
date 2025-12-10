@@ -1,7 +1,7 @@
 # golangci-lint configuration v2
 # https://golangci-lint.run/usage/configuration/
 
-version: 2
+version: "2"
 
 run:
   timeout: 5m
@@ -22,26 +22,18 @@ linters:
     gocritic:
       disabled-checks:
         - unlambda  # 不强制将 lambda 替换为函数引用
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - errcheck
+          - dupl
+      - path: internal/graph/generated/
+        linters:
+          - all
 
 formatters:
   enable:
     - gofumpt
     - goimports
     - golines
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - errcheck
-        - dupl
-    - path: internal/graph/generated/
-      linters:
-        - all
-  max-issues-per-linter: 0
-  max-same-issues: 0
-
-output:
-  format: colored-line-number
-  print-issued-lines: true
-  print-linter-name: true
