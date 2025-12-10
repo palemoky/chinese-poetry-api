@@ -295,7 +295,12 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 	}
 
 	// Get or create dynasty
-	dynastyID, err := p.repo.GetOrCreateDynasty(poemMeta.Dynasty)
+	// Convert dynasty name to match database encoding (traditional or simplified)
+	dynastyName, err := p.convertText(poemMeta.Dynasty, p.convertToTraditional)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert dynasty name: %w", err)
+	}
+	dynastyID, err := p.repo.GetOrCreateDynasty(dynastyName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get/create dynasty: %w", err)
 	}
