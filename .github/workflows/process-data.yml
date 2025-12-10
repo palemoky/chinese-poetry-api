@@ -6,6 +6,13 @@ on:
       - 'v[0-9]+.[0-9]+.0'  # Only trigger on v*.*.0 tags (e.g., v0.1.0, v0.2.0, v1.0.0)
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
 jobs:
   process-data:
     runs-on: ubuntu-latest
@@ -41,6 +48,25 @@ jobs:
           gzip -9 poetry-traditional.db
           sha256sum *.db.gz > checksums.txt
 
+      - name: Collect statistics
+        id: stats
+        run: |
+          # 解压临时统计
+          gunzip -k poetry-simplified.db.gz
+          gunzip -k poetry-traditional.db.gz
+
+          # 统计数据
+          POEMS=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM poems')
+          AUTHORS=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM authors')
+          DYNASTIES=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM dynasties')
+
+          echo "poems=$POEMS" >> $GITHUB_OUTPUT
+          echo "authors=$AUTHORS" >> $GITHUB_OUTPUT
+          echo "dynasties=$DYNASTIES" >> $GITHUB_OUTPUT
+
+          # 清理临时文件
+          rm poetry-simplified.db poetry-traditional.db
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
@@ -51,27 +77,29 @@ jobs:
           body: |
             ## 诗词数据库 ${{ github.ref_name }}
 
-            ### 文件说明
-            - `poetry-simplified.db.gz`: 简体中文数据库
-            - `poetry-traditional.db.gz`: 繁体中文数据库
-            - `checksums.txt`: SHA256校验和
+            ### 📊 数据统计
+            | 项目 | 数量 |
+            |------|------|
+            | 诗词总数 | ${{ steps.stats.outputs.poems }} |
+            | 作者数量 | ${{ steps.stats.outputs.authors }} |
+            | 朝代数量 | ${{ steps.stats.outputs.dynasties }} |
 
-            ### 数据统计
-            此版本包含唐诗、宋词、元曲等中国古典诗词数据。
+            ### 📦 文件说明
+            | 文件 | 说明 |
+            |------|------|
+            | `poetry-simplified.db.gz` | 简体中文数据库 |
+            | `poetry-traditional.db.gz` | 繁体中文数据库 |
+            | `checksums.txt` | SHA256 校验和 |
 
-            ### 使用方法
+            ### 🚀 快速开始
+            容器启动时会自动下载数据库，无需手动下载。
+
             ```bash
-            # 下载并解压
-            wget https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/poetry-simplified.db.gz
-            gunzip poetry-simplified.db.gz
+            # 使用 docker-compose
+            wget https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml
+            docker-compose up -d
             ```
 
-            ### Docker 使用
-            ```bash
-            docker run -d -p 8080:8080 \
-              -e GITHUB_REPO=${{ github.repository }} \
-              -e RELEASE_VERSION=${{ github.ref_name }} \
-              your-dockerhub-username/chinese-poetry-api:latest
-            ```
+            详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
