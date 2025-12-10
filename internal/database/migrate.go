@@ -5,10 +5,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+
+	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 )
 
 // DB wraps the gorm.DB connection
@@ -20,10 +21,8 @@ type DB struct {
 func Open(path string) (*DB, error) {
 	// Configure GORM
 	config := &gorm.Config{
-		Logger: logger.Default.LogMode(logger.Silent), // Change to logger.Info for debugging
-		NowFunc: func() time.Time {
-			return time.Now()
-		},
+		Logger:  logger.Default.LogMode(logger.Silent), // Change to logger.Info for debugging
+		NowFunc: time.Now,
 		// Prepare statements for better performance
 		PrepareStmt: true,
 	}

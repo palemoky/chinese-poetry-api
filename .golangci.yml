@@ -9,11 +9,20 @@ run:
   build-tags:
     - fts5
 
-# Use default linters - they are well-tested and compatible
 linters:
-  enable-all: false
-  disable-all: false
-  # Let golangci-lint use its default set of linters
+  enable:
+    - govet        # 官方静态分析
+    - errcheck     # 错误检查
+    - staticcheck  # 综合静态分析 (包含 gosimple, unused)
+    - ineffassign  # 无效赋值检测
+    - misspell     # 拼写检查
+    - gocyclo      # 圈复杂度检查
+    - gocritic     # 代码质量建议
+
+linters-settings:
+  gocritic:
+    disabled-checks:
+      - unlambda  # 不强制将 lambda 替换为函数引用
 
 issues:
   exclude-rules:
@@ -27,11 +36,6 @@ issues:
     - path: internal/graph/generated/
       linters:
         - all
-
-    # 排除 staticcheck QF1003 (tagged switch suggestions)
-    - linters:
-        - staticcheck
-      text: "QF1003"
 
   max-issues-per-linter: 0
   max-same-issues: 0

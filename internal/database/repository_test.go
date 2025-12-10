@@ -54,9 +54,10 @@ func TestGetOrCreateDynasty(t *testing.T) {
 				require.NoError(t, err)
 				assert.Greater(t, id, int64(0))
 
-				if i == 0 {
+				switch i {
+				case 0:
 					firstID = id
-				} else if i == 1 {
+				case 1:
 					// Second call should return same ID
 					assert.Equal(t, firstID, id, "Should return same ID for existing dynasty")
 				}
@@ -110,9 +111,10 @@ func TestGetOrCreateAuthor(t *testing.T) {
 				require.NoError(t, err)
 				assert.Greater(t, id, int64(0))
 
-				if i == 0 {
+				switch i {
+				case 0:
 					firstID = id
-				} else if i == 1 {
+				case 1:
 					assert.Equal(t, firstID, id, "Should return same ID for existing author")
 				}
 			}
@@ -190,8 +192,7 @@ func BenchmarkGetOrCreateDynasty(b *testing.B) {
 	db := &DB{DB: gormDB}
 	repo := NewRepository(db)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _ = repo.GetOrCreateDynasty("唐")
 	}
 }

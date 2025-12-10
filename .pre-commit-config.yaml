@@ -20,11 +20,11 @@ repos:
       # Format Go imports
       - id: goimports
         name: Format Go imports (goimports)
-        entry: bash -c 'goimports -w $(find . -name "*.go" -not -path "./vendor/*" -not -path "./.git/*")'
+        entry: goimports -w -local github.com/palemoky/chinese-poetry-api
         language: system
         types: [go]
         stages: [pre-commit]
-        pass_filenames: false
+        pass_filenames: true
 
       # Run go mod tidy
       - id: go-mod-tidy
@@ -80,24 +80,3 @@ repos:
         stages: [pre-push]
         pass_filenames: false
         verbose: true
-
-      # Optional: Run tests on commit for changed packages only
-      - id: go-test-changed
-        name: Run tests for changed packages
-        entry: bash -c 'changed_dirs=$(git diff --cached --name-only --diff-filter=ACM | grep "\.go$" | xargs -I {} dirname {} | sort -u | grep "^internal/" || true); if [ -n "$changed_dirs" ]; then for dir in $changed_dirs; do echo "Testing $dir..."; go test -tags "fts5" ./$dir/... -cover || exit 1; done; fi'
-        language: system
-        stages: [pre-commit]
-        pass_filenames: false
-        verbose: true
-
-  # Optional: Go vet (static analysis)
-  - repo: local
-    hooks:
-      - id: go-vet
-        name: Run go vet
-        entry: go vet
-        language: system
-        types: [go]
-        stages: [pre-commit]
-        pass_filenames: false
-        args: ['./...']
