@@ -142,7 +142,7 @@ func expandParagraphs(paragraphs []string) []string {
 // splitBySentence splits text by sentence-ending punctuation
 func splitBySentence(text string) []string {
 	// Replace sentence-ending punctuation with a delimiter
-	delimiters := []string{"。", "！", "？", "；"}
+	delimiters := []string{"。", "！", "？", "；", "，"}
 	for _, delim := range delimiters {
 		text = strings.ReplaceAll(text, delim, "\n")
 	}
