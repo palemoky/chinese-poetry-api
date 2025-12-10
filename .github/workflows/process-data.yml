@@ -103,3 +103,27 @@ jobs:
             详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Success
+        if: success() && github.event_name != 'pull_request'
+        run: |
+          if [ -n "${{ vars.SPEAKER_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ vars.SPEAKER_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${{ secrets.SPEAKER_TOKEN }}" \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            -d '{"message": "${{ github.event.repository.name }}: poetry data ${{ github.ref_name }} has been processed and released!"}' || true
+          fi
+
+      - name: Notify Failure
+        if: failure() && github.event_name != 'pull_request'
+        run: |
+          if [ -n "${{ vars.SPEAKER_WEBHOOK_URL }}" ]; then
+            curl -X POST "${{ vars.SPEAKER_WEBHOOK_URL }}" \
+            -H "Content-Type: application/json" \
+            -H "X-API-Key: ${{ secrets.SPEAKER_TOKEN }}" \
+            -H "CF-Access-Client-Id: ${{ secrets.CF_CLIENT_ID }}" \
+            -H "CF-Access-Client-Secret: ${{ secrets.CF_CLIENT_SECRET }}" \
+            -d '{"message": "${{ github.event.repository.name }}: Mayday! Mayday! Poetry data ${{ github.ref_name }} processing failed. Check the logs."}' || true
+          fi
