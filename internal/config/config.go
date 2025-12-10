@@ -118,18 +118,12 @@ func bindEnvVars(v *viper.Viper) {
 	}
 
 	// Database
-	if dbType := os.Getenv("DB_TYPE"); dbType != "" {
-		v.Set("database.type", dbType)
-		// Update path based on type
-		v.Set("database.path", fmt.Sprintf("poetry-%s.db", dbType))
-	}
-
-	// Download
-	if repo := os.Getenv("GITHUB_REPO"); repo != "" {
-		v.Set("download.github_repo", repo)
-	}
-	if version := os.Getenv("RELEASE_VERSION"); version != "" {
-		v.Set("download.release_version", version)
+	if dbMode := os.Getenv("DATABASE_MODE"); dbMode != "" {
+		v.Set("database.type", dbMode)
+		// Update path based on mode (for simplified/traditional only)
+		if dbMode != "both" {
+			v.Set("database.path", fmt.Sprintf("poetry-%s.db", dbMode))
+		}
 	}
 
 	// Rate Limit
@@ -146,11 +140,6 @@ func bindEnvVars(v *viper.Viper) {
 			v.Set("rate_limit.burst", b)
 		}
 	}
-
-	// GraphQL
-	if playground := os.Getenv("GRAPHQL_PLAYGROUND"); playground != "" {
-		v.Set("graphql.playground", playground == "true")
-	}
 }
 
 // Validate validates the configuration
@@ -163,8 +152,8 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("invalid server mode: %s (must be 'debug', 'release', or 'test')", c.Server.Mode)
 	}
 
-	if c.Database.Type != "simplified" && c.Database.Type != "traditional" {
-		return fmt.Errorf("invalid database type: %s (must be 'simplified' or 'traditional')", c.Database.Type)
+	if c.Database.Type != "simplified" && c.Database.Type != "traditional" && c.Database.Type != "both" {
+		return fmt.Errorf("invalid database mode: %s (must be 'simplified', 'traditional', or 'both')", c.Database.Type)
 	}
 
 	if c.Database.Path == "" {

@@ -1,48 +1,51 @@
 #!/bin/sh
 set -e
 
-DB_FILE="poetry-${DB_TYPE}.db"
-
 echo "=== Chinese Poetry API Startup ==="
-echo "Database type: ${DB_TYPE}"
-echo "GitHub repo: ${GITHUB_REPO}"
-echo "Release version: ${RELEASE_VERSION}"
+echo "Database mode: ${DATABASE_MODE:-simplified}"
 
-# If database doesn't exist, download from GitHub Release
-if [ ! -f "$DB_FILE" ]; then
-    echo "Database not found locally, downloading from GitHub Release..."
+# Function to download database
+download_db() {
+    local db_type=$1
+    local db_file="poetry-${db_type}.db"
 
-    if [ -z "$GITHUB_REPO" ]; then
-        echo "ERROR: GITHUB_REPO environment variable is not set"
-        exit 1
+    if [ -f "$db_file" ]; then
+        echo "Database found: $db_file"
+        return 0
     fi
 
-    DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/download/${RELEASE_VERSION}/poetry-${DB_TYPE}.db.gz"
+    echo "Downloading ${db_type} database..."
+    local url="https://github.com/palemoky/chinese-poetry-api/releases/download/latest/${db_file}.gz"
 
-    echo "Downloading from: $DOWNLOAD_URL"
-
-    if ! curl -L -f -o "${DB_FILE}.gz" "$DOWNLOAD_URL"; then
-        echo "ERROR: Failed to download database"
-        echo "Please check:"
-        echo "  1. GITHUB_REPO is correct: ${GITHUB_REPO}"
-        echo "  2. RELEASE_VERSION exists: ${RELEASE_VERSION}"
-        echo "  3. Database file exists in release: poetry-${DB_TYPE}.db.gz"
-        exit 1
+    if ! curl -L -f -o "${db_file}.gz" "$url"; then
+        echo "ERROR: Failed to download ${db_type} database"
+        echo "URL: $url"
+        return 1
     fi
 
-    echo "Extracting database..."
-    gunzip "${DB_FILE}.gz"
+    echo "Extracting ${db_file}..."
+    gunzip "${db_file}.gz"
+    echo "Database ready: $db_file"
+}
 
-    echo "Database ready!"
-else
-    echo "Database found: $DB_FILE"
-fi
-
-# Verify database exists
-if [ ! -f "$DB_FILE" ]; then
-    echo "ERROR: Database file not found after download"
-    exit 1
-fi
+# Download based on DATABASE_MODE
+case "${DATABASE_MODE:-simplified}" in
+    simplified)
+        download_db "simplified" || exit 1
+        ;;
+    traditional)
+        download_db "traditional" || exit 1
+        ;;
+    both)
+        download_db "simplified" || exit 1
+        download_db "traditional" || exit 1
+        ;;
+    *)
+        echo "ERROR: Invalid DATABASE_MODE: ${DATABASE_MODE}"
+        echo "Valid options: simplified, traditional, both"
+        exit 1
+        ;;
+esac
 
 echo "Starting API server..."
 exec ./server
