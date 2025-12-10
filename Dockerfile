@@ -27,8 +27,9 @@ RUN apk add --no-cache ca-certificates curl gzip
 
 WORKDIR /app
 
-# Copy binary and startup script only
+# Copy binary, config, and startup script
 COPY --from=builder /build/server .
+COPY config.yaml .
 COPY scripts/startup.sh .
 RUN chmod +x startup.sh server
 
