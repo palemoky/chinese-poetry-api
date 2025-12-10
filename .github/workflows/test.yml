@@ -32,8 +32,7 @@ jobs:
         with:
           version: v2.7.2
           args: --timeout=5m --config=.golangci.yml
-          skip-pkg-cache: true
-          skip-build-cache: true
+          skip-cache: true
 
       - name: Run tests
         run: go test -v -parallel 4 ./...
