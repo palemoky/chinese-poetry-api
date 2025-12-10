@@ -42,6 +42,7 @@ help:
 	@echo "$(GREEN)测试命令:$(NC)"
 	@echo "  make test               - 运行所有测试"
 	@echo "  make test-verbose       - 运行测试（详细输出）"
+	@echo "  make coverage           - 生成测试覆盖率报告"
 	@echo "  make bench              - 运行基准测试"
 	@echo "  make fuzz               - 运行模糊测试"
 	@echo ""
@@ -137,6 +138,20 @@ test-verbose:
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "$(GREEN)✓ 测试完成，覆盖率报告: coverage.html$(NC)"
 
+## coverage: 生成测试覆盖率报告
+coverage:
+	@echo "$(BLUE)生成测试覆盖率报告...$(NC)"
+	@$(GO_BUILD_FLAGS) go test -coverprofile=coverage.out ./...
+	@echo ""
+	@echo "$(GREEN)📊 覆盖率详情:$(NC)"
+	@go tool cover -func=coverage.out
+	@echo ""
+	@echo "$(GREEN)📈 总覆盖率:$(NC)"
+	@go tool cover -func=coverage.out | grep "^total:" | awk '{print "  " $$3}'
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo ""
+	@echo "$(GREEN)✓ 覆盖率报告已生成: coverage.html$(NC)"
+
 ## bench: 运行基准测试
 bench:
 	@echo "$(BLUE)运行基准测试...$(NC)"
@@ -214,7 +229,7 @@ docker-run:
 	@echo "$(BLUE)启动Docker容器...$(NC)"
 	@docker-compose up -d
 	@echo "$(GREEN)✓ Docker容器已启动$(NC)"
-	@echo "  API: http://localhost:8080"
+	@echo "  API: http://localhost:1279"
 
 ## docker-stop: 停止Docker容器
 docker-stop:
@@ -225,8 +240,14 @@ docker-stop:
 ## install: 安装到系统
 install: build
 	@echo "$(BLUE)安装到系统...$(NC)"
-	@cp $(PROCESSOR_BINARY) $(GOPATH)/bin/poetry-processor
-	@cp $(SERVER_BINARY) $(GOPATH)/bin/poetry-server
+	@if [ -z "$$GOPATH" ]; then \
+		echo "$(YELLOW)GOPATH 未设置，使用 go install...$(NC)"; \
+		cd cmd/processor && go install; \
+		cd ../server && go install; \
+	else \
+		cp $(PROCESSOR_BINARY) $$GOPATH/bin/poetry-processor; \
+		cp $(SERVER_BINARY) $$GOPATH/bin/poetry-server; \
+	fi
 	@echo "$(GREEN)✓ 安装完成$(NC)"
 	@echo "  poetry-processor - 数据处理器"
 	@echo "  poetry-server - API服务器"
