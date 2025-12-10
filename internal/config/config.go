@@ -90,7 +90,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "release")
 	v.SetDefault("database.type", "simplified")
-	v.SetDefault("database.path", "poetry-simplified.db")
+	v.SetDefault("database.path", "data/poetry-simplified.db")
 	v.SetDefault("download.enabled", true)
 	v.SetDefault("download.release_version", "latest")
 	v.SetDefault("rate_limit.enabled", true)
@@ -136,7 +136,7 @@ func bindEnvVars(v *viper.Viper) {
 		v.Set("database.type", modeStr)
 		// Update path based on mode (for simplified/traditional only)
 		if modeStr != "both" {
-			v.Set("database.path", fmt.Sprintf("poetry-%s.db", modeStr))
+			v.Set("database.path", fmt.Sprintf("data/poetry-%s.db", modeStr))
 		}
 	}
 

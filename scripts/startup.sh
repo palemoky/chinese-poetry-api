@@ -8,24 +8,28 @@ echo "Database mode: ${DATABASE_MODE:-1}"
 download_db() {
     local db_type=$1
     local db_file="poetry-${db_type}.db"
+    local db_path="data/${db_file}"
 
-    if [ -f "$db_file" ]; then
-        echo "Database found: $db_file"
+    if [ -f "$db_path" ]; then
+        echo "Database found: $db_path"
         return 0
     fi
+
+    # Create data directory if it doesn't exist
+    mkdir -p data
 
     echo "Downloading ${db_type} database..."
     local url="https://github.com/palemoky/chinese-poetry-api/releases/latest/download/${db_file}.gz"
 
-    if ! curl -L -f -o "${db_file}.gz" "$url"; then
+    if ! curl -L -f -o "data/${db_file}.gz" "$url"; then
         echo "ERROR: Failed to download ${db_type} database"
         echo "URL: $url"
         return 1
     fi
 
     echo "Extracting ${db_file}..."
-    gunzip "${db_file}.gz"
-    echo "Database ready: $db_file"
+    gunzip "data/${db_file}.gz"
+    echo "Database ready: $db_path"
 }
 
 # Download based on DATABASE_MODE (0=both, 1=simplified, 2=traditional)
