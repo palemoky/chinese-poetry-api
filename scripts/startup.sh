@@ -15,7 +15,7 @@ download_db() {
     fi
 
     echo "Downloading ${db_type} database..."
-    local url="https://github.com/palemoky/chinese-poetry-api/releases/download/latest/${db_file}.gz"
+    local url="https://github.com/palemoky/chinese-poetry-api/releases/latest/download/${db_file}.gz"
 
     if ! curl -L -f -o "${db_file}.gz" "$url"; then
         echo "ERROR: Failed to download ${db_type} database"
