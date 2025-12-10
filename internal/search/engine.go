@@ -58,9 +58,9 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 	isPinyin := isPinyinQuery(params.Query)
 
 	var query string
-	var args []interface{}
+	var args []any
 	var countQuery string
-	var countArgs []interface{}
+	var countArgs []any
 
 	switch params.SearchType {
 	case SearchTypePinyin:
@@ -148,7 +148,7 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 }
 
 // FTS5 full-text search
-func (e *Engine) buildFTSQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildFTSQuery(query string, limit, offset int) (string, []any) {
 	sql := `
 		SELECT DISTINCT
 			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
@@ -165,16 +165,16 @@ func (e *Engine) buildFTSQuery(query string, limit, offset int) (string, []inter
 		ORDER BY rank
 		LIMIT ? OFFSET ?
 	`
-	return sql, []interface{}{query, limit, offset}
+	return sql, []any{query, limit, offset}
 }
 
-func (e *Engine) buildFTSCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildFTSCountQuery(query string) (string, []any) {
 	sql := `SELECT COUNT(DISTINCT poem_id) FROM poems_fts WHERE poems_fts MATCH ?`
-	return sql, []interface{}{query}
+	return sql, []any{query}
 }
 
 // Pinyin search (full or abbreviation)
-func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := `
 		SELECT
@@ -193,10 +193,10 @@ func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []in
 			OR a.name_pinyin_abbr LIKE ?
 		LIMIT ? OFFSET ?
 	`
-	return sql, []interface{}{pattern, pattern, pattern, pattern, limit, offset}
+	return sql, []any{pattern, pattern, pattern, pattern, limit, offset}
 }
 
-func (e *Engine) buildPinyinCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildPinyinCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := `
 		SELECT COUNT(*)
@@ -207,65 +207,65 @@ func (e *Engine) buildPinyinCountQuery(query string) (string, []interface{}) {
 			OR a.name_pinyin LIKE ?
 			OR a.name_pinyin_abbr LIKE ?
 	`
-	return sql, []interface{}{pattern, pattern, pattern, pattern}
+	return sql, []any{pattern, pattern, pattern, pattern}
 }
 
 // Title search
-func (e *Engine) buildTitleQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildTitleQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := e.getBaseQuery() + ` WHERE p.title LIKE ? LIMIT ? OFFSET ?`
-	return sql, []interface{}{pattern, limit, offset}
+	return sql, []any{pattern, limit, offset}
 }
 
-func (e *Engine) buildTitleCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildTitleCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE title LIKE ?`, []interface{}{pattern}
+	return `SELECT COUNT(*) FROM poems WHERE title LIKE ?`, []any{pattern}
 }
 
-func (e *Engine) buildTitlePinyinQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildTitlePinyinQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := e.getBaseQuery() + ` WHERE p.title_pinyin LIKE ? OR p.title_pinyin_abbr LIKE ? LIMIT ? OFFSET ?`
-	return sql, []interface{}{pattern, pattern, limit, offset}
+	return sql, []any{pattern, pattern, limit, offset}
 }
 
-func (e *Engine) buildTitlePinyinCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildTitlePinyinCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE title_pinyin LIKE ? OR title_pinyin_abbr LIKE ?`, []interface{}{pattern, pattern}
+	return `SELECT COUNT(*) FROM poems WHERE title_pinyin LIKE ? OR title_pinyin_abbr LIKE ?`, []any{pattern, pattern}
 }
 
 // Content search
-func (e *Engine) buildContentQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildContentQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := e.getBaseQuery() + ` WHERE p.content LIKE ? LIMIT ? OFFSET ?`
-	return sql, []interface{}{pattern, limit, offset}
+	return sql, []any{pattern, limit, offset}
 }
 
-func (e *Engine) buildContentCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildContentCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE content LIKE ?`, []interface{}{pattern}
+	return `SELECT COUNT(*) FROM poems WHERE content LIKE ?`, []any{pattern}
 }
 
 // Author search
-func (e *Engine) buildAuthorQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildAuthorQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := e.getBaseQuery() + ` WHERE a.name LIKE ? LIMIT ? OFFSET ?`
-	return sql, []interface{}{pattern, limit, offset}
+	return sql, []any{pattern, limit, offset}
 }
 
-func (e *Engine) buildAuthorCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildAuthorCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name LIKE ?`, []interface{}{pattern}
+	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name LIKE ?`, []any{pattern}
 }
 
-func (e *Engine) buildAuthorPinyinQuery(query string, limit, offset int) (string, []interface{}) {
+func (e *Engine) buildAuthorPinyinQuery(query string, limit, offset int) (string, []any) {
 	pattern := "%" + query + "%"
 	sql := e.getBaseQuery() + ` WHERE a.name_pinyin LIKE ? OR a.name_pinyin_abbr LIKE ? LIMIT ? OFFSET ?`
-	return sql, []interface{}{pattern, pattern, limit, offset}
+	return sql, []any{pattern, pattern, limit, offset}
 }
 
-func (e *Engine) buildAuthorPinyinCountQuery(query string) (string, []interface{}) {
+func (e *Engine) buildAuthorPinyinCountQuery(query string) (string, []any) {
 	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name_pinyin LIKE ? OR a.name_pinyin_abbr LIKE ?`, []interface{}{pattern, pattern}
+	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name_pinyin LIKE ? OR a.name_pinyin_abbr LIKE ?`, []any{pattern, pattern}
 }
 
 func (e *Engine) getBaseQuery() string {

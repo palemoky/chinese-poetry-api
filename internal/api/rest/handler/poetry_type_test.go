@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
 func setupPoetryTypeTestRouter(t *testing.T) (*gin.Engine, *database.Repository) {
@@ -51,7 +52,7 @@ func TestListPoetryTypes(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 

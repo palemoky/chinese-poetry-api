@@ -175,7 +175,7 @@ func (l *JSONLoader) loadJSONFile(path string, tag string) ([]PoemData, error) {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	var rawPoems []map[string]interface{}
+	var rawPoems []map[string]any
 	if err := json.Unmarshal(data, &rawPoems); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON: %w", err)
 	}
@@ -265,15 +265,15 @@ func inferDynasty(key, name string) string {
 	return "其他"
 }
 
-func getString(m map[string]interface{}, key string) string {
+func getString(m map[string]any, key string) string {
 	if v, ok := m[key].(string); ok {
 		return v
 	}
 	return ""
 }
 
-func getStringArray(m map[string]interface{}, key string) []string {
-	if arr, ok := m[key].([]interface{}); ok {
+func getStringArray(m map[string]any, key string) []string {
+	if arr, ok := m[key].([]any); ok {
 		result := make([]string, 0, len(arr))
 		for _, item := range arr {
 			if str, ok := item.(string); ok {

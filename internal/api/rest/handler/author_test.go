@@ -55,17 +55,17 @@ func TestListAuthors(t *testing.T) {
 		name           string
 		query          string
 		expectedStatus int
-		checkResponse  func(*testing.T, map[string]interface{})
+		checkResponse  func(*testing.T, map[string]any)
 	}{
 		{
 			name:           "default pagination",
 			query:          "",
 			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				data := resp["data"].([]interface{})
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
 				assert.GreaterOrEqual(t, len(data), 2)
 
-				pagination := resp["pagination"].(map[string]interface{})
+				pagination := resp["pagination"].(map[string]any)
 				assert.Equal(t, float64(1), pagination["page"])
 				assert.Equal(t, float64(20), pagination["page_size"])
 			},
@@ -74,11 +74,11 @@ func TestListAuthors(t *testing.T) {
 			name:           "custom page size",
 			query:          "?page=1&page_size=1",
 			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				data := resp["data"].([]interface{})
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
 				assert.Len(t, data, 1)
 
-				pagination := resp["pagination"].(map[string]interface{})
+				pagination := resp["pagination"].(map[string]any)
 				assert.Equal(t, float64(1), pagination["page_size"])
 			},
 		},
@@ -94,7 +94,7 @@ func TestListAuthors(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.checkResponse != nil {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				require.NoError(t, err)
 				tt.checkResponse(t, response)
@@ -117,14 +117,14 @@ func TestGetAuthor(t *testing.T) {
 		name           string
 		authorID       string
 		expectedStatus int
-		checkResponse  func(*testing.T, map[string]interface{})
+		checkResponse  func(*testing.T, map[string]any)
 	}{
 		{
 			name:           "get existing author",
 			authorID:       strconv.FormatInt(authorID, 10),
 			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, resp map[string]interface{}) {
-				data := resp["data"].(map[string]interface{})
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].(map[string]any)
 				assert.NotNil(t, data)
 			},
 		},
@@ -152,7 +152,7 @@ func TestGetAuthor(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			if tt.checkResponse != nil {
-				var response map[string]interface{}
+				var response map[string]any
 				err := json.Unmarshal(w.Body.Bytes(), &response)
 				require.NoError(t, err)
 				tt.checkResponse(t, response)

@@ -54,11 +54,11 @@ func TestListDynasties(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	data := response["data"].([]interface{})
+	data := response["data"].([]any)
 	assert.GreaterOrEqual(t, len(data), 2)
 }
 
