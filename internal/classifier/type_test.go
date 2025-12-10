@@ -14,6 +14,7 @@ func TestClassifyPoetryType(t *testing.T) {
 		rhythmic   string
 		want       PoetryTypeInfo
 	}{
+		// 词
 		{
 			name:       "词 with rhythmic field",
 			paragraphs: []string{"明月几时有", "把酒问青天"},
@@ -23,8 +24,9 @@ func TestClassifyPoetryType(t *testing.T) {
 				Category: "词",
 			},
 		},
+		// 五言绝句
 		{
-			name:       "五言绝句",
+			name:       "五言绝句 - 无标点",
 			paragraphs: []string{"春眠不觉晓", "处处闻啼鸟", "夜来风雨声", "花落知多少"},
 			rhythmic:   "",
 			want: PoetryTypeInfo{
@@ -35,7 +37,19 @@ func TestClassifyPoetryType(t *testing.T) {
 			},
 		},
 		{
-			name:       "七言绝句",
+			name:       "五言绝句 - 带标点格式",
+			paragraphs: []string{"春眠不觉晓，处处闻啼鸟。", "夜来风雨声，花落知多少。"},
+			rhythmic:   "",
+			want: PoetryTypeInfo{
+				TypeName:     "五言绝句",
+				Category:     "诗",
+				Lines:        intPtr(4),
+				CharsPerLine: intPtr(5),
+			},
+		},
+		// 七言绝句
+		{
+			name:       "七言绝句 - 无标点",
 			paragraphs: []string{"两个黄鹂鸣翠柳", "一行白鹭上青天", "窗含西岭千秋雪", "门泊东吴万里船"},
 			rhythmic:   "",
 			want: PoetryTypeInfo{
@@ -46,19 +60,8 @@ func TestClassifyPoetryType(t *testing.T) {
 			},
 		},
 		{
-			name:       "五言律诗",
-			paragraphs: []string{"空山新雨后", "天气晚来秋", "明月松间照", "清泉石上流", "竹喧归浣女", "莲动下渔舟", "随意春芳歇", "王孙自可留"},
-			rhythmic:   "",
-			want: PoetryTypeInfo{
-				TypeName:     "五言律诗",
-				Category:     "诗",
-				Lines:        intPtr(8),
-				CharsPerLine: intPtr(5),
-			},
-		},
-		{
-			name:       "七言绝句 (4 lines)",
-			paragraphs: []string{"岐王宅里寻常见", "崔九堂前几度闻", "正是江南好风景", "落花时节又逢君"},
+			name:       "七言绝句 - 带标点格式",
+			paragraphs: []string{"岐王宅里寻常见，崔九堂前几度闻。", "正是江南好风景，落花时节又逢君。"},
 			rhythmic:   "",
 			want: PoetryTypeInfo{
 				TypeName:     "七言绝句",
@@ -67,6 +70,76 @@ func TestClassifyPoetryType(t *testing.T) {
 				CharsPerLine: intPtr(7),
 			},
 		},
+		// 五言律诗
+		{
+			name: "五言律诗 - 无标点",
+			paragraphs: []string{
+				"空山新雨后",
+				"天气晚来秋",
+				"明月松间照",
+				"清泉石上流",
+				"竹喧归浣女",
+				"莲动下渔舟",
+				"随意春芳歇",
+				"王孙自可留",
+			},
+			rhythmic: "",
+			want: PoetryTypeInfo{
+				TypeName:     "五言律诗",
+				Category:     "诗",
+				Lines:        intPtr(8),
+				CharsPerLine: intPtr(5),
+			},
+		},
+		{
+			name:       "五言律诗 - 带标点格式（每段两句）",
+			paragraphs: []string{"影暗才分竹，烟低正满簷。", "雨斜侵药裹，风过乱书签。", "篆灭香犹在，尘昏砚未添。", "静中时有兴，著论不为潜。"},
+			rhythmic:   "",
+			want: PoetryTypeInfo{
+				TypeName:     "五言律诗",
+				Category:     "诗",
+				Lines:        intPtr(8),
+				CharsPerLine: intPtr(5),
+			},
+		},
+		// 七言律诗
+		{
+			name: "七言律诗 - 无标点",
+			paragraphs: []string{
+				"风急天高猿啸哀",
+				"渚清沙白鸟飞回",
+				"无边落木萧萧下",
+				"不尽长江滚滚来",
+				"万里悲秋常作客",
+				"百年多病独登台",
+				"艰难苦恨繁霜鬓",
+				"潦倒新停浊酒杯",
+			},
+			rhythmic: "",
+			want: PoetryTypeInfo{
+				TypeName:     "七言律诗",
+				Category:     "诗",
+				Lines:        intPtr(8),
+				CharsPerLine: intPtr(7),
+			},
+		},
+		{
+			name: "七言律诗 - 带标点格式",
+			paragraphs: []string{
+				"风急天高猿啸哀，渚清沙白鸟飞回。",
+				"无边落木萧萧下，不尽长江滚滚来。",
+				"万里悲秋常作客，百年多病独登台。",
+				"艰难苦恨繁霜鬓，潦倒新停浊酒杯。",
+			},
+			rhythmic: "",
+			want: PoetryTypeInfo{
+				TypeName:     "七言律诗",
+				Category:     "诗",
+				Lines:        intPtr(8),
+				CharsPerLine: intPtr(7),
+			},
+		},
+		// 边界情况
 		{
 			name:       "empty paragraphs",
 			paragraphs: []string{},
@@ -77,12 +150,32 @@ func TestClassifyPoetryType(t *testing.T) {
 			},
 		},
 		{
-			name:       "irregular format",
+			name:       "irregular format - 不均匀行长",
 			paragraphs: []string{"短", "这是一首很长的句子超过十个字"},
 			rhythmic:   "",
 			want: PoetryTypeInfo{
 				TypeName: "其他",
 				Category: "其他",
+			},
+		},
+		{
+			name:       "irregular format - 非标准行数",
+			paragraphs: []string{"床前明月光", "疑是地上霜", "举头望明月"},
+			rhythmic:   "",
+			want: PoetryTypeInfo{
+				TypeName: "其他",
+				Category: "其他",
+			},
+		},
+		{
+			name:       "空字符串段落应被过滤",
+			paragraphs: []string{"春眠不觉晓。", "", "处处闻啼鸟。", "", "夜来风雨声。", "", "花落知多少。"},
+			rhythmic:   "",
+			want: PoetryTypeInfo{
+				TypeName:     "五言绝句",
+				Category:     "诗",
+				Lines:        intPtr(4),
+				CharsPerLine: intPtr(5),
 			},
 		},
 	}
