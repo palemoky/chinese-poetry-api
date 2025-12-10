@@ -18,25 +18,26 @@ linters:
     - misspell     # 拼写检查
     - gocyclo      # 圈复杂度检查
     - gocritic     # 代码质量建议
+  settings:
+    gocritic:
+      disabled-checks:
+        - unlambda  # 不强制将 lambda 替换为函数引用
 
-linters-settings:
-  gocritic:
-    disabled-checks:
-      - unlambda  # 不强制将 lambda 替换为函数引用
+formatters:
+  enable:
+    - gofumpt
+    - goimports
+    - golines
 
 issues:
   exclude-rules:
-    # 排除测试文件的某些检查
     - path: _test\.go
       linters:
         - errcheck
         - dupl
-
-    # 排除生成的代码
     - path: internal/graph/generated/
       linters:
         - all
-
   max-issues-per-linter: 0
   max-same-issues: 0
 
