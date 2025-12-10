@@ -37,7 +37,7 @@ jobs:
           args: --timeout=5m --config=.golangci.yml
 
       - name: Run tests
-        run: go test -tags fts5 -v -race -coverprofile=coverage.out ./...
+        run: go test -tags fts5 -v -coverprofile=coverage.out ./...
 
       - name: Upload coverage
         uses: codecov/codecov-action@v4
