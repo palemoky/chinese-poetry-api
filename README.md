@@ -8,8 +8,6 @@
 
 <h2 align="center">中国古诗词 API 服务</h2>
 
----
-
 [![Test Status](https://github.com/palemoky/chinese-poetry-api/actions/workflows/test.yml/badge.svg)](https://github.com/palemoky/chinese-poetry-api/actions/workflows/test.yml)
 [![Docker Build](https://github.com/palemoky/chinese-poetry-api/actions/workflows/docker-build.yml/badge.svg)](https://github.com/palemoky/chinese-poetry-api/actions/workflows/docker-build.yml)
 [![Docker Image](https://img.shields.io/docker/v/palemoky/chinese-poetry-api?sort=semver&label=docker)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
