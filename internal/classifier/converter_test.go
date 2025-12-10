@@ -135,20 +135,3 @@ func TestToPinyinAbbr(t *testing.T) {
 		})
 	}
 }
-
-// Benchmark tests
-func BenchmarkToTraditional(b *testing.B) {
-	text := "春眠不觉晓，处处闻啼鸟。夜来风雨声，花落知多少。"
-
-	for b.Loop() {
-		_, _ = ToTraditional(text)
-	}
-}
-
-func BenchmarkToPinyinNoTone(b *testing.B) {
-	text := "李白"
-
-	for b.Loop() {
-		_ = ToPinyinNoTone(text)
-	}
-}
