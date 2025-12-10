@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
 func setupDynastyTestRouter(t *testing.T) (*gin.Engine, *database.Repository) {
@@ -139,7 +140,11 @@ func TestGetDynastyPoems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/dynasties/"+tt.dynastyID+"/poems"+tt.query, nil)
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/dynasties/"+tt.dynastyID+"/poems"+tt.query,
+				nil,
+			)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
@@ -81,7 +82,6 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		Page:       page,
 		PageSize:   pageSize,
 	})
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "search failed",

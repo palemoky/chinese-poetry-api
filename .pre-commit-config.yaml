@@ -17,6 +17,15 @@ repos:
   # Go formatting and tools
   - repo: local
     hooks:
+      # Format Go code with gofumpt (stricter than gofmt)
+      - id: gofumpt
+        name: Format Go code (gofumpt)
+        entry: gofumpt -w
+        language: system
+        types: [go]
+        stages: [pre-commit]
+        pass_filenames: true
+
       # Format Go imports
       - id: goimports
         name: Format Go imports (goimports)

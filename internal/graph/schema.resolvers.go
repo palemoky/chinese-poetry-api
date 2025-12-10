@@ -502,11 +502,13 @@ func (r *Resolver) Query() generated.QueryResolver { return &queryResolver{r} }
 // Statistics returns generated.StatisticsResolver implementation.
 func (r *Resolver) Statistics() generated.StatisticsResolver { return &statisticsResolver{r} }
 
-type authorResolver struct{ *Resolver }
-type authorEdgeResolver struct{ *Resolver }
-type dynastyResolver struct{ *Resolver }
-type poemResolver struct{ *Resolver }
-type poemEdgeResolver struct{ *Resolver }
-type poetryTypeResolver struct{ *Resolver }
-type queryResolver struct{ *Resolver }
-type statisticsResolver struct{ *Resolver }
+type (
+	authorResolver     struct{ *Resolver }
+	authorEdgeResolver struct{ *Resolver }
+	dynastyResolver    struct{ *Resolver }
+	poemResolver       struct{ *Resolver }
+	poemEdgeResolver   struct{ *Resolver }
+	poetryTypeResolver struct{ *Resolver }
+	queryResolver      struct{ *Resolver }
+	statisticsResolver struct{ *Resolver }
+)

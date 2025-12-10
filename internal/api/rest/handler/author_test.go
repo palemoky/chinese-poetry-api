@@ -8,11 +8,12 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
 // setupTestRouter creates a test router with a test database
@@ -198,7 +199,11 @@ func TestGetAuthorPoems(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/authors/"+tt.authorID+"/poems"+tt.query, nil)
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/authors/"+tt.authorID+"/poems"+tt.query,
+				nil,
+			)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
