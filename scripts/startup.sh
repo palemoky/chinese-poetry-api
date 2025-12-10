@@ -2,7 +2,7 @@
 set -e
 
 echo "=== Chinese Poetry API Startup ==="
-echo "Database mode: ${DATABASE_MODE:-simplified}"
+echo "Database mode: ${DATABASE_MODE:-1}"
 
 # Function to download database
 download_db() {
@@ -28,21 +28,21 @@ download_db() {
     echo "Database ready: $db_file"
 }
 
-# Download based on DATABASE_MODE
-case "${DATABASE_MODE:-simplified}" in
-    simplified)
+# Download based on DATABASE_MODE (0=both, 1=simplified, 2=traditional)
+case "${DATABASE_MODE:-1}" in
+    0)
         download_db "simplified" || exit 1
-        ;;
-    traditional)
         download_db "traditional" || exit 1
         ;;
-    both)
+    1)
         download_db "simplified" || exit 1
+        ;;
+    2)
         download_db "traditional" || exit 1
         ;;
     *)
         echo "ERROR: Invalid DATABASE_MODE: ${DATABASE_MODE}"
-        echo "Valid options: simplified, traditional, both"
+        echo "Valid options: 0 (both), 1 (simplified), 2 (traditional)"
         exit 1
         ;;
 esac

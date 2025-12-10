@@ -119,10 +119,24 @@ func bindEnvVars(v *viper.Viper) {
 
 	// Database
 	if dbMode := os.Getenv("DATABASE_MODE"); dbMode != "" {
-		v.Set("database.type", dbMode)
+		// Convert numeric values to string (0=both, 1=simplified, 2=traditional)
+		var modeStr string
+		switch dbMode {
+		case "0":
+			modeStr = "both"
+		case "1":
+			modeStr = "simplified"
+		case "2":
+			modeStr = "traditional"
+		default:
+			// Invalid value, use default
+			modeStr = "simplified"
+		}
+
+		v.Set("database.type", modeStr)
 		// Update path based on mode (for simplified/traditional only)
-		if dbMode != "both" {
-			v.Set("database.path", fmt.Sprintf("poetry-%s.db", dbMode))
+		if modeStr != "both" {
+			v.Set("database.path", fmt.Sprintf("poetry-%s.db", modeStr))
 		}
 	}
 

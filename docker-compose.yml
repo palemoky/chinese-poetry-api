@@ -6,6 +6,8 @@ services:
       - "${PORT:-1279}:${PORT:-1279}"
     env_file:
       - .env
+    environment:
+      - DATABASE_MODE=1  # 0=both, 1=simplified, 2=traditionals
     volumes:
       - ./data:/app/data
     restart: unless-stopped

@@ -33,7 +33,7 @@ COPY scripts/startup.sh .
 RUN chmod +x startup.sh server
 
 # Minimal environment variables (others via .env)
-ENV DATABASE_MODE=simplified \
+ENV DATABASE_MODE=1 \
     PORT=1279 \
     GIN_MODE=release \
     RATE_LIMIT_ENABLED=true \
