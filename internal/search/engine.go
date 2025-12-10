@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"unicode"
 
+	"gorm.io/gorm"
+
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
@@ -53,234 +55,198 @@ func (e *Engine) Search(params SearchParams) (*SearchResult, error) {
 	}
 
 	offset := (params.Page - 1) * params.PageSize
-
-	// Determine if query is pinyin or Chinese
 	isPinyin := isPinyinQuery(params.Query)
 
-	var query string
-	var args []any
-	var countQuery string
-	var countArgs []any
+	var poems []database.Poem
+	var totalCount int64
 
 	switch params.SearchType {
 	case SearchTypePinyin:
-		// Force pinyin search
-		query, args = e.buildPinyinQuery(params.Query, params.PageSize, offset)
-		countQuery, countArgs = e.buildPinyinCountQuery(params.Query)
+		poems, totalCount = e.searchByPinyin(params.Query, params.PageSize, offset)
 
 	case SearchTypeTitle:
 		if isPinyin {
-			query, args = e.buildTitlePinyinQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildTitlePinyinCountQuery(params.Query)
+			poems, totalCount = e.searchByTitlePinyin(params.Query, params.PageSize, offset)
 		} else {
-			query, args = e.buildTitleQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildTitleCountQuery(params.Query)
+			poems, totalCount = e.searchByTitle(params.Query, params.PageSize, offset)
 		}
 
 	case SearchTypeContent:
-		query, args = e.buildContentQuery(params.Query, params.PageSize, offset)
-		countQuery, countArgs = e.buildContentCountQuery(params.Query)
+		poems, totalCount = e.searchByContent(params.Query, params.PageSize, offset)
 
 	case SearchTypeAuthor:
 		if isPinyin {
-			query, args = e.buildAuthorPinyinQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildAuthorPinyinCountQuery(params.Query)
+			poems, totalCount = e.searchByAuthorPinyin(params.Query, params.PageSize, offset)
 		} else {
-			query, args = e.buildAuthorQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildAuthorCountQuery(params.Query)
+			poems, totalCount = e.searchByAuthor(params.Query, params.PageSize, offset)
 		}
 
 	default: // SearchTypeAll
 		if isPinyin {
-			query, args = e.buildPinyinQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildPinyinCountQuery(params.Query)
+			poems, totalCount = e.searchByPinyin(params.Query, params.PageSize, offset)
 		} else {
-			query, args = e.buildFTSQuery(params.Query, params.PageSize, offset)
-			countQuery, countArgs = e.buildFTSCountQuery(params.Query)
-		}
-	}
-
-	// Execute count query
-	var totalCount int
-	if err := e.db.Raw(countQuery, countArgs...).Scan(&totalCount).Error; err != nil {
-		return nil, fmt.Errorf("failed to count results: %w", err)
-	}
-
-	// Execute search query
-	var poems []database.Poem
-	if err := e.db.Raw(query, args...).Scan(&poems).Error; err != nil {
-		return nil, fmt.Errorf("failed to execute search: %w", err)
-	}
-
-	// Batch preload relationships to avoid N+1 query problem
-	if len(poems) > 0 {
-		poemIDs := make([]int64, len(poems))
-		for i, poem := range poems {
-			poemIDs[i] = poem.ID
-		}
-
-		// Load all poems with relationships in a single query
-		var fullPoems []database.Poem
-		if err := e.db.Preload("Author").Preload("Dynasty").Preload("Type").
-			Where("id IN ?", poemIDs).Find(&fullPoems).Error; err != nil {
-			return nil, fmt.Errorf("failed to preload relationships: %w", err)
-		}
-
-		// Create a map for quick lookup and preserve original order
-		poemMap := make(map[int64]database.Poem, len(fullPoems))
-		for _, p := range fullPoems {
-			poemMap[p.ID] = p
-		}
-
-		// Replace poems with fully loaded versions in original order
-		for i, poem := range poems {
-			if fullPoem, ok := poemMap[poem.ID]; ok {
-				poems[i] = fullPoem
-			}
+			// FTS5 requires raw SQL
+			return e.searchByFTS(params.Query, params.PageSize, offset)
 		}
 	}
 
 	return &SearchResult{
 		Poems:      poems,
-		TotalCount: totalCount,
-		HasMore:    offset+len(poems) < totalCount,
+		TotalCount: int(totalCount),
+		HasMore:    offset+len(poems) < int(totalCount),
 	}, nil
 }
 
-// FTS5 full-text search
-func (e *Engine) buildFTSQuery(query string, limit, offset int) (string, []any) {
-	sql := `
-		SELECT DISTINCT
-			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
-			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
-			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
-			d.id, d.name, d.name_en, d.start_year, d.end_year, d.created_at,
-			t.id, t.name, t.category, t.lines, t.chars_per_line, t.created_at
+// baseQuery returns a GORM query with preloaded relationships
+func (e *Engine) baseQuery() *gorm.DB {
+	return e.db.Model(&database.Poem{}).
+		Preload("Author").
+		Preload("Dynasty").
+		Preload("Type")
+}
+
+// searchByTitle searches poems by title (Chinese)
+func (e *Engine) searchByTitle(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().Where("title LIKE ?", pattern)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByTitlePinyin searches poems by title pinyin
+func (e *Engine) searchByTitlePinyin(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().Where("title_pinyin LIKE ? OR title_pinyin_abbr LIKE ?", pattern, pattern)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByContent searches poems by content
+func (e *Engine) searchByContent(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().Where("content LIKE ?", pattern)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByAuthor searches poems by author name (Chinese)
+func (e *Engine) searchByAuthor(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().
+		Joins("JOIN authors ON poems.author_id = authors.id").
+		Where("authors.name LIKE ?", pattern)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByAuthorPinyin searches poems by author pinyin
+func (e *Engine) searchByAuthorPinyin(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().
+		Joins("JOIN authors ON poems.author_id = authors.id").
+		Where("authors.name_pinyin LIKE ? OR authors.name_pinyin_abbr LIKE ?", pattern, pattern)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByPinyin searches by any pinyin field (title, author)
+func (e *Engine) searchByPinyin(query string, limit, offset int) ([]database.Poem, int64) {
+	pattern := "%" + query + "%"
+	var poems []database.Poem
+	var count int64
+
+	db := e.baseQuery().
+		Joins("LEFT JOIN authors ON poems.author_id = authors.id").
+		Where(
+			"poems.title_pinyin LIKE ? OR poems.title_pinyin_abbr LIKE ? OR authors.name_pinyin LIKE ? OR authors.name_pinyin_abbr LIKE ?",
+			pattern, pattern, pattern, pattern,
+		)
+	db.Count(&count)
+	db.Limit(limit).Offset(offset).Find(&poems)
+
+	return poems, count
+}
+
+// searchByFTS uses SQLite FTS5 for full-text search (requires raw SQL)
+func (e *Engine) searchByFTS(query string, limit, offset int) (*SearchResult, error) {
+	// Count query
+	var totalCount int
+	countSQL := `SELECT COUNT(DISTINCT poem_id) FROM poems_fts WHERE poems_fts MATCH ?`
+	if err := e.db.Raw(countSQL, query).Scan(&totalCount).Error; err != nil {
+		return nil, fmt.Errorf("failed to count FTS results: %w", err)
+	}
+
+	// Search query - get poem IDs with ranking
+	var poemIDs []int64
+	searchSQL := `
+		SELECT DISTINCT poem_id
 		FROM poems_fts
-		JOIN poems p ON poems_fts.poem_id = p.id
-		LEFT JOIN authors a ON p.author_id = a.id
-		LEFT JOIN dynasties d ON p.dynasty_id = d.id
-		LEFT JOIN poetry_types t ON p.type_id = t.id
 		WHERE poems_fts MATCH ?
 		ORDER BY rank
 		LIMIT ? OFFSET ?
 	`
-	return sql, []any{query, limit, offset}
-}
+	if err := e.db.Raw(searchSQL, query, limit, offset).Scan(&poemIDs).Error; err != nil {
+		return nil, fmt.Errorf("failed to execute FTS search: %w", err)
+	}
 
-func (e *Engine) buildFTSCountQuery(query string) (string, []any) {
-	sql := `SELECT COUNT(DISTINCT poem_id) FROM poems_fts WHERE poems_fts MATCH ?`
-	return sql, []any{query}
-}
+	if len(poemIDs) == 0 {
+		return &SearchResult{
+			Poems:      []database.Poem{},
+			TotalCount: totalCount,
+			HasMore:    false,
+		}, nil
+	}
 
-// Pinyin search (full or abbreviation)
-func (e *Engine) buildPinyinQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := `
-		SELECT
-			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
-			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
-			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
-			d.id, d.name, d.name_en, d.start_year, d.end_year, d.created_at,
-			t.id, t.name, t.category, t.lines, t.chars_per_line, t.created_at
-		FROM poems p
-		LEFT JOIN authors a ON p.author_id = a.id
-		LEFT JOIN dynasties d ON p.dynasty_id = d.id
-		LEFT JOIN poetry_types t ON p.type_id = t.id
-		WHERE p.title_pinyin LIKE ?
-			OR p.title_pinyin_abbr LIKE ?
-			OR a.name_pinyin LIKE ?
-			OR a.name_pinyin_abbr LIKE ?
-		LIMIT ? OFFSET ?
-	`
-	return sql, []any{pattern, pattern, pattern, pattern, limit, offset}
-}
+	// Load full poems with relationships, preserving FTS rank order
+	var poems []database.Poem
+	if err := e.db.Preload("Author").Preload("Dynasty").Preload("Type").
+		Where("id IN ?", poemIDs).Find(&poems).Error; err != nil {
+		return nil, fmt.Errorf("failed to load poems: %w", err)
+	}
 
-func (e *Engine) buildPinyinCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := `
-		SELECT COUNT(*)
-		FROM poems p
-		LEFT JOIN authors a ON p.author_id = a.id
-		WHERE p.title_pinyin LIKE ?
-			OR p.title_pinyin_abbr LIKE ?
-			OR a.name_pinyin LIKE ?
-			OR a.name_pinyin_abbr LIKE ?
-	`
-	return sql, []any{pattern, pattern, pattern, pattern}
-}
+	// Preserve original FTS rank order
+	poemMap := make(map[int64]database.Poem, len(poems))
+	for _, p := range poems {
+		poemMap[p.ID] = p
+	}
 
-// Title search
-func (e *Engine) buildTitleQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := e.getBaseQuery() + ` WHERE p.title LIKE ? LIMIT ? OFFSET ?`
-	return sql, []any{pattern, limit, offset}
-}
+	orderedPoems := make([]database.Poem, 0, len(poemIDs))
+	for _, id := range poemIDs {
+		if poem, ok := poemMap[id]; ok {
+			orderedPoems = append(orderedPoems, poem)
+		}
+	}
 
-func (e *Engine) buildTitleCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE title LIKE ?`, []any{pattern}
-}
-
-func (e *Engine) buildTitlePinyinQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := e.getBaseQuery() + ` WHERE p.title_pinyin LIKE ? OR p.title_pinyin_abbr LIKE ? LIMIT ? OFFSET ?`
-	return sql, []any{pattern, pattern, limit, offset}
-}
-
-func (e *Engine) buildTitlePinyinCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE title_pinyin LIKE ? OR title_pinyin_abbr LIKE ?`, []any{pattern, pattern}
-}
-
-// Content search
-func (e *Engine) buildContentQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := e.getBaseQuery() + ` WHERE p.content LIKE ? LIMIT ? OFFSET ?`
-	return sql, []any{pattern, limit, offset}
-}
-
-func (e *Engine) buildContentCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems WHERE content LIKE ?`, []any{pattern}
-}
-
-// Author search
-func (e *Engine) buildAuthorQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := e.getBaseQuery() + ` WHERE a.name LIKE ? LIMIT ? OFFSET ?`
-	return sql, []any{pattern, limit, offset}
-}
-
-func (e *Engine) buildAuthorCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name LIKE ?`, []any{pattern}
-}
-
-func (e *Engine) buildAuthorPinyinQuery(query string, limit, offset int) (string, []any) {
-	pattern := "%" + query + "%"
-	sql := e.getBaseQuery() + ` WHERE a.name_pinyin LIKE ? OR a.name_pinyin_abbr LIKE ? LIMIT ? OFFSET ?`
-	return sql, []any{pattern, pattern, limit, offset}
-}
-
-func (e *Engine) buildAuthorPinyinCountQuery(query string) (string, []any) {
-	pattern := "%" + query + "%"
-	return `SELECT COUNT(*) FROM poems p JOIN authors a ON p.author_id = a.id WHERE a.name_pinyin LIKE ? OR a.name_pinyin_abbr LIKE ?`, []any{pattern, pattern}
-}
-
-func (e *Engine) getBaseQuery() string {
-	return `
-		SELECT
-			p.id, p.title, p.title_pinyin, p.title_pinyin_abbr,
-			p.content, p.rhythmic, p.rhythmic_pinyin, p.created_at,
-			a.id, a.name, a.name_pinyin, a.name_pinyin_abbr, a.created_at,
-			d.id, d.name, d.name_en, d.start_year, d.end_year, d.created_at,
-			t.id, t.name, t.category, t.lines, t.chars_per_line, t.created_at
-		FROM poems p
-		LEFT JOIN authors a ON p.author_id = a.id
-		LEFT JOIN dynasties d ON p.dynasty_id = d.id
-		LEFT JOIN poetry_types t ON p.type_id = t.id
-	`
+	return &SearchResult{
+		Poems:      orderedPoems,
+		TotalCount: totalCount,
+		HasMore:    offset+len(orderedPoems) < totalCount,
+	}, nil
 }
 
 // isPinyinQuery checks if a query string is pinyin
@@ -289,7 +255,6 @@ func isPinyinQuery(s string) bool {
 		return false
 	}
 
-	// Count ASCII letters
 	letterCount := 0
 	totalCount := 0
 
