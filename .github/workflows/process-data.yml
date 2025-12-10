@@ -107,15 +107,39 @@ jobs:
 
             详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)
 
-      - name: Update latest tag
+      - name: Update latest release
         if: startsWith(github.ref, 'refs/tags/')
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git tag -f latest
-          git push -f origin latest
+          # Prepare release notes
+          NOTES="## 最新诗词数据库
+
+          此 release 始终包含最新的数据库文件，会随着新版本自动更新。
+
+          ### 📦 文件说明
+          - \`poetry-simplified.db.gz\` - 简体中文数据库
+          - \`poetry-traditional.db.gz\` - 繁体中文数据库
+          - \`checksums.txt\` - SHA256 校验和
+
+          ### 🔖 当前版本
+          基于版本: ${{ github.ref_name }}
+
+          ### 🚀 使用方法
+          容器启动时会自动从此 release 下载最新数据库。
+
+          详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)"
+
+          # Create or update latest release
+          gh release create latest --title "Latest Poetry Database" --notes "$NOTES" \
+            || gh release edit latest --title "Latest Poetry Database" --notes "$NOTES"
+
+          # Upload database files (will replace existing files)
+          gh release upload latest \
+            poetry-simplified.db.gz \
+            poetry-traditional.db.gz \
+            checksums.txt \
+            --clobber
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Notify Success
         if: success() && github.event_name != 'pull_request'
