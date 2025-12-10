@@ -129,8 +129,8 @@ jobs:
           详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)"
 
           # Create or update latest release
-          gh release create latest --title "Latest Poetry Database" --notes "$NOTES" \
-            || gh release edit latest --title "Latest Poetry Database" --notes "$NOTES"
+          gh release create latest --title "latest" --notes "$NOTES" \
+            || gh release edit latest --title "latest" --notes "$NOTES"
 
           # Upload database files (will replace existing files)
           gh release upload latest \
