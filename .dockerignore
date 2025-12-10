@@ -28,7 +28,6 @@ cmd/server/server
 docs/
 
 # Config
-config.yaml
 config.local.yaml
 
 # Data directories
