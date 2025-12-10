@@ -162,7 +162,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	// Start batch inserter goroutine
 	insertDone := make(chan error, 1)
 	go func() {
-		insertDone <- p.batchInserter(resultCh, progress)
+		insertDone <- p.batchInserter(resultCh)
 	}()
 
 	// Send work to workers
@@ -175,6 +175,11 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 
 	// Wait for all workers to finish processing
 	wg.Wait()
+
+	// Complete the processing progress bar before starting insertion
+	bar.SetTotal(int64(total), true) // Mark as complete
+	progress.Wait()                  // Wait for processing bar to finish rendering
+
 	close(resultCh) // Signal batch inserter to finish
 
 	// Wait for batch inserter to complete
@@ -183,9 +188,6 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	}
 
 	close(errorCh)
-
-	// Wait for progress bar to finish rendering
-	progress.Wait()
 
 	// Collect errors (non-blocking)
 	var errors []error
@@ -218,7 +220,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 
 // batchInserter collects poems and inserts them using large transactions
 // This approach reduces fsync overhead by grouping many inserts into fewer transactions
-func (p *Processor) batchInserter(resultCh <-chan *database.Poem, progress *mpb.Progress) error {
+func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 	// Collect all poems first (they're already processed)
 	allPoems := make([]*database.Poem, 0, cap(resultCh))
 
@@ -232,25 +234,28 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem, progress *mpb.
 
 	log.Printf("[Batch Inserter] Collected %d poems, starting transaction-based insertion...", len(allPoems))
 
+	// Create a new progress container for insertion
+	progress := mpb.New(
+		mpb.WithWidth(60),
+		mpb.WithRefreshRate(100*time.Millisecond),
+	)
+
 	// Use large transactions for maximum performance
 	// Transaction size: 20,000 poems per transaction (reduces fsync calls)
 	// Batch size: use current configured batch size for inserts within transaction
 	transactionSize := 20000
 
 	err := p.repo.BatchInsertPoemsWithTransaction(allPoems, transactionSize, p.batchSize, progress)
+
+	// Wait for progress bar to finish rendering
+	progress.Wait()
+
 	if err != nil {
 		return fmt.Errorf("failed to insert poems with transactions: %w", err)
 	}
 
 	log.Printf("[Batch Inserter] Successfully inserted %d poems using large transactions", len(allPoems))
 	return nil
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, error) {

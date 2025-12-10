@@ -154,15 +154,13 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 	}
 
 	totalTransactions := (len(poems) + transactionSize - 1) / transactionSize
-	log.Printf("[Database] Starting batch insertion: %d poems in %d transactions (batch size: %d)",
-		len(poems), totalTransactions, batchSize)
 
-	// Create progress bar for transactions
-	var txBar *mpb.Bar
+	// Create progress bar for poems (not transactions) for smoother updates
+	var poemBar *mpb.Bar
 	if progress != nil {
-		txBar = progress.AddBar(int64(totalTransactions),
+		poemBar = progress.AddBar(int64(len(poems)),
 			mpb.PrependDecorators(
-				decor.Name("Inserting: ", decor.WC{W: 12, C: decor.DindentRight}),
+				decor.Name("Inserting Poems: ", decor.WC{W: 17, C: decor.DindentRight}),
 				decor.CountersNoUnit("%d / %d", decor.WCSyncWidth),
 			),
 			mpb.AppendDecorators(
@@ -173,18 +171,37 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 		)
 	}
 
+	log.Printf("[Database] Starting batch insertion: %d poems in %d transactions (batch size: %d)",
+		len(poems), totalTransactions, batchSize)
+
 	// Process poems in large transaction chunks
 	for i := 0; i < len(poems); i += transactionSize {
 		end := min(i+transactionSize, len(poems))
 		transactionChunk := poems[i:end]
 
-		// Execute one large transaction
+		// Execute one large transaction with manual batching for progress updates
 		err := r.db.Transaction(func(tx *gorm.DB) error {
-			// Within the transaction, insert in smaller batches
-			return tx.Clauses(clause.OnConflict{
-				Columns:   []clause.Column{{Name: "id"}},
-				DoNothing: true,
-			}).CreateInBatches(transactionChunk, batchSize).Error
+			// Manually batch insert within transaction to update progress bar
+			for j := 0; j < len(transactionChunk); j += batchSize {
+				batchEnd := min(j+batchSize, len(transactionChunk))
+				batch := transactionChunk[j:batchEnd]
+
+				// Insert this batch
+				err := tx.Clauses(clause.OnConflict{
+					Columns:   []clause.Column{{Name: "id"}},
+					DoNothing: true,
+				}).Create(&batch).Error
+
+				if err != nil {
+					return err
+				}
+
+				// Update progress bar after each batch
+				if poemBar != nil {
+					poemBar.IncrBy(len(batch))
+				}
+			}
+			return nil
 		})
 
 		if err != nil {
@@ -192,14 +209,8 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 			return fmt.Errorf("failed to insert transaction %d/%d (poems %d-%d): %w",
 				txNum, totalTransactions, i, end, err)
 		}
-
-		// Update progress bar
-		if txBar != nil {
-			txBar.Increment()
-		}
 	}
 
-	log.Printf("[Database] ✓ All %d poems inserted successfully", len(poems))
 	return nil
 }
 
