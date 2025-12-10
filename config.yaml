@@ -1,5 +1,5 @@
 server:
-  port: 8080
+  port: 1279
   mode: release  # debug, release, test
 
 database:
