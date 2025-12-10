@@ -3,7 +3,7 @@ services:
     image: palemoky/chinese-poetry-api:latest
     container_name: chinese-poetry-api
     ports:
-      - "${PORT:-1566}:${PORT:-1566}"
+      - "${PORT:-1279}:${PORT:-1279}"
     env_file:
       - .env
     volumes:

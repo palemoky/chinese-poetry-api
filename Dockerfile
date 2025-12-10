@@ -34,13 +34,13 @@ RUN chmod +x startup.sh server
 
 # Minimal environment variables (others via .env)
 ENV DATABASE_MODE=simplified \
-    PORT=1566 \
+    PORT=1279 \
     GIN_MODE=release \
     RATE_LIMIT_ENABLED=true \
     RATE_LIMIT_RPS=10 \
     RATE_LIMIT_BURST=20
 
-EXPOSE 1566
+EXPOSE 1279
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/v1/health || exit 1
