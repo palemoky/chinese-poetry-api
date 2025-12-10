@@ -35,10 +35,10 @@ jobs:
       - name: Build processor
         run: go build -o processor ./cmd/processor
 
-      - name: Process poetry data (Simplified)
+      - name: Process poetry data
         run: |
           ./processor \
-            --input . \
+            --input poetry-data \
             --output-simplified poetry-simplified.db \
             --output-traditional poetry-traditional.db \
             --workers 8
