@@ -17,7 +17,7 @@ import (
 )
 
 // setupTestRouter creates a test router with a test database
-func setupTestRouter(t *testing.T) (*gin.Engine, *database.Repository) {
+func setupTestRouter(t *testing.T) (*gin.Engine, *database.Repository, *gorm.DB) {
 	gin.SetMode(gin.TestMode)
 
 	// Create in-memory database
@@ -37,11 +37,11 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *database.Repository) {
 	repo := database.NewRepository(db)
 
 	router := gin.New()
-	return router, repo
+	return router, repo, gormDB
 }
 
 func TestListAuthors(t *testing.T) {
-	router, repo := setupTestRouter(t)
+	router, repo, _ := setupTestRouter(t)
 	handler := NewAuthorHandler(repo)
 
 	// Create test data
@@ -104,7 +104,7 @@ func TestListAuthors(t *testing.T) {
 }
 
 func TestGetAuthor(t *testing.T) {
-	router, repo := setupTestRouter(t)
+	router, repo, _ := setupTestRouter(t)
 	handler := NewAuthorHandler(repo)
 
 	// Create test data
@@ -168,12 +168,23 @@ func TestGetAuthor(t *testing.T) {
 }
 
 func TestGetAuthorPoems(t *testing.T) {
-	router, repo := setupTestRouter(t)
+	router, repo, db := setupTestRouter(t)
 	handler := NewAuthorHandler(repo)
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
 	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+
+	// Create a poem
+	poemContent := []string{"床前明月光", "疑是地上霜"}
+	contentJSON, _ := json.Marshal(poemContent)
+
+	db.Create(&database.Poem{
+		Title:     "静夜思",
+		Content:   contentJSON,
+		AuthorID:  &authorID,
+		DynastyID: &dynastyID,
+	})
 
 	router.GET("/authors/:id/poems", handler.GetAuthorPoems)
 
@@ -182,24 +193,48 @@ func TestGetAuthorPoems(t *testing.T) {
 		authorID       string
 		query          string
 		expectedStatus int
+		checkResponse  func(*testing.T, map[string]any)
 	}{
 		{
 			name:           "get author poems",
 			authorID:       strconv.FormatInt(authorID, 10),
 			query:          "",
 			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
+				assert.NotEmpty(t, data)
+				poem := data[0].(map[string]any)
+
+				// Check basic fields
+				assert.NotEmpty(t, poem["title"])
+				assert.NotEmpty(t, poem["content"])
+
+				// Check nested objects
+				assert.NotNil(t, poem["author"])
+				author := poem["author"].(map[string]any)
+				assert.Equal(t, "李白", author["name"])
+
+				assert.NotNil(t, poem["dynasty"])
+				dynasty := poem["dynasty"].(map[string]any)
+				assert.Equal(t, "唐", dynasty["name"])
+			},
 		},
 		{
 			name:           "with pagination",
 			authorID:       strconv.FormatInt(authorID, 10),
 			query:          "?page=1&page_size=10",
 			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
+				assert.NotEmpty(t, data)
+			},
 		},
 		{
 			name:           "invalid author ID",
 			authorID:       "invalid",
 			query:          "",
 			expectedStatus: http.StatusBadRequest,
+			checkResponse:  nil,
 		},
 	}
 
@@ -215,6 +250,13 @@ func TestGetAuthorPoems(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.checkResponse != nil {
+				var response map[string]any
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				tt.checkResponse(t, response)
+			}
 		})
 	}
 }
