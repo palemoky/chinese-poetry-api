@@ -152,6 +152,13 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 					continue
 				}
 
+				// Skip nil poems (e.g., empty content after normalization)
+				if poem == nil {
+					processed.Add(1)
+					bar.Increment()
+					continue
+				}
+
 				// Send processed poem to result channel
 				resultCh <- poem
 				processed.Add(1)
@@ -226,10 +233,13 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 // This approach reduces fsync overhead by grouping many inserts into fewer transactions
 func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 	// Collect all poems first (they're already processed)
+	// Filter out nil poems as a safety measure
 	allPoems := make([]*database.Poem, 0, cap(resultCh))
 
 	for poem := range resultCh {
-		allPoems = append(allPoems, poem)
+		if poem != nil {
+			allPoems = append(allPoems, poem)
+		}
 	}
 
 	if len(allPoems) == 0 {
