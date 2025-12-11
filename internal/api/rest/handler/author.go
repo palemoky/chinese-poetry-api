@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
@@ -47,8 +48,36 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 		return
 	}
 
+	// Map to response format
+	data := make([]map[string]interface{}, len(authors))
+	for i, author := range authors {
+		dynastyName := ""
+		if author.Dynasty != nil {
+			dynastyName = author.Dynasty.Name
+		}
+
+		namePinyin := ""
+		if author.NamePinyin != nil {
+			namePinyin = *author.NamePinyin
+		}
+
+		namePinyinAbbr := ""
+		if author.NamePinyinAbbr != nil {
+			namePinyinAbbr = *author.NamePinyinAbbr
+		}
+
+		data[i] = map[string]interface{}{
+			"id":               author.ID,
+			"name":             author.Name,
+			"name_pinyin":      namePinyin,
+			"name_pinyin_abbr": namePinyinAbbr,
+			"dynasty":          dynastyName,
+			"poem_count":       author.PoemCount,
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data": authors,
+		"data": data,
 		"pagination": gin.H{
 			"page":        page,
 			"page_size":   pageSize,

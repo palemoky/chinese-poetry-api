@@ -12,6 +12,7 @@ func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, 
 		Order("poem_count DESC").
 		Limit(limit).
 		Offset(offset).
+		Preload("Dynasty").
 		Find(&authors).Error
 
 	return authors, err
