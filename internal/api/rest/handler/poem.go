@@ -65,19 +65,13 @@ func formatPoem(poem *database.Poem) map[string]any {
 		}
 	}
 
-	rhythmic := ""
-	if poem.Rhythmic != nil {
-		rhythmic = *poem.Rhythmic
-	}
-
 	return map[string]any{
-		"id":       poem.ID,
-		"type":     typeData,
-		"title":    poem.Title,
-		"rhythmic": rhythmic,
-		"content":  poem.Content,
-		"author":   authorData,
-		"dynasty":  dynastyData,
+		"id":      poem.ID,
+		"type":    typeData,
+		"title":   poem.Title,
+		"content": poem.Content,
+		"author":  authorData,
+		"dynasty": dynastyData,
 	}
 }
 

@@ -58,7 +58,6 @@ type Poem {
   author: Author
   dynasty: Dynasty
   type: PoetryType
-  rhythmic: String
   createdAt: String!
 }
 

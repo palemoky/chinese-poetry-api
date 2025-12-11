@@ -264,36 +264,32 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 
 // resolveTitleByCategory determines the final title based on poetry type category
 // Different categories use different source fields:
-// - 词 (Ci): use rhythmic (词牌名) as title
+// - 词 (Ci): use rhythmic (词牌名) as title, merge with subtitle if present
 // - 论语/四书五经: use chapter as title
 // - Others (诗/曲/诗经/楚辞/蒙学): use title
-func resolveTitleByCategory(poem loader.PoemData, category string) (finalTitle string, rhythmic string) {
+func resolveTitleByCategory(poem loader.PoemData, category string) string {
 	switch category {
 	case "词": // 宋词 - use rhythmic (词牌名) as title
 		if poem.Rhythmic != "" {
 			// Rhythmic is the main title (词牌名)
 			// If there's also a title, merge them as "词牌名·副标题"
 			if poem.Title != "" && poem.Title != poem.Rhythmic {
-				return poem.Rhythmic + "·" + poem.Title, poem.Rhythmic
+				return poem.Rhythmic + "·" + poem.Title
 			}
-			return poem.Rhythmic, poem.Rhythmic
+			return poem.Rhythmic
 		}
 		// Fallback to title if no rhythmic
-		return poem.Title, ""
+		return poem.Title
 
 	case "论语", "四书五经": // Use chapter as title
 		if poem.Chapter != "" {
-			return poem.Chapter, ""
+			return poem.Chapter
 		}
 		// Fallback to title if no chapter
-		return poem.Title, ""
+		return poem.Title
 
 	default: // 唐诗, 元曲, 诗经, 楚辞, 蒙学, etc. - use title
-		// For 曲, rhythmic might exist but title is primary
-		if poem.Rhythmic != "" && poem.Rhythmic != poem.Title {
-			rhythmic = poem.Rhythmic
-		}
-		return poem.Title, rhythmic
+		return poem.Title
 	}
 }
 
@@ -366,19 +362,12 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 
 	// Resolve final title based on category (handles 词/论语/四书五经/etc.)
 	// This intelligently maps different source fields (title/rhythmic/chapter) to the final title
-	finalTitle, finalRhythmic := resolveTitleByCategory(poem, typeInfo.Category)
+	finalTitle := resolveTitleByCategory(poem, typeInfo.Category)
 
-	// Convert final title and rhythmic
+	// Convert final title
 	finalTitle, err = p.convertText(finalTitle, p.convertToTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert final title: %w", err)
-	}
-
-	if finalRhythmic != "" {
-		finalRhythmic, err = p.convertText(finalRhythmic, p.convertToTraditional)
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert rhythmic: %w", err)
-		}
 	}
 
 	// Use sequential ID assigned during processing
@@ -403,7 +392,6 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		TypeID:      &typeID,
 		Content:     datatypes.JSON(contentJSON),
 		ContentHash: contentHash,
-		Rhythmic:    &finalRhythmic, // Preserved for 词 and 曲
 	}
 
 	return dbPoem, nil

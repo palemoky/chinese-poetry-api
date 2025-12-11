@@ -100,7 +100,6 @@ type ComplexityRoot struct {
 		Dynasty    func(childComplexity int) int
 		ID         func(childComplexity int) int
 		Paragraphs func(childComplexity int) int
-		Rhythmic   func(childComplexity int) int
 		Title      func(childComplexity int) int
 		Type       func(childComplexity int) int
 	}
@@ -391,12 +390,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Poem.Paragraphs(childComplexity), true
-	case "Poem.rhythmic":
-		if e.complexity.Poem.Rhythmic == nil {
-			break
-		}
-
-		return e.complexity.Poem.Rhythmic(childComplexity), true
 	case "Poem.title":
 		if e.complexity.Poem.Title == nil {
 			break
@@ -763,7 +756,6 @@ type Poem {
   author: Author
   dynasty: Dynasty
   type: PoetryType
-  rhythmic: String
   createdAt: String!
 }
 
@@ -2043,35 +2035,6 @@ func (ec *executionContext) fieldContext_Poem_type(_ context.Context, field grap
 	return fc, nil
 }
 
-func (ec *executionContext) _Poem_rhythmic(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Poem_rhythmic,
-		func(ctx context.Context) (any, error) {
-			return obj.Rhythmic, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Poem_rhythmic(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Poem",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Poem_createdAt(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2240,8 +2203,6 @@ func (ec *executionContext) fieldContext_PoemEdge_node(_ context.Context, field 
 				return ec.fieldContext_Poem_dynasty(ctx, field)
 			case "type":
 				return ec.fieldContext_Poem_type(ctx, field)
-			case "rhythmic":
-				return ec.fieldContext_Poem_rhythmic(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -2520,8 +2481,6 @@ func (ec *executionContext) fieldContext_Query_poem(ctx context.Context, field g
 				return ec.fieldContext_Poem_dynasty(ctx, field)
 			case "type":
 				return ec.fieldContext_Poem_type(ctx, field)
-			case "rhythmic":
-				return ec.fieldContext_Poem_rhythmic(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -2677,8 +2636,6 @@ func (ec *executionContext) fieldContext_Query_randomPoem(ctx context.Context, f
 				return ec.fieldContext_Poem_dynasty(ctx, field)
 			case "type":
 				return ec.fieldContext_Poem_type(ctx, field)
-			case "rhythmic":
-				return ec.fieldContext_Poem_rhythmic(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -5248,8 +5205,6 @@ func (ec *executionContext) _Poem(ctx context.Context, sel ast.SelectionSet, obj
 			out.Values[i] = ec._Poem_dynasty(ctx, field, obj)
 		case "type":
 			out.Values[i] = ec._Poem_type(ctx, field, obj)
-		case "rhythmic":
-			out.Values[i] = ec._Poem_rhythmic(ctx, field, obj)
 		case "createdAt":
 			field := field
 
