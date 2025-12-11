@@ -302,32 +302,3 @@ func TestRemovePunctuation(t *testing.T) {
 		})
 	}
 }
-
-func TestGenerateStableAuthorID(t *testing.T) {
-	tests := []struct {
-		name       string
-		authorName string
-		wantSame   string // Another name that should generate the same ID
-		wantDiff   string // Another name that should generate different ID
-	}{
-		{"same name generates same ID", "李白", "李白", "杜甫"},
-		{"different names generate different IDs", "白居易", "白居易", "李商隐"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			id1 := GenerateStableAuthorID(tt.authorName)
-			id2 := GenerateStableAuthorID(tt.wantSame)
-			id3 := GenerateStableAuthorID(tt.wantDiff)
-
-			// Same name should generate same ID
-			assert.Equal(t, id1, id2, "Same name should generate same ID")
-
-			// Different name should generate different ID
-			assert.NotEqual(t, id1, id3, "Different names should generate different IDs")
-
-			// ID should be non-zero
-			assert.NotZero(t, id1, "ID should not be zero")
-		})
-	}
-}

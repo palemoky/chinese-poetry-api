@@ -122,7 +122,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	// Get optimal configuration
 	workBuffer, resultBuffer, errorBuffer, _, _, _ := getOptimalConfig()
 
-	workCh := make(chan loader.PoemWithMeta, workBuffer)
+	workCh := make(chan PoemWork, workBuffer)
 	resultCh := make(chan *database.Poem, resultBuffer)
 	errorCh := make(chan error, errorBuffer)
 	var wg sync.WaitGroup
@@ -136,13 +136,13 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			for poemMeta := range workCh {
-				poem, err := p.processPoem(poemMeta)
+			for work := range workCh {
+				poem, err := p.processPoem(work)
 				if err != nil {
 					errorCount.Add(1)
 					// Non-blocking error recording
 					select {
-					case errorCh <- fmt.Errorf("worker %d: %s - %w", workerID, poemMeta.Title, err):
+					case errorCh <- fmt.Errorf("worker %d: %s - %w", workerID, work.Title, err):
 					default:
 						// Discard error to avoid blocking
 					}
@@ -167,8 +167,11 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 
 	// Send work to workers
 	go func() {
-		for _, poem := range poems {
-			workCh <- poem
+		for i, poem := range poems {
+			workCh <- PoemWork{
+				PoemWithMeta: poem,
+				ID:           int64(i + 1), // Sequential ID starting from 1
+			}
 		}
 		close(workCh)
 	}()
@@ -258,8 +261,8 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 	return nil
 }
 
-func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, error) {
-	poem := poemMeta.PoemData
+func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
+	poem := work.PoemData
 
 	// Normalize all text fields (trim whitespace)
 	title := classifier.NormalizeText(poem.Title)
@@ -296,7 +299,7 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 
 	// Get or create dynasty
 	// Convert dynasty name to match database encoding (traditional or simplified)
-	dynastyName, err := p.convertText(poemMeta.Dynasty, p.convertToTraditional)
+	dynastyName, err := p.convertText(work.Dynasty, p.convertToTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert dynasty name: %w", err)
 	}
@@ -357,9 +360,8 @@ func (p *Processor) processPoem(poemMeta loader.PoemWithMeta) (*database.Poem, e
 		rhythmicPinyin = &rp
 	}
 
-	// Generate stable numeric ID based on poem content
-	// This ensures the same poem always gets the same ID
-	poemID := classifier.GenerateStablePoemID(finalTitle, author, paragraphs)
+	// Use sequential ID assigned during processing
+	poemID := work.ID
 
 	// Convert paragraphs to JSON for storage
 	contentJSON, err := json.Marshal(paragraphs)

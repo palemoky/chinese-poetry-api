@@ -8,8 +8,6 @@ import (
 	"github.com/vbauerster/mpb/v8/decor"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-
-	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 )
 
 // RepositoryInterface defines the interface for repository operations
@@ -69,15 +67,11 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 }
 
 // GetOrCreateAuthor gets or creates an author in a thread-safe manner
-// Uses stable hash-based ID and ON CONFLICT to handle concurrent inserts
+// Uses Name as unique key and ON CONFLICT to handle concurrent inserts
 // Note: Author's dynasty_id is set on first creation and not updated
 // This is because some authors appear in multiple dynasty datasets
 func (r *Repository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error) {
-	// Generate stable 6-digit ID based on author name
-	authorID := classifier.GenerateStableAuthorID(name)
-
 	author := Author{
-		ID:             authorID,
 		Name:           name,
 		NamePinyin:     &namePinyin,
 		NamePinyinAbbr: &namePinyinAbbr,
@@ -87,18 +81,29 @@ func (r *Repository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, 
 	// Try to create the author with ON CONFLICT DO NOTHING
 	// This handles concurrent inserts gracefully
 	err := r.db.Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}}, // Changed from "name" to "id"
-		DoNothing: true,                          // Ignore if already exists
+		Columns:   []clause.Column{{Name: "name"}},
+		DoNothing: true, // Ignore if already exists
 	}).Create(&author).Error
 	if err != nil {
 		return 0, err
 	}
 
-	// If RowsAffected is 0, it means the insert was skipped (already exists)
-	// The author variable still has the correct ID from our generation
+	// If author.ID is 0, it means the insert was skipped (already exists)
+	// We need to fetch the existing author
+	if author.ID == 0 {
+		err = r.db.Where("name = ?", name).First(&author).Error
+		if err != nil {
+			return 0, err
+		}
+	}
 
 	return author.ID, nil
 }
+
+// GetOrCreateAuthor gets or creates an author in a thread-safe manner
+// Uses stable hash-based ID and ON CONFLICT to handle concurrent inserts
+// Note: Author's dynasty_id is set on first creation and not updated
+// This is because some authors appear in multiple dynasty datasets
 
 // GetPoetryTypeID gets the ID of a poetry type by name
 func (r *Repository) GetPoetryTypeID(name string) (int64, error) {

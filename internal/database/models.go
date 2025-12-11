@@ -23,8 +23,8 @@ func (Dynasty) TableName() string {
 
 // Author represents a poet or author
 type Author struct {
-	ID             int64     `gorm:"primaryKey"           json:"id"`   // Stable 6-digit hash-based ID
-	Name           string    `gorm:"not null;uniqueIndex" json:"name"` // uniqueIndex prevents duplicates
+	ID             int64     `gorm:"primaryKey;autoIncrement" json:"id"` // Auto-increment ID
+	Name           string    `gorm:"not null;uniqueIndex" json:"name"`   // uniqueIndex prevents duplicates
 	NamePinyin     *string   `gorm:"index"                json:"name_pinyin,omitempty"`
 	NamePinyinAbbr *string   `                            json:"name_pinyin_abbr,omitempty"`
 	DynastyID      *int64    `gorm:"index"                json:"dynasty_id,omitempty"`
