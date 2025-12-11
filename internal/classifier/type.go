@@ -37,15 +37,16 @@ type PoetryTypeInfo struct {
 
 // ClassifyPoetryType determines the type of poetry based on its structure
 func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
-	return ClassifyPoetryTypeWithDataset(paragraphs, rhythmic, "")
+	return ClassifyPoetryTypeWithDataset(paragraphs, rhythmic, "", "")
 }
 
 // ClassifyPoetryTypeWithDataset determines the type of poetry based on dataset source and structure
 // Priority order:
 // 1. Dataset-based direct mapping (for shijing, chuci, lunyu, mengzi, yuanqu)
 // 2. Rhythmic field check (for songci)
+// 2.5. Yuefu poem title check
 // 3. Structure analysis (for tangshi)
-func ClassifyPoetryTypeWithDataset(paragraphs []string, rhythmic string, datasetKey string) PoetryTypeInfo {
+func ClassifyPoetryTypeWithDataset(paragraphs []string, rhythmic string, datasetKey string, title string) PoetryTypeInfo {
 	// Priority 1: Check dataset key for direct type mapping
 	if typeInfo, ok := getTypeFromDataset(datasetKey); ok {
 		return typeInfo
@@ -56,6 +57,14 @@ func ClassifyPoetryTypeWithDataset(paragraphs []string, rhythmic string, dataset
 		return PoetryTypeInfo{
 			TypeName: TypeCi,
 			Category: CategoryCi,
+		}
+	}
+
+	// Priority 2.5: Check if it's a Yuefu poem by title
+	if title != "" && isYuefuPoem(title) {
+		return PoetryTypeInfo{
+			TypeName: "乐府诗",
+			Category: "唐诗",
 		}
 	}
 
@@ -239,4 +248,88 @@ func removePunctuation(text string) string {
 	}, text)
 
 	return strings.TrimSpace(result)
+}
+
+// isYuefuPoem checks if a poem is a Yuefu poem based on its title
+func isYuefuPoem(title string) bool {
+	// Common Yuefu poem titles
+	yuefuTitles := []string{
+		// 边塞乐府
+		"凉州词", "出塞", "从军行", "塞下曲", "塞上曲",
+		"关山月", "渡荆门", "渡远荆门外",
+
+		// 送别乐府
+		"送友人", "送孟浩然", "送元二使安西",
+		"送友人入蜀", "宣州送裴坡判", "宣州送裴坡判官归京",
+
+		// 抒情乐府
+		"将进酒", "行路难", "长相思", "春思", "秋思",
+		"子夜吴歌", "清平调",
+
+		// 山水游历
+		"蜀道难", "梦游天姥", "侠客行",
+		"登金陵凤凰台", "黄鹤楼",
+		"宣州谢脸楼", "宣城见杜鹃花",
+		"宣州谢脸楼饿别校书叔云",
+		"渡浙江问舟中人",
+
+		// 白居易乐府
+		"琵琶行", "长恨歌", "卖炭翁", "观刈麦",
+		"新丰折臂翁", "上阳白发人", "井底引银瓶",
+		"杜陵叟", "缭绫",
+
+		// 杜甫乐府
+		"兵车行", "丽人行", "哀江头", "哀王孙",
+		"新安吏", "石壕吏", "潼关吏",
+		"新婚别", "垂老别", "无家别",
+
+		// 王维乐府
+		"老将行", "桃源行", "洛阳女儿行",
+
+		// 高适乐府
+		"燕歌行", "别董大", "营州歌",
+
+		// 岑参乐府
+		"白雪歌", "走马川", "轮台歌",
+
+		// 王昌龄乐府
+		"芙蓉楼", "闺怨",
+
+		// 刘禹锡乐府
+		"竹枝词", "杨柳枝", "浪淘沙", "乌衣巷",
+		"石头城", "西塞山怀古",
+
+		// 韩愈乐府
+		"山石", "谒衡岳庙", "八月十五夜赠张功曹",
+
+		// 柳宗元乐府
+		"渔翁", "江雪",
+
+		// 孟郊乐府
+		"游子吟", "秋怀", "烈女操",
+
+		// 元稹乐府
+		"遣悲怀", "离思", "行宫",
+
+		// 李贺乐府
+		"雁门太守行", "金铜仙人辞汉歌", "苏小小墓",
+		"梦天", "李凭箜篌引",
+
+		// 其他常见乐府题
+		"古风", "古意", "拟古", "采莲曲", "江南曲",
+		"白头吟", "怨歌行", "短歌行", "长歌行",
+		"陇西行", "陌上桑", "木兰诗",
+		"孔雀东南飞", "悲愤诗",
+
+		// 汉魏六朝乐府
+		"饮马长城窟行", "十五从军征", "上邪",
+		"有所思", "上山采蘼芜", "江南",
+	}
+
+	for _, yuefuTitle := range yuefuTitles {
+		if strings.Contains(title, yuefuTitle) {
+			return true
+		}
+	}
+	return false
 }
