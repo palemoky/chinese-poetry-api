@@ -142,12 +142,21 @@ func (l *JSONLoader) loadDataset(key string, dataset DatasetInfo) ([]PoemWithMet
 			}
 
 			for _, poem := range filePoems {
-				poems = append(poems, PoemWithMeta{
+				poemWithMeta := PoemWithMeta{
 					PoemData:    poem,
 					Dynasty:     dynasty,
 					DatasetName: dataset.Name,
 					DatasetKey:  key,
-				})
+				}
+
+				// Set default author if not present in data
+				if poemWithMeta.Author == "" {
+					if defaultAuthor := getDefaultAuthorFromDataset(key); defaultAuthor != "" {
+						poemWithMeta.Author = defaultAuthor
+					}
+				}
+
+				poems = append(poems, poemWithMeta)
 			}
 		}
 	} else {
@@ -158,12 +167,21 @@ func (l *JSONLoader) loadDataset(key string, dataset DatasetInfo) ([]PoemWithMet
 		}
 
 		for _, poem := range filePoems {
-			poems = append(poems, PoemWithMeta{
+			poemWithMeta := PoemWithMeta{
 				PoemData:    poem,
 				Dynasty:     dynasty,
 				DatasetName: dataset.Name,
 				DatasetKey:  key,
-			})
+			}
+
+			// Set default author if not present in data
+			if poemWithMeta.Author == "" {
+				if defaultAuthor := getDefaultAuthorFromDataset(key); defaultAuthor != "" {
+					poemWithMeta.Author = defaultAuthor
+				}
+			}
+
+			poems = append(poems, poemWithMeta)
 		}
 	}
 
@@ -269,6 +287,19 @@ func inferDynasty(key, name string) string {
 	}
 
 	return "其他"
+}
+
+// getDefaultAuthorFromDataset returns the default author for datasets that don't have author field
+func getDefaultAuthorFromDataset(datasetKey string) string {
+	authorMap := map[string]string{
+		"caocao":      "曹操",
+		"nalanxingde": "纳兰性德",
+	}
+
+	if author, ok := authorMap[datasetKey]; ok {
+		return author
+	}
+	return ""
 }
 
 func getString(m map[string]any, key string) string {

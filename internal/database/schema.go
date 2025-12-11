@@ -40,6 +40,7 @@ var InitialPoetryTypesSQL = `INSERT OR IGNORE INTO poetry_types (id, name, categ
 	(14, '七言律诗', '唐诗', 8, 7, '八句，每句七字'),
 	(15, '五言古诗', '唐诗', NULL, 5, '不限句数，每句五字'),
 	(16, '七言古诗', '唐诗', NULL, 7, '不限句数，每句七字'),
+	(17, '乐府诗', '唐诗', NULL, NULL, '不限句数，不限字数'),
 	(20, '宋词', '宋词', NULL, NULL, '长短句'),
 	(21, '五代词', '词', NULL, NULL, '长短句'),
 	(30, '元曲', '曲', NULL, NULL, '散曲'),

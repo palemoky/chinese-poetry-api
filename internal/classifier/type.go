@@ -147,6 +147,10 @@ func getTypeFromDataset(datasetKey string) (PoetryTypeInfo, bool) {
 			TypeName: "宋词", // 纳兰性德是清代，但词的形式与宋词相同
 			Category: "宋词",
 		},
+		"caocao": {
+			TypeName: "乐府诗",
+			Category: "唐诗",
+		},
 	}
 
 	if typeInfo, ok := datasetTypeMap[datasetKey]; ok {
