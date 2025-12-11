@@ -301,6 +301,11 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	paragraphs := classifier.NormalizeTextArray(poem.Paragraphs)
 	rhythmic := classifier.NormalizeText(poem.Rhythmic)
 
+	// Skip poems with empty content after normalization (return nil to skip silently)
+	if len(paragraphs) == 0 {
+		return nil, nil
+	}
+
 	// Assign default author for poems without author
 	if author == "" {
 		author = "佚名" // Anonymous/Unknown author
