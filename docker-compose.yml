@@ -7,7 +7,8 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_MODE=1  # 0=both, 1=simplified, 2=traditionals
+      - DATABASE_MODE=1  # 0=both, 1=simplified, 2=traditional
+      - TZ=Asia/Shanghai
     volumes:
       - ./data:/app/data
     restart: unless-stopped
