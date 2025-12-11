@@ -300,16 +300,32 @@ func TestRandomPoem(t *testing.T) {
 		name           string
 		setupData      bool
 		expectedStatus int
+		checkResponse  func(*testing.T, map[string]any)
 	}{
 		{
 			name:           "get random poem when database is empty",
 			setupData:      false,
 			expectedStatus: http.StatusInternalServerError,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.Equal(t, "failed to get random poem", resp["error"])
+			},
 		},
 		{
 			name:           "get random poem with data",
 			setupData:      true,
 			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.NotEmpty(t, resp["title"])
+				assert.NotEmpty(t, resp["content"])
+
+				assert.NotNil(t, resp["author"])
+				author := resp["author"].(map[string]any)
+				assert.Equal(t, "李白", author["name"])
+
+				assert.NotNil(t, resp["dynasty"])
+				dynasty := resp["dynasty"].(map[string]any)
+				assert.Equal(t, "唐", dynasty["name"])
+			},
 		},
 	}
 
@@ -330,6 +346,13 @@ func TestRandomPoem(t *testing.T) {
 			router.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.checkResponse != nil {
+				var response map[string]any
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				tt.checkResponse(t, response)
+			}
 		})
 	}
 }

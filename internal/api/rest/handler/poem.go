@@ -58,6 +58,88 @@ func (h *PoemHandler) GetPoem(c *gin.Context) {
 	}
 }
 
+// formatPoem formats a poem into a detailed map structure
+func formatPoem(poem *database.Poem) map[string]any {
+	var typeData map[string]any
+	if poem.Type != nil {
+		typeData = map[string]any{
+			"id":       poem.Type.ID,
+			"name":     poem.Type.Name,
+			"category": poem.Type.Category,
+		}
+		if poem.Type.Description != nil {
+			typeData["description"] = *poem.Type.Description
+		}
+	}
+
+	var authorData map[string]any
+	if poem.Author != nil {
+		a := poem.Author
+		namePinyin := ""
+		if a.NamePinyin != nil {
+			namePinyin = *a.NamePinyin
+		}
+		namePinyinAbbr := ""
+		if a.NamePinyinAbbr != nil {
+			namePinyinAbbr = *a.NamePinyinAbbr
+		}
+		authorData = map[string]any{
+			"id":               a.ID,
+			"name":             a.Name,
+			"name_pinyin":      namePinyin,
+			"name_pinyin_abbr": namePinyinAbbr,
+		}
+	}
+
+	var dynastyData map[string]any
+	if poem.Dynasty != nil {
+		d := poem.Dynasty
+		dynastyData = map[string]any{
+			"id":   d.ID,
+			"name": d.Name,
+		}
+		if d.NameEn != nil {
+			dynastyData["name_en"] = *d.NameEn
+		}
+		if d.StartYear != nil {
+			dynastyData["start_year"] = *d.StartYear
+		}
+		if d.EndYear != nil {
+			dynastyData["end_year"] = *d.EndYear
+		}
+	}
+
+	titlePinyin := ""
+	if poem.TitlePinyin != nil {
+		titlePinyin = *poem.TitlePinyin
+	}
+	titlePinyinAbbr := ""
+	if poem.TitlePinyinAbbr != nil {
+		titlePinyinAbbr = *poem.TitlePinyinAbbr
+	}
+	rhythmic := ""
+	if poem.Rhythmic != nil {
+		rhythmic = *poem.Rhythmic
+	}
+	rhythmicPinyin := ""
+	if poem.RhythmicPinyin != nil {
+		rhythmicPinyin = *poem.RhythmicPinyin
+	}
+
+	return map[string]any{
+		"id":                poem.ID,
+		"type":              typeData,
+		"title":             poem.Title,
+		"title_pinyin":      titlePinyin,
+		"title_pinyin_abbr": titlePinyinAbbr,
+		"rhythmic":          rhythmic,
+		"rhythmic_pinyin":   rhythmicPinyin,
+		"content":           poem.Content,
+		"author":            authorData,
+		"dynasty":           dynastyData,
+	}
+}
+
 // ListPoems retrieves a paginated list of poems
 func (h *PoemHandler) ListPoems(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -88,79 +170,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 	// Map keys to response format
 	data := make([]map[string]any, len(poems))
 	for i, poem := range poems {
-		var typeData map[string]any
-		if poem.Type != nil {
-			typeData = map[string]any{
-				"id":       poem.Type.ID,
-				"name":     poem.Type.Name,
-				"category": poem.Type.Category,
-			}
-			if poem.Type.Description != nil {
-				typeData["description"] = *poem.Type.Description
-			}
-		}
-
-		var authorData map[string]any
-		if poem.Author != nil {
-			a := poem.Author
-			namePinyin := ""
-			if a.NamePinyin != nil {
-				namePinyin = *a.NamePinyin
-			}
-			namePinyinAbbr := ""
-			if a.NamePinyinAbbr != nil {
-				namePinyinAbbr = *a.NamePinyinAbbr
-			}
-			authorData = map[string]any{
-				"id":               a.ID,
-				"name":             a.Name,
-				"name_pinyin":      namePinyin,
-				"name_pinyin_abbr": namePinyinAbbr,
-			}
-		}
-
-		var dynastyData map[string]any
-		if poem.Dynasty != nil {
-			d := poem.Dynasty
-			dynastyData = map[string]any{
-				"id":   d.ID,
-				"name": d.Name,
-			}
-			if d.NameEn != nil {
-				dynastyData["name_en"] = *d.NameEn
-			}
-			if d.StartYear != nil {
-				dynastyData["start_year"] = *d.StartYear
-			}
-			if d.EndYear != nil {
-				dynastyData["end_year"] = *d.EndYear
-			}
-		}
-
-		titlePinyin := ""
-		if poem.TitlePinyin != nil {
-			titlePinyin = *poem.TitlePinyin
-		}
-		titlePinyinAbbr := ""
-		if poem.TitlePinyinAbbr != nil {
-			titlePinyinAbbr = *poem.TitlePinyinAbbr
-		}
-		rhythmic := ""
-		if poem.Rhythmic != nil {
-			rhythmic = *poem.Rhythmic
-		}
-
-		data[i] = map[string]any{
-			"id":                poem.ID,
-			"type":              typeData,
-			"title":             poem.Title,
-			"title_pinyin":      titlePinyin,
-			"title_pinyin_abbr": titlePinyinAbbr,
-			"rhythmic":          rhythmic,
-			"content":           poem.Content,
-			"author":            authorData,
-			"dynasty":           dynastyData,
-		}
+		data[i] = formatPoem(&poem)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -227,19 +237,15 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 
 	// This is a simplified implementation
 	// In production, you'd want a more efficient method
-	result, err := h.search.Search(search.SearchParams{
-		Query:      "",
-		SearchType: search.SearchTypeAll,
-		Page:       offset + 1,
-		PageSize:   1,
-	})
+	// Using ListPoems with limit 1 and random offset is better than search for random
+	poems, err := h.repo.ListPoems(1, offset)
 
-	if err != nil || len(result.Poems) == 0 {
+	if err != nil || len(poems) == 0 {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to get random poem",
 		})
 		return
 	}
 
-	c.JSON(http.StatusOK, result.Poems[0])
+	c.JSON(http.StatusOK, formatPoem(&poems[0]))
 }
