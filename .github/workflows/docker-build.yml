@@ -17,7 +17,20 @@ env:
   DOCKER_IMAGE: ${{ vars.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
 
 jobs:
+  check-test-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Test Success
+        uses: lewagon/wait-on-check-action@v1.4.1
+        with:
+          ref: ${{ github.ref }}
+          check-name: 'Tests'
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 10
+          allowed-conclusions: success
+
   build:
+    needs: check-test-status
     runs-on: ubuntu-latest
 
     steps:
