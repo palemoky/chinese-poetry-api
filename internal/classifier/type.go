@@ -326,10 +326,24 @@ func isYuefuPoem(title string) bool {
 		"有所思", "上山采蘼芜", "江南",
 	}
 
+	// Check exact title matches
 	for _, yuefuTitle := range yuefuTitles {
 		if strings.Contains(title, yuefuTitle) {
 			return true
 		}
 	}
+
+	// Check for common Yuefu patterns (suffixes)
+	// 曲辞、歌辞、歌行、乐府 are typical Yuefu markers
+	yuefuPatterns := []string{
+		"曲辞", "歌辞", "歌行", "乐府",
+	}
+
+	for _, pattern := range yuefuPatterns {
+		if strings.Contains(title, pattern) {
+			return true
+		}
+	}
+
 	return false
 }
