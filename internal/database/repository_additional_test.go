@@ -1,12 +1,21 @@
 package database
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
 )
+
+// calculateTestHash generates a SHA256 hash for test content
+func calculateTestHash(content []byte) string {
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:])
+}
 
 // Test new repository methods added in repository_additional.go
 
@@ -21,22 +30,26 @@ func TestGetAuthorsWithStats(t *testing.T) {
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	// Create poems for authors
+	content1 := []byte(`["床前明月光"]`)
 	_ = db.Create(&Poem{
-		ID:        100001,
-		Title:     "静夜思",
-		Content:   datatypes.JSON([]byte(`["床前明月光"]`)),
-		AuthorID:  &author1ID,
-		DynastyID: &dynastyID,
-		TypeID:    &typeID,
+		ID:          100001,
+		Title:       "静夜思",
+		Content:     datatypes.JSON(content1),
+		ContentHash: calculateTestHash(content1),
+		AuthorID:    &author1ID,
+		DynastyID:   &dynastyID,
+		TypeID:      &typeID,
 	}).Error
 
+	content2 := []byte(`["日照香炉生紫烟"]`)
 	_ = db.Create(&Poem{
-		ID:        100002,
-		Title:     "望庐山瀑布",
-		Content:   datatypes.JSON([]byte(`["日照香炉生紫烟"]`)),
-		AuthorID:  &author1ID,
-		DynastyID: &dynastyID,
-		TypeID:    &typeID,
+		ID:          100002,
+		Title:       "望庐山瀑布",
+		Content:     datatypes.JSON(content2),
+		ContentHash: calculateTestHash(content2),
+		AuthorID:    &author1ID,
+		DynastyID:   &dynastyID,
+		TypeID:      &typeID,
 	}).Error
 
 	tests := []struct {
@@ -120,15 +133,17 @@ func TestGetPoemsByAuthor(t *testing.T) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
-	// Create test poems
+	// Create test poems with unique content
 	for i := range 5 {
+		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
 		_ = db.Create(&Poem{
-			ID:        int64(200000 + i),
-			Title:     "测试诗歌",
-			Content:   datatypes.JSON([]byte(`["测试内容"]`)),
-			AuthorID:  &authorID,
-			DynastyID: &dynastyID,
-			TypeID:    &typeID,
+			ID:          int64(200000 + i),
+			Title:       fmt.Sprintf("测试诗歌%d", i),
+			Content:     datatypes.JSON(content),
+			ContentHash: calculateTestHash(content),
+			AuthorID:    &authorID,
+			DynastyID:   &dynastyID,
+			TypeID:      &typeID,
 		}).Error
 	}
 
@@ -138,18 +153,8 @@ func TestGetPoemsByAuthor(t *testing.T) {
 		offset  int
 		wantLen int
 	}{
-		{
-			name:    "get all poems",
-			limit:   10,
-			offset:  0,
-			wantLen: 5,
-		},
-		{
-			name:    "get with pagination",
-			limit:   2,
-			offset:  0,
-			wantLen: 2,
-		},
+		{"get all poems", 10, 0, 5},
+		{"get with pagination", 2, 0, 2},
 	}
 
 	for _, tt := range tests {
@@ -172,13 +177,15 @@ func TestGetDynastiesWithStats(t *testing.T) {
 	author1ID, _ := repo.GetOrCreateAuthor("李白", dynasty1ID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
+	content3 := []byte(`["床前明月光"]`)
 	_ = db.Create(&Poem{
-		ID:        300001,
-		Title:     "静夜思",
-		Content:   datatypes.JSON([]byte(`["床前明月光"]`)),
-		AuthorID:  &author1ID,
-		DynastyID: &dynasty1ID,
-		TypeID:    &typeID,
+		ID:          300001,
+		Title:       "静夜思",
+		Content:     datatypes.JSON(content3),
+		ContentHash: calculateTestHash(content3),
+		AuthorID:    &author1ID,
+		DynastyID:   &dynasty1ID,
+		TypeID:      &typeID,
 	}).Error
 
 	dynasties, err := repo.GetDynastiesWithStats()
@@ -210,16 +217,8 @@ func TestGetDynastyByID(t *testing.T) {
 		id      int64
 		wantErr bool
 	}{
-		{
-			name:    "get existing dynasty",
-			id:      dynastyID,
-			wantErr: false,
-		},
-		{
-			name:    "get non-existent dynasty",
-			id:      999999,
-			wantErr: true,
-		},
+		{"get existing dynasty", dynastyID, false},
+		{"get non-existent dynasty", 999999, true},
 	}
 
 	for _, tt := range tests {
@@ -252,13 +251,15 @@ func TestGetPoetryTypesWithStats(t *testing.T) {
 	_ = db.Create(poetryType).Error
 	typeID := poetryType.ID
 
+	content4 := []byte(`["床前明月光"]`)
 	_ = db.Create(&Poem{
-		ID:        400001,
-		Title:     "静夜思",
-		Content:   datatypes.JSON([]byte(`["床前明月光"]`)),
-		AuthorID:  &authorID,
-		DynastyID: &dynastyID,
-		TypeID:    &typeID,
+		ID:          400001,
+		Title:       "静夜思",
+		Content:     datatypes.JSON(content4),
+		ContentHash: calculateTestHash(content4),
+		AuthorID:    &authorID,
+		DynastyID:   &dynastyID,
+		TypeID:      &typeID,
 	}).Error
 
 	types, err := repo.GetPoetryTypesWithStats()
@@ -330,15 +331,17 @@ func TestGetPoemsByType(t *testing.T) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
-	// Create test poems
+	// Create test poems with unique content
 	for i := range 3 {
+		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
 		_ = db.Create(&Poem{
-			ID:        int64(500000 + i),
-			Title:     "测试诗歌",
-			Content:   datatypes.JSON([]byte(`["测试内容"]`)),
-			AuthorID:  &authorID,
-			DynastyID: &dynastyID,
-			TypeID:    &typeID,
+			ID:          int64(500000 + i),
+			Title:       fmt.Sprintf("测试诗歌%d", i),
+			Content:     datatypes.JSON(content),
+			ContentHash: calculateTestHash(content),
+			AuthorID:    &authorID,
+			DynastyID:   &dynastyID,
+			TypeID:      &typeID,
 		}).Error
 	}
 
