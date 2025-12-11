@@ -3,7 +3,6 @@ package handler
 import (
 	"math/rand"
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -109,18 +108,9 @@ func formatPoem(poem *database.Poem) map[string]any {
 
 // ListPoems retrieves a paginated list of poems
 func (h *PoemHandler) ListPoems(c *gin.Context) {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	pagination := ParsePagination(c)
 
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
-	offset := (page - 1) * pageSize
-	poems, err := h.repo.ListPoems(pageSize, offset)
+	poems, err := h.repo.ListPoems(pagination.PageSize, pagination.Offset())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "failed to retrieve poems",
@@ -140,12 +130,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		data[i] = formatPoem(&poem)
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data":      data,
-		"page":      page,
-		"page_size": pageSize,
-		"total":     total,
-	})
+	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
 }
 
 // SearchPoems searches for poems
@@ -159,18 +144,13 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	}
 
 	searchType := search.SearchType(c.DefaultQuery("type", "all"))
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	if pageSize > 100 {
-		pageSize = 100
-	}
+	pagination := ParsePagination(c)
 
 	result, err := h.search.Search(search.SearchParams{
 		Query:      query,
 		SearchType: searchType,
-		Page:       page,
-		PageSize:   pageSize,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -179,13 +159,7 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"poems":       result.Poems,
-		"total_count": result.TotalCount,
-		"page":        page,
-		"page_size":   pageSize,
-		"has_more":    result.HasMore,
-	})
+	c.JSON(http.StatusOK, NewPaginationResponse(result.Poems, pagination, int64(result.TotalCount)))
 }
 
 // RandomPoem returns a random poem

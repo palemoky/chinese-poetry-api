@@ -93,9 +93,11 @@ func TestListPoems(t *testing.T) {
 			checkResponse: func(t *testing.T, resp map[string]any) {
 				data := resp["data"].([]any)
 				assert.Len(t, data, 2)
-				assert.Equal(t, float64(1), resp["page"])
-				assert.Equal(t, float64(20), resp["page_size"])
-				assert.Equal(t, float64(2), resp["total"])
+
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(1), pagination["page"])
+				assert.Equal(t, float64(20), pagination["page_size"])
+				assert.Equal(t, float64(2), pagination["total"])
 
 				// Check nested structure of first poem
 				poem := data[0].(map[string]any)
@@ -118,8 +120,10 @@ func TestListPoems(t *testing.T) {
 			checkResponse: func(t *testing.T, resp map[string]any) {
 				data := resp["data"].([]any)
 				assert.Len(t, data, 1) // Should only return 1
-				assert.Equal(t, float64(1), resp["page"])
-				assert.Equal(t, float64(1), resp["page_size"])
+
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(1), pagination["page"])
+				assert.Equal(t, float64(1), pagination["page_size"])
 			},
 		},
 	}
@@ -163,11 +167,13 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=静夜思",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp, "poems")
-				assert.Contains(t, resp, "total_count")
-				assert.Contains(t, resp, "page")
-				assert.Contains(t, resp, "page_size")
-				assert.Contains(t, resp, "has_more")
+				assert.Contains(t, resp, "data")
+				assert.Contains(t, resp, "pagination")
+
+				pagination := resp["pagination"].(map[string]any)
+				assert.Contains(t, pagination, "total")
+				assert.Contains(t, pagination, "page")
+				assert.Contains(t, pagination, "page_size")
 			},
 		},
 		{
@@ -175,7 +181,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=李白&type=author",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp, "poems")
+				assert.Contains(t, resp, "data")
 			},
 		},
 		{
@@ -183,8 +189,9 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=test&page=1&page_size=10",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, float64(1), resp["page"])
-				assert.Equal(t, float64(10), resp["page_size"])
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(1), pagination["page"])
+				assert.Equal(t, float64(10), pagination["page_size"])
 			},
 		},
 		{
@@ -192,7 +199,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=jingye&type=pinyin",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp, "poems")
+				assert.Contains(t, resp, "data")
 			},
 		},
 		{
@@ -209,7 +216,8 @@ func TestSearchPoems(t *testing.T) {
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
 				// Should be capped at 100
-				assert.Equal(t, float64(100), resp["page_size"])
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(100), pagination["page_size"])
 			},
 		},
 	}

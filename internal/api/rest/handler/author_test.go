@@ -68,6 +68,7 @@ func TestListAuthors(t *testing.T) {
 				pagination := resp["pagination"].(map[string]any)
 				assert.Equal(t, float64(1), pagination["page"])
 				assert.Equal(t, float64(20), pagination["page_size"])
+				assert.Equal(t, float64(2), pagination["total"])
 			},
 		},
 		{

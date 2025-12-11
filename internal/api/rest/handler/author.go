@@ -21,21 +21,10 @@ func NewAuthorHandler(repo *database.Repository) *AuthorHandler {
 
 // ListAuthors returns a list of authors
 func (h *AuthorHandler) ListAuthors(c *gin.Context) {
-	// Parse pagination parameters
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
-	offset := (page - 1) * pageSize
+	pagination := ParsePagination(c)
 
 	// Get authors from database
-	authors, err := h.repo.GetAuthorsWithStats(pageSize, offset)
+	authors, err := h.repo.GetAuthorsWithStats(pagination.PageSize, pagination.Offset())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch authors"})
 		return
@@ -76,15 +65,7 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"data": data,
-		"pagination": gin.H{
-			"page":        page,
-			"page_size":   pageSize,
-			"total":       total,
-			"total_pages": (total + pageSize - 1) / pageSize,
-		},
-	})
+	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
 }
 
 // GetAuthor returns a specific author by ID
