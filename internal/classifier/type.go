@@ -8,8 +8,8 @@ import (
 // Poetry type constants
 const (
 	// Categories
-	CategoryPoetry = "诗"
-	CategoryCi     = "词"
+	CategoryPoetry = "唐诗"
+	CategoryCi     = "宋词"
 	CategoryOther  = "其他"
 
 	// Specific types
@@ -17,7 +17,7 @@ const (
 	TypeQiyanJueju = "七言绝句"
 	TypeWuyanLvshi = "五言律诗"
 	TypeQiyanLvshi = "七言律诗"
-	TypeCi         = "词"
+	TypeCi         = "宋词"
 	TypeOther      = "其他"
 
 	// Structure constraints

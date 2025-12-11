@@ -302,13 +302,12 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	paragraphs := classifier.NormalizeTextArray(poem.Paragraphs)
 	rhythmic := classifier.NormalizeText(poem.Rhythmic)
 
-	// Skip poems with empty required fields
+	// Assign default author for poems without author
 	if author == "" {
-		return nil, fmt.Errorf("skipping poem: author name is empty")
+		author = "佚名" // Anonymous/Unknown author
 	}
-	if title == "" && poem.Chapter == "" && rhythmic == "" {
-		return nil, fmt.Errorf("skipping poem: no valid title source (title, chapter, or rhythmic)")
-	}
+	// Allow poems without title if they have content
+	// Some poems may only have paragraphs without a formal title
 
 	// Normalize Chinese characters for consistency
 	// Traditional DB: convert to traditional
