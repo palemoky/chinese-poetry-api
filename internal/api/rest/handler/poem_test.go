@@ -70,63 +70,6 @@ func stringPtr(s string) *string {
 	return &s
 }
 
-func TestGetPoem(t *testing.T) {
-	router, repo, searchEngine := setupPoemTestRouter(t)
-	handler := NewPoemHandler(repo, searchEngine)
-
-	// Create test poem
-	poem := createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
-
-	router.GET("/poems/:id", handler.GetPoem)
-
-	tests := []struct {
-		name           string
-		poemID         string
-		expectedStatus int
-		checkResponse  func(*testing.T, map[string]any)
-	}{
-		{
-			name:           "get existing poem",
-			poemID:         "12345678901234",
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "静夜思", resp["title"])
-				paragraphs := resp["paragraphs"].([]any)
-				assert.Len(t, paragraphs, 4)
-				assert.Equal(t, "床前明月光", paragraphs[0])
-			},
-		},
-		{
-			name:           "get non-existent poem",
-			poemID:         "99999999999999",
-			expectedStatus: http.StatusNotFound,
-			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "poem not found", resp["error"])
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequest(http.MethodGet, "/poems/"+tt.poemID, nil)
-			w := httptest.NewRecorder()
-
-			router.ServeHTTP(w, req)
-
-			assert.Equal(t, tt.expectedStatus, w.Code)
-
-			if tt.checkResponse != nil {
-				var response map[string]any
-				err := json.Unmarshal(w.Body.Bytes(), &response)
-				require.NoError(t, err)
-				tt.checkResponse(t, response)
-			}
-		})
-	}
-
-	_ = poem // use poem to avoid unused variable warning
-}
-
 func TestListPoems(t *testing.T) {
 	router, repo, searchEngine := setupPoemTestRouter(t)
 	handler := NewPoemHandler(repo, searchEngine)

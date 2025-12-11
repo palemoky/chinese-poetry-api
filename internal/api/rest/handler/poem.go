@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"encoding/json"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -23,38 +22,6 @@ func NewPoemHandler(repo *database.Repository, searchEngine *search.Engine) *Poe
 	return &PoemHandler{
 		repo:   repo,
 		search: searchEngine,
-	}
-}
-
-// GetPoem retrieves a single poem by ID
-func (h *PoemHandler) GetPoem(c *gin.Context) {
-	id := c.Param("id")
-
-	poem, err := h.repo.GetPoemByID(id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error": "poem not found",
-		})
-		return
-	}
-
-	// Parse content JSON
-	var paragraphs []string
-	if err := json.Unmarshal([]byte(poem.Content), &paragraphs); err == nil {
-		// Create response withanyagraphs
-		response := map[string]any{
-			"id":         poem.ID,
-			"title":      poem.Title,
-			"paragraphs": paragraphs,
-			"author":     poem.Author,
-			"dynasty":    poem.Dynasty,
-			"type":       poem.Type,
-			"rhythmic":   poem.Rhythmic,
-			"created_at": poem.CreatedAt,
-		}
-		c.JSON(http.StatusOK, response)
-	} else {
-		c.JSON(http.StatusOK, poem)
 	}
 }
 

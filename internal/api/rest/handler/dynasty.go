@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
@@ -45,42 +46,4 @@ func (h *DynastyHandler) GetDynasty(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": dynasty})
-}
-
-// GetDynastyPoems returns poems from a specific dynasty
-func (h *DynastyHandler) GetDynastyPoems(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid dynasty ID"})
-		return
-	}
-
-	// Parse pagination
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
-
-	if page < 1 {
-		page = 1
-	}
-	if pageSize < 1 || pageSize > 100 {
-		pageSize = 20
-	}
-
-	offset := (page - 1) * pageSize
-
-	// Get poems
-	poems, err := h.repo.GetPoemsByDynasty(id, pageSize, offset)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch poems"})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": poems,
-		"pagination": gin.H{
-			"page":      page,
-			"page_size": pageSize,
-		},
-	})
 }
