@@ -6,16 +6,17 @@ const (
 )
 
 // InitialDynastiesSQL contains initial data for dynasties
+// Ordered chronologically by start_year for consistent ID assignment
 var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start_year, end_year) VALUES
-	('唐', 'Tang', 618, 907),
-	('宋', 'Song', 960, 1279),
-	('元', 'Yuan', 1271, 1368),
-	('五代', 'Five Dynasties', 907, 960),
 	('先秦', 'Pre-Qin', -2070, -221),
 	('两汉', 'Han', -206, 220),
 	('魏晋', 'Wei-Jin', 220, 420),
 	('南北朝', 'Northern and Southern', 420, 589),
 	('隋', 'Sui', 581, 618),
+	('唐', 'Tang', 618, 907),
+	('五代', 'Five Dynasties', 907, 960),
+	('宋', 'Song', 960, 1279),
+	('元', 'Yuan', 1271, 1368),
 	('清', 'Qing', 1644, 1912),
 	('其他', 'Other', NULL, NULL)`
 
