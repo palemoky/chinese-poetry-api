@@ -27,6 +27,7 @@ type DatasetInfo struct {
 type PoemData struct {
 	ID         string   `json:"id"`
 	Title      string   `json:"title"`
+	Chapter    string   `json:"chapter,omitempty"` // For 论语, 四书五经
 	Author     string   `json:"author"`
 	Paragraphs []string `json:"paragraphs"`
 	Rhythmic   string   `json:"rhythmic,omitempty"` // For ci (词)
@@ -195,6 +196,11 @@ func (l *JSONLoader) loadJSONFile(path string, tag string) ([]PoemData, error) {
 		// Handle rhythmic (for ci/词)
 		if rhythmic, ok := raw["rhythmic"].(string); ok {
 			poem.Rhythmic = rhythmic
+		}
+
+		// Handle chapter (for lunyu/论语, sishuwujing/四书五经)
+		if chapter, ok := raw["chapter"].(string); ok {
+			poem.Chapter = chapter
 		}
 
 		// Extract paragraphs based on tag
