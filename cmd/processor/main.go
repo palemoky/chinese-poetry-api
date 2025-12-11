@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/olekukonko/tablewriter"
+	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/loader"
 	"github.com/palemoky/chinese-poetry-api/internal/processor"
@@ -76,13 +78,9 @@ func run(cmd *cobra.Command, args []string) error {
 	log.Printf("Simplified database: %s", outputSimplified)
 	log.Printf("Traditional database: %s", outputTraditional)
 
-	// Print statistics
-	if err := printStatistics(outputSimplified, "Simplified"); err != nil {
-		log.Printf("Warning: failed to print simplified statistics: %v", err)
-	}
-
-	if err := printStatistics(outputTraditional, "Traditional"); err != nil {
-		log.Printf("Warning: failed to print traditional statistics: %v", err)
+	// Print comparison statistics
+	if err := printComparisonStatistics(outputSimplified, outputTraditional); err != nil {
+		log.Printf("Warning: failed to print statistics: %v", err)
 	}
 
 	return nil
@@ -129,37 +127,141 @@ func processDatabase(dbPath string, poems []loader.PoemWithMeta, convertToTradit
 	return nil
 }
 
-func printStatistics(dbPath, label string) error {
-	db, err := database.Open(dbPath)
+func printComparisonStatistics(simplifiedPath, traditionalPath string) error {
+	// Load simplified stats
+	dbSimp, err := database.Open(simplifiedPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open simplified database: %w", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = dbSimp.Close() }()
 
-	repo := database.NewRepository(db)
-	stats, err := repo.GetStatistics()
+	repoSimp := database.NewRepository(dbSimp)
+	statsSimp, err := repoSimp.GetStatistics()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get simplified statistics: %w", err)
 	}
 
-	log.Printf("\n=== %s Database Statistics ===", label)
-	log.Printf("Total Poems: %d", stats.TotalPoems)
-	log.Printf("Total Authors: %d", stats.TotalAuthors)
-	log.Printf("Total Dynasties: %d", stats.TotalDynasties)
+	// Load traditional stats
+	dbTrad, err := database.Open(traditionalPath)
+	if err != nil {
+		return fmt.Errorf("failed to open traditional database: %w", err)
+	}
+	defer func() { _ = dbTrad.Close() }()
 
-	log.Println("\nPoems by Dynasty:")
-	for _, ds := range stats.PoemsByDynasty {
+	repoTrad := database.NewRepository(dbTrad)
+	statsTrad, err := repoTrad.GetStatistics()
+	if err != nil {
+		return fmt.Errorf("failed to get traditional statistics: %w", err)
+	}
+
+	log.Println("\n=== Database Statistics Comparison ===\n")
+
+	// Overview comparison table
+	overviewData := [][]string{
+		{"Metric", "Simplified", "Traditional", "Difference"},
+		{
+			"Total Poems",
+			fmt.Sprintf("%d", statsSimp.TotalPoems),
+			fmt.Sprintf("%d", statsTrad.TotalPoems),
+			fmt.Sprintf("%+d", statsTrad.TotalPoems-statsSimp.TotalPoems),
+		},
+		{
+			"Total Authors",
+			fmt.Sprintf("%d", statsSimp.TotalAuthors),
+			fmt.Sprintf("%d", statsTrad.TotalAuthors),
+			fmt.Sprintf("%+d", statsTrad.TotalAuthors-statsSimp.TotalAuthors),
+		},
+		{
+			"Total Dynasties",
+			fmt.Sprintf("%d", statsSimp.TotalDynasties),
+			fmt.Sprintf("%d", statsTrad.TotalDynasties),
+			fmt.Sprintf("%+d", statsTrad.TotalDynasties-statsSimp.TotalDynasties),
+		},
+	}
+	overviewTable := tablewriter.NewWriter(os.Stdout)
+	overviewTable.Header(overviewData[0])
+	overviewTable.Bulk(overviewData[1:])
+	overviewTable.Render()
+
+	// Poems by Dynasty comparison table
+	fmt.Println("\nPoems by Dynasty:")
+	dynastyMap := make(map[string][2]int) // [simplified, traditional]
+	for _, ds := range statsSimp.PoemsByDynasty {
 		if ds.PoemCount > 0 {
-			log.Printf("  %s: %d poems", ds.Name, ds.PoemCount)
+			entry := dynastyMap[ds.Name]
+			entry[0] = ds.PoemCount
+			dynastyMap[ds.Name] = entry
+		}
+	}
+	for _, ds := range statsTrad.PoemsByDynasty {
+		if ds.PoemCount > 0 {
+			// Convert traditional name to simplified for matching
+			simpName, err := classifier.ToSimplified(ds.Name)
+			if err != nil {
+				simpName = ds.Name // fallback to original if conversion fails
+			}
+			entry := dynastyMap[simpName]
+			entry[1] = ds.PoemCount
+			dynastyMap[simpName] = entry
 		}
 	}
 
-	log.Println("\nPoems by Type:")
-	for _, ts := range stats.PoemsByType {
-		if ts.PoemCount > 0 {
-			log.Printf("  %s: %d poems", ts.Name, ts.PoemCount)
+	dynastyData := [][]string{{"Dynasty", "Simplified", "Traditional", "Difference"}}
+	for _, ds := range statsSimp.PoemsByDynasty {
+		if counts, ok := dynastyMap[ds.Name]; ok && (counts[0] > 0 || counts[1] > 0) {
+			diff := counts[1] - counts[0]
+			dynastyData = append(dynastyData, []string{
+				ds.Name,
+				fmt.Sprintf("%d", counts[0]),
+				fmt.Sprintf("%d", counts[1]),
+				fmt.Sprintf("%+d", diff),
+			})
 		}
 	}
+	dynastyTable := tablewriter.NewWriter(os.Stdout)
+	dynastyTable.Header(dynastyData[0])
+	dynastyTable.Bulk(dynastyData[1:])
+	dynastyTable.Render()
+
+	// Poems by Type comparison table
+	fmt.Println("\nPoems by Type:")
+	typeMap := make(map[string][2]int) // [simplified, traditional]
+	for _, ts := range statsSimp.PoemsByType {
+		if ts.PoemCount > 0 {
+			entry := typeMap[ts.Name]
+			entry[0] = ts.PoemCount
+			typeMap[ts.Name] = entry
+		}
+	}
+	for _, ts := range statsTrad.PoemsByType {
+		if ts.PoemCount > 0 {
+			// Convert traditional name to simplified for matching
+			simpName, err := classifier.ToSimplified(ts.Name)
+			if err != nil {
+				simpName = ts.Name // fallback to original if conversion fails
+			}
+			entry := typeMap[simpName]
+			entry[1] = ts.PoemCount
+			typeMap[simpName] = entry
+		}
+	}
+
+	typeData := [][]string{{"Type", "Simplified", "Traditional", "Difference"}}
+	for _, ts := range statsSimp.PoemsByType {
+		if counts, ok := typeMap[ts.Name]; ok && (counts[0] > 0 || counts[1] > 0) {
+			diff := counts[1] - counts[0]
+			typeData = append(typeData, []string{
+				ts.Name,
+				fmt.Sprintf("%d", counts[0]),
+				fmt.Sprintf("%d", counts[1]),
+				fmt.Sprintf("%+d", diff),
+			})
+		}
+	}
+	typeTable := tablewriter.NewWriter(os.Stdout)
+	typeTable.Header(typeData[0])
+	typeTable.Bulk(typeData[1:])
+	typeTable.Render()
 
 	return nil
 }
