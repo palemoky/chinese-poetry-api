@@ -65,10 +65,6 @@ func createTestPoem(t *testing.T, repo *database.Repository, id int64, title, co
 	return poem
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
-
 func TestListPoems(t *testing.T) {
 	router, repo, searchEngine := setupPoemTestRouter(t)
 	handler := NewPoemHandler(repo, searchEngine)

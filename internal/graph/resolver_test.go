@@ -74,10 +74,6 @@ func createTestData(t *testing.T, repo *database.Repository) (dynastyID, authorI
 	return dynastyID, authorID, poem.ID
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
-
 func TestPoemQuery(t *testing.T) {
 	resolver, repo := setupTestResolver(t)
 	_, _, _ = createTestData(t, repo)

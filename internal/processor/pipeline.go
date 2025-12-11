@@ -297,7 +297,6 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	poem := work.PoemData
 
 	// Normalize all text fields (trim whitespace)
-	title := classifier.NormalizeText(poem.Title)
 	author := classifier.NormalizeText(poem.Author)
 	paragraphs := classifier.NormalizeTextArray(poem.Paragraphs)
 	rhythmic := classifier.NormalizeText(poem.Rhythmic)
@@ -312,14 +311,8 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	// Normalize Chinese characters for consistency
 	// Traditional DB: convert to traditional
 	// Simplified DB: convert to simplified
-	var err error
 
-	title, err = p.convertText(title, p.convertToTraditional)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert title: %w", err)
-	}
-
-	author, err = p.convertText(author, p.convertToTraditional)
+	author, err := p.convertText(author, p.convertToTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert author: %w", err)
 	}
