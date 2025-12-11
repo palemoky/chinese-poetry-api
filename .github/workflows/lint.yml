@@ -1,19 +1,10 @@
-name: Test
+name: Lint
 
 on:
   push:
     branches: [main]
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
-      - '.github/workflows/test.yml'
   pull_request:
     branches: [main]
-    paths:
-      - '**.go'
-      - 'go.mod'
-      - 'go.sum'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -23,7 +14,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  golangci:
+    name: golangci-lint
     runs-on: ubuntu-latest
 
     steps:
@@ -36,10 +28,9 @@ jobs:
           go-version: '1.25'
           cache: true
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Coverage report
-        run: |
-          echo "📊 Coverage Report:"
-          go tool cover -func=coverage.out | tail -1
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.7.2
+          args: --timeout=5m --config=.golangci.yml
+          skip-cache: true
