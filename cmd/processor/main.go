@@ -7,11 +7,12 @@ import (
 	"path/filepath"
 
 	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
+
 	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/loader"
 	"github.com/palemoky/chinese-poetry-api/internal/processor"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -154,7 +155,7 @@ func printComparisonStatistics(simplifiedPath, traditionalPath string) error {
 		return fmt.Errorf("failed to get traditional statistics: %w", err)
 	}
 
-	log.Println("\n=== Database Statistics Comparison ===\n")
+	log.Println("\n=== Database Statistics Comparison ===")
 
 	// Overview comparison table
 	overviewData := [][]string{
@@ -180,8 +181,8 @@ func printComparisonStatistics(simplifiedPath, traditionalPath string) error {
 	}
 	overviewTable := tablewriter.NewWriter(os.Stdout)
 	overviewTable.Header(overviewData[0])
-	overviewTable.Bulk(overviewData[1:])
-	overviewTable.Render()
+	_ = overviewTable.Bulk(overviewData[1:])
+	_ = overviewTable.Render()
 
 	// Poems by Dynasty comparison table
 	fmt.Println("\nPoems by Dynasty:")
@@ -220,8 +221,8 @@ func printComparisonStatistics(simplifiedPath, traditionalPath string) error {
 	}
 	dynastyTable := tablewriter.NewWriter(os.Stdout)
 	dynastyTable.Header(dynastyData[0])
-	dynastyTable.Bulk(dynastyData[1:])
-	dynastyTable.Render()
+	_ = dynastyTable.Bulk(dynastyData[1:])
+	_ = dynastyTable.Render()
 
 	// Poems by Type comparison table
 	fmt.Println("\nPoems by Type:")
@@ -260,8 +261,8 @@ func printComparisonStatistics(simplifiedPath, traditionalPath string) error {
 	}
 	typeTable := tablewriter.NewWriter(os.Stdout)
 	typeTable.Header(typeData[0])
-	typeTable.Bulk(typeData[1:])
-	typeTable.Render()
+	_ = typeTable.Bulk(typeData[1:])
+	_ = typeTable.Render()
 
 	return nil
 }
