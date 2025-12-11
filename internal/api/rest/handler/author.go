@@ -49,7 +49,7 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 	}
 
 	// Map to response format
-	data := make([]map[string]interface{}, len(authors))
+	data := make([]map[string]any, len(authors))
 	for i, author := range authors {
 		dynastyName := ""
 		if author.Dynasty != nil {
@@ -66,7 +66,7 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 			namePinyinAbbr = *author.NamePinyinAbbr
 		}
 
-		data[i] = map[string]interface{}{
+		data[i] = map[string]any{
 			"id":               author.ID,
 			"name":             author.Name,
 			"name_pinyin":      namePinyin,
@@ -102,7 +102,30 @@ func (h *AuthorHandler) GetAuthor(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": author})
+	dynastyName := ""
+	if author.Dynasty != nil {
+		dynastyName = author.Dynasty.Name
+	}
+
+	namePinyin := ""
+	if author.NamePinyin != nil {
+		namePinyin = *author.NamePinyin
+	}
+
+	namePinyinAbbr := ""
+	if author.NamePinyinAbbr != nil {
+		namePinyinAbbr = *author.NamePinyinAbbr
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": map[string]any{
+			"id":               author.ID,
+			"name":             author.Name,
+			"name_pinyin":      namePinyin,
+			"name_pinyin_abbr": namePinyinAbbr,
+			"dynasty":          dynastyName,
+		},
+	})
 }
 
 // GetAuthorPoems returns poems by a specific author

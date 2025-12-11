@@ -42,7 +42,7 @@ func (h *PoemHandler) GetPoem(c *gin.Context) {
 	var paragraphs []string
 	if err := json.Unmarshal([]byte(poem.Content), &paragraphs); err == nil {
 		// Create response withanyagraphs
-		response := map[string]interface{}{
+		response := map[string]any{
 			"id":         poem.ID,
 			"title":      poem.Title,
 			"paragraphs": paragraphs,

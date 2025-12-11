@@ -126,6 +126,12 @@ func TestGetAuthor(t *testing.T) {
 			checkResponse: func(t *testing.T, resp map[string]any) {
 				data := resp["data"].(map[string]any)
 				assert.NotNil(t, data)
+				assert.Equal(t, "李白", data["name"])
+				assert.Equal(t, "li bai", data["name_pinyin"])
+				assert.Equal(t, "lb", data["name_pinyin_abbr"])
+				assert.Equal(t, "唐", data["dynasty"])
+				// Ensure ID is present
+				assert.NotNil(t, data["id"])
 			},
 		},
 		{
