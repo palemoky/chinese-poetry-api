@@ -1,6 +1,8 @@
 package processor
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -354,15 +356,20 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to marshal paragraphs: %w", err)
 	}
 
+	// Calculate content hash for deduplication
+	hash := sha256.Sum256(contentJSON)
+	contentHash := hex.EncodeToString(hash[:])
+
 	// Create poem record
 	dbPoem := &database.Poem{
-		ID:        poemID,
-		Title:     finalTitle, // Use merged title (includes rhythmic if present)
-		AuthorID:  &authorID,
-		DynastyID: &dynastyID,
-		TypeID:    &typeID,
-		Content:   datatypes.JSON(contentJSON),
-		Rhythmic:  &rhythmic, // Keep for search/classification
+		ID:          poemID,
+		Title:       finalTitle, // Use merged title (includes rhythmic if present)
+		AuthorID:    &authorID,
+		DynastyID:   &dynastyID,
+		TypeID:      &typeID,
+		Content:     datatypes.JSON(contentJSON),
+		ContentHash: contentHash,
+		Rhythmic:    &rhythmic, // Keep for search/classification
 	}
 
 	return dbPoem, nil
