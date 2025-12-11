@@ -257,6 +257,26 @@ func TestNormalizeTextArray(t *testing.T) {
 			input: []string{"春眠不觉晓", "   ", "处处闻啼鸟"},
 			want:  []string{"春眠不觉晓", "处处闻啼鸟"},
 		},
+		{
+			name:  "filter punctuation-only content",
+			input: []string{"春眠不觉晓", "。", "处处闻啼鸟", "，"},
+			want:  []string{"春眠不觉晓", "处处闻啼鸟"},
+		},
+		{
+			name:  "filter various punctuation",
+			input: []string{"床前明月光", "。", "、", "；", "：", "！", "？", "疑是地上霜"},
+			want:  []string{"床前明月光", "疑是地上霜"},
+		},
+		{
+			name:  "filter punctuation with spaces",
+			input: []string{"举头望明月", "  。  ", "  ，  ", "低头思故乡"},
+			want:  []string{"举头望明月", "低头思故乡"},
+		},
+		{
+			name:  "keep content with punctuation",
+			input: []string{"春眠不觉晓，", "处处闻啼鸟。"},
+			want:  []string{"春眠不觉晓，", "处处闻啼鸟。"},
+		},
 	}
 
 	for _, tt := range tests {

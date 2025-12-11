@@ -16,12 +16,25 @@ func NormalizeText(text string) string {
 	return text
 }
 
-// NormalizeTextArray normalizes an array of text strings
+// hasValidContent checks if text contains actual content beyond punctuation and whitespace
+func hasValidContent(text string) bool {
+	for _, r := range text {
+		// If we find any character that's not punctuation or whitespace, it's valid content
+		if !unicode.IsPunct(r) && !unicode.IsSpace(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// NormalizeTextArray normalizes an array of text strings and filters out invalid entries
+// Invalid entries include: empty strings, whitespace-only, or punctuation-only content
 func NormalizeTextArray(texts []string) []string {
 	result := make([]string, 0, len(texts))
 	for _, text := range texts {
 		normalized := NormalizeText(text)
-		if normalized != "" {
+		// Filter out empty strings and punctuation-only content
+		if normalized != "" && hasValidContent(normalized) {
 			result = append(result, normalized)
 		}
 	}
