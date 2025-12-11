@@ -251,8 +251,18 @@ func removePunctuation(text string) string {
 }
 
 // isYuefuPoem checks if a poem is a Yuefu poem based on its title
+// Note: We maintain only simplified Chinese patterns and convert the input title
+// to simplified Chinese before matching. This avoids the need to maintain both
+// simplified and traditional variants, preventing inconsistencies.
 func isYuefuPoem(title string) bool {
-	// Common Yuefu poem titles
+	// Convert title to simplified Chinese for consistent matching
+	// If conversion fails, fall back to original title
+	simplifiedTitle, err := ToSimplified(title)
+	if err != nil {
+		simplifiedTitle = title
+	}
+
+	// Common Yuefu poem titles (simplified Chinese only)
 	yuefuTitles := []string{
 		// 边塞乐府
 		"凉州词", "出塞", "从军行", "塞下曲", "塞上曲",
@@ -269,8 +279,8 @@ func isYuefuPoem(title string) bool {
 		// 山水游历
 		"蜀道难", "梦游天姥", "侠客行",
 		"登金陵凤凰台", "黄鹤楼",
-		"宣州谢脸楼", "宣城见杜鹃花",
-		"宣州谢脸楼饿别校书叔云",
+		"宣州谢脁楼", "宣城见杜鹃花",
+		"宣州谢脁楼饯别校书叔云",
 		"渡浙江问舟中人",
 
 		// 白居易乐府
@@ -326,21 +336,21 @@ func isYuefuPoem(title string) bool {
 		"有所思", "上山采蘼芜", "江南",
 	}
 
-	// Check exact title matches
+	// Check title matches using simplified title
 	for _, yuefuTitle := range yuefuTitles {
-		if strings.Contains(title, yuefuTitle) {
+		if strings.Contains(simplifiedTitle, yuefuTitle) {
 			return true
 		}
 	}
 
 	// Check for common Yuefu patterns (suffixes)
-	// 曲辞、歌辞、歌行、乐府 are typical Yuefu markers
+	// 曲辞、歌辞、歌行、乐府、新乐府 are typical Yuefu markers
 	yuefuPatterns := []string{
-		"曲辞", "歌辞", "歌行", "乐府",
+		"曲辞", "歌辞", "歌行", "乐府", "新乐府",
 	}
 
 	for _, pattern := range yuefuPatterns {
-		if strings.Contains(title, pattern) {
+		if strings.Contains(simplifiedTitle, pattern) {
 			return true
 		}
 	}
