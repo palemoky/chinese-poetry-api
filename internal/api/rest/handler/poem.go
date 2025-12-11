@@ -85,8 +85,86 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		total = 0
 	}
 
+	// Map keys to response format
+	data := make([]map[string]any, len(poems))
+	for i, poem := range poems {
+		var typeData map[string]any
+		if poem.Type != nil {
+			typeData = map[string]any{
+				"id":       poem.Type.ID,
+				"name":     poem.Type.Name,
+				"category": poem.Type.Category,
+			}
+			if poem.Type.Description != nil {
+				typeData["description"] = *poem.Type.Description
+			}
+		}
+
+		var authorData map[string]any
+		if poem.Author != nil {
+			a := poem.Author
+			namePinyin := ""
+			if a.NamePinyin != nil {
+				namePinyin = *a.NamePinyin
+			}
+			namePinyinAbbr := ""
+			if a.NamePinyinAbbr != nil {
+				namePinyinAbbr = *a.NamePinyinAbbr
+			}
+			authorData = map[string]any{
+				"id":               a.ID,
+				"name":             a.Name,
+				"name_pinyin":      namePinyin,
+				"name_pinyin_abbr": namePinyinAbbr,
+			}
+		}
+
+		var dynastyData map[string]any
+		if poem.Dynasty != nil {
+			d := poem.Dynasty
+			dynastyData = map[string]any{
+				"id":   d.ID,
+				"name": d.Name,
+			}
+			if d.NameEn != nil {
+				dynastyData["name_en"] = *d.NameEn
+			}
+			if d.StartYear != nil {
+				dynastyData["start_year"] = *d.StartYear
+			}
+			if d.EndYear != nil {
+				dynastyData["end_year"] = *d.EndYear
+			}
+		}
+
+		titlePinyin := ""
+		if poem.TitlePinyin != nil {
+			titlePinyin = *poem.TitlePinyin
+		}
+		titlePinyinAbbr := ""
+		if poem.TitlePinyinAbbr != nil {
+			titlePinyinAbbr = *poem.TitlePinyinAbbr
+		}
+		rhythmic := ""
+		if poem.Rhythmic != nil {
+			rhythmic = *poem.Rhythmic
+		}
+
+		data[i] = map[string]any{
+			"id":                poem.ID,
+			"type":              typeData,
+			"title":             poem.Title,
+			"title_pinyin":      titlePinyin,
+			"title_pinyin_abbr": titlePinyinAbbr,
+			"rhythmic":          rhythmic,
+			"content":           poem.Content,
+			"author":            authorData,
+			"dynasty":           dynastyData,
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
-		"data":      poems,
+		"data":      data,
 		"page":      page,
 		"page_size": pageSize,
 		"total":     total,

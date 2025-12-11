@@ -43,7 +43,7 @@ func setupPoemTestRouter(t *testing.T) (*gin.Engine, *database.Repository, *sear
 }
 
 // createTestPoem creates a test poem in the database
-func createTestPoem(t *testing.T, repo *database.Repository, title, content string) *database.Poem {
+func createTestPoem(t *testing.T, repo *database.Repository, id int64, title, content string) *database.Poem {
 	// Create dynasty and author first
 	dynastyID, err := repo.GetOrCreateDynasty("唐")
 	require.NoError(t, err)
@@ -53,7 +53,7 @@ func createTestPoem(t *testing.T, repo *database.Repository, title, content stri
 
 	// Create poem
 	poem := &database.Poem{
-		ID:          12345678901234,
+		ID:          id,
 		Title:       title,
 		TitlePinyin: stringPtr("jing ye si"),
 		Content:     datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
@@ -75,7 +75,7 @@ func TestGetPoem(t *testing.T) {
 	handler := NewPoemHandler(repo, searchEngine)
 
 	// Create test poem
-	poem := createTestPoem(t, repo, "静夜思", "test content")
+	poem := createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
 
 	router.GET("/poems/:id", handler.GetPoem)
 
@@ -127,12 +127,85 @@ func TestGetPoem(t *testing.T) {
 	_ = poem // use poem to avoid unused variable warning
 }
 
+func TestListPoems(t *testing.T) {
+	router, repo, searchEngine := setupPoemTestRouter(t)
+	handler := NewPoemHandler(repo, searchEngine)
+
+	// Create test poems
+	createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
+	createTestPoem(t, repo, 12345678901235, "春晓", "test content 2")
+
+	router.GET("/poems", handler.ListPoems)
+
+	tests := []struct {
+		name           string
+		query          string
+		expectedStatus int
+		checkResponse  func(*testing.T, map[string]any)
+	}{
+		{
+			name:           "list poems default pagination",
+			query:          "",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
+				assert.Len(t, data, 2)
+				assert.Equal(t, float64(1), resp["page"])
+				assert.Equal(t, float64(20), resp["page_size"])
+				assert.Equal(t, float64(2), resp["total"])
+
+				// Check nested structure of first poem
+				poem := data[0].(map[string]any)
+				assert.NotEmpty(t, poem["title"])
+				assert.NotEmpty(t, poem["content"])
+
+				assert.NotNil(t, poem["author"])
+				author := poem["author"].(map[string]any)
+				assert.Equal(t, "李白", author["name"])
+
+				assert.NotNil(t, poem["dynasty"])
+				dynasty := poem["dynasty"].(map[string]any)
+				assert.Equal(t, "唐", dynasty["name"])
+			},
+		},
+		{
+			name:           "list poems with pagination",
+			query:          "?page=1&page_size=1",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
+				assert.Len(t, data, 1) // Should only return 1
+				assert.Equal(t, float64(1), resp["page"])
+				assert.Equal(t, float64(1), resp["page_size"])
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/poems"+tt.query, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.checkResponse != nil {
+				var response map[string]any
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				tt.checkResponse(t, response)
+			}
+		})
+	}
+}
+
 func TestSearchPoems(t *testing.T) {
 	router, repo, searchEngine := setupPoemTestRouter(t)
 	handler := NewPoemHandler(repo, searchEngine)
 
 	// Create test poems
-	createTestPoem(t, repo, "静夜思", "test content")
+	createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
 
 	router.GET("/poems/search", handler.SearchPoems)
 
@@ -248,7 +321,7 @@ func TestRandomPoem(t *testing.T) {
 			router.GET("/random", handler.RandomPoem)
 
 			if tt.setupData {
-				createTestPoem(t, repo, "静夜思", "test content")
+				createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
 			}
 
 			req := httptest.NewRequest(http.MethodGet, "/random", nil)
