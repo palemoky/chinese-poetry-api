@@ -353,8 +353,8 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to get/create author: %w", err)
 	}
 
-	// Classify poetry type
-	typeInfo := classifier.ClassifyPoetryType(paragraphs, rhythmic)
+	// Classify poetry type using dataset source information
+	typeInfo := classifier.ClassifyPoetryTypeWithDataset(paragraphs, rhythmic, work.DatasetKey)
 
 	// Convert type name to match database encoding
 	typeName, err := p.convertText(typeInfo.TypeName, p.convertToTraditional)

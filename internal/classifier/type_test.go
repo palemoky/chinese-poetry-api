@@ -318,3 +318,130 @@ func TestRemovePunctuation(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyPoetryTypeWithDataset(t *testing.T) {
+	tests := []struct {
+		name       string
+		paragraphs []string
+		rhythmic   string
+		datasetKey string
+		want       PoetryTypeInfo
+	}{
+		// Dataset-based direct mapping
+		{
+			name:       "诗经 - dataset mapping",
+			paragraphs: []string{"关关雎鸠，在河之洲。", "窈窕淑女，君子好逑。"},
+			rhythmic:   "",
+			datasetKey: "shijing",
+			want: PoetryTypeInfo{
+				TypeName: "诗经",
+				Category: "诗经",
+			},
+		},
+		{
+			name:       "楚辞 - dataset mapping",
+			paragraphs: []string{"帝高阳之苗裔兮，朕皇考曰伯庸。"},
+			rhythmic:   "",
+			datasetKey: "chuci",
+			want: PoetryTypeInfo{
+				TypeName: "楚辞",
+				Category: "楚辞",
+			},
+		},
+		{
+			name:       "论语 - dataset mapping",
+			paragraphs: []string{"学而时习之，不亦说乎？"},
+			rhythmic:   "",
+			datasetKey: "lunyu",
+			want: PoetryTypeInfo{
+				TypeName: "论语",
+				Category: "论语",
+			},
+		},
+		{
+			name:       "四书五经 - dataset mapping",
+			paragraphs: []string{"天时不如地利，地利不如人和。"},
+			rhythmic:   "",
+			datasetKey: "mengzi",
+			want: PoetryTypeInfo{
+				TypeName: "四书五经",
+				Category: "四书五经",
+			},
+		},
+		{
+			name:       "元曲 - dataset mapping",
+			paragraphs: []string{"枯藤老树昏鸦，小桥流水人家。"},
+			rhythmic:   "",
+			datasetKey: "yuanqu",
+			want: PoetryTypeInfo{
+				TypeName: "元曲",
+				Category: "曲",
+			},
+		},
+		// Fallback to structure-based classification
+		{
+			name:       "五言绝句 - no dataset key",
+			paragraphs: []string{"春眠不觉晓", "处处闻啼鸟", "夜来风雨声", "花落知多少"},
+			rhythmic:   "",
+			datasetKey: "",
+			want: PoetryTypeInfo{
+				TypeName:     "五言绝句",
+				Category:     "唐诗",
+				Lines:        intPtr(4),
+				CharsPerLine: intPtr(5),
+			},
+		},
+		{
+			name:       "五言绝句 - unknown dataset key",
+			paragraphs: []string{"春眠不觉晓", "处处闻啼鸟", "夜来风雨声", "花落知多少"},
+			rhythmic:   "",
+			datasetKey: "tangsong",
+			want: PoetryTypeInfo{
+				TypeName:     "五言绝句",
+				Category:     "唐诗",
+				Lines:        intPtr(4),
+				CharsPerLine: intPtr(5),
+			},
+		},
+		{
+			name:       "宋词 - rhythmic field takes priority",
+			paragraphs: []string{"明月几时有", "把酒问青天"},
+			rhythmic:   "水调歌头",
+			datasetKey: "songci",
+			want: PoetryTypeInfo{
+				TypeName: "宋词",
+				Category: "宋词",
+			},
+		},
+		// Edge case: dataset mapping should override structure analysis
+		{
+			name:       "诗经 with regular structure - dataset takes priority",
+			paragraphs: []string{"关关雎鸠", "在河之洲", "窈窕淑女", "君子好逑"},
+			rhythmic:   "",
+			datasetKey: "shijing",
+			want: PoetryTypeInfo{
+				TypeName: "诗经",
+				Category: "诗经",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ClassifyPoetryTypeWithDataset(tt.paragraphs, tt.rhythmic, tt.datasetKey)
+
+			assert.Equal(t, tt.want.TypeName, got.TypeName, "TypeName mismatch")
+			assert.Equal(t, tt.want.Category, got.Category, "Category mismatch")
+
+			if tt.want.Lines != nil {
+				require.NotNil(t, got.Lines, "Lines should not be nil")
+				assert.Equal(t, *tt.want.Lines, *got.Lines, "Lines mismatch")
+			}
+
+			if tt.want.CharsPerLine != nil {
+				require.NotNil(t, got.CharsPerLine, "CharsPerLine should not be nil")
+				assert.Equal(t, *tt.want.CharsPerLine, *got.CharsPerLine, "CharsPerLine mismatch")
+			}
+		})
+	}
+}

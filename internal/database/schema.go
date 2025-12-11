@@ -23,9 +23,9 @@ var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start
 // InitialPoetryTypesSQL contains initial data for poetry types
 // IDs use semantic ranges for easy categorization and extension:
 //
-//	10-19: 唐诗/诗 (Poetry)
-//	20-29: 宋词/词 (Ci)
-//	30-39: 元曲/曲 (Qu)
+//	10-19: 诗 (Poetry) - 包括唐诗、古诗等
+//	20-29: 词 (Ci) - 包括宋词、五代词等
+//	30-39: 曲 (Qu) - 元曲
 //	40-49: 蒙学 (Primer)
 //	50-59: 诗经 (Book of Songs)
 //	60-69: 论语 (Analects)
@@ -34,13 +34,14 @@ var InitialDynastiesSQL = `INSERT OR IGNORE INTO dynasties (name, name_en, start
 //	99: 其他 (Other)
 var InitialPoetryTypesSQL = `INSERT OR IGNORE INTO poetry_types (id, name, category, lines, chars_per_line, description) VALUES
 	(10, '唐诗', '唐诗', NULL, NULL, '诗'),
-	(11, '五言绝句', '诗', 4, 5, '四句，每句五字'),
-	(12, '七言绝句', '诗', 4, 7, '四句，每句七字'),
-	(13, '五言律诗', '诗', 8, 5, '八句，每句五字'),
-	(14, '七言律诗', '诗', 8, 7, '八句，每句七字'),
-	(15, '五言古诗', '诗', NULL, 5, '不限句数，每句五字'),
-	(16, '七言古诗', '诗', NULL, 7, '不限句数，每句七字'),
-	(20, '宋词', '词', NULL, NULL, '长短句'),
+	(11, '五言绝句', '唐诗', 4, 5, '四句，每句五字'),
+	(12, '七言绝句', '唐诗', 4, 7, '四句，每句七字'),
+	(13, '五言律诗', '唐诗', 8, 5, '八句，每句五字'),
+	(14, '七言律诗', '唐诗', 8, 7, '八句，每句七字'),
+	(15, '五言古诗', '唐诗', NULL, 5, '不限句数，每句五字'),
+	(16, '七言古诗', '唐诗', NULL, 7, '不限句数，每句七字'),
+	(20, '宋词', '宋词', NULL, NULL, '长短句'),
+	(21, '五代词', '词', NULL, NULL, '长短句'),
 	(30, '元曲', '曲', NULL, NULL, '散曲'),
 	(40, '蒙学', '蒙学', NULL, NULL, '蒙学'),
 	(50, '诗经', '诗经', NULL, NULL, '诗经'),

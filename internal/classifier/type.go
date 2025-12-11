@@ -37,7 +37,21 @@ type PoetryTypeInfo struct {
 
 // ClassifyPoetryType determines the type of poetry based on its structure
 func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
-	// If it has a rhythmic field, it's ci (词)
+	return ClassifyPoetryTypeWithDataset(paragraphs, rhythmic, "")
+}
+
+// ClassifyPoetryTypeWithDataset determines the type of poetry based on dataset source and structure
+// Priority order:
+// 1. Dataset-based direct mapping (for shijing, chuci, lunyu, mengzi, yuanqu)
+// 2. Rhythmic field check (for songci)
+// 3. Structure analysis (for tangshi)
+func ClassifyPoetryTypeWithDataset(paragraphs []string, rhythmic string, datasetKey string) PoetryTypeInfo {
+	// Priority 1: Check dataset key for direct type mapping
+	if typeInfo, ok := getTypeFromDataset(datasetKey); ok {
+		return typeInfo
+	}
+
+	// Priority 2: If it has a rhythmic field, it's ci (词)
 	if rhythmic != "" {
 		return PoetryTypeInfo{
 			TypeName: TypeCi,
@@ -45,6 +59,7 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 		}
 	}
 
+	// Priority 3: Structure-based classification for Tang poetry
 	if len(paragraphs) == 0 {
 		return PoetryTypeInfo{
 			TypeName: TypeOther,
@@ -93,6 +108,52 @@ func ClassifyPoetryType(paragraphs []string, rhythmic string) PoetryTypeInfo {
 		Lines:        &lineCount,
 		CharsPerLine: &charsPerLine,
 	}
+}
+
+// getTypeFromDataset returns poetry type info based on dataset key
+// Returns (typeInfo, true) if dataset has a direct mapping, (empty, false) otherwise
+func getTypeFromDataset(datasetKey string) (PoetryTypeInfo, bool) {
+	// Map dataset keys to their corresponding poetry types
+	datasetTypeMap := map[string]PoetryTypeInfo{
+		"shijing": {
+			TypeName: "诗经",
+			Category: "诗经",
+		},
+		"chuci": {
+			TypeName: "楚辞",
+			Category: "楚辞",
+		},
+		"lunyu": {
+			TypeName: "论语",
+			Category: "论语",
+		},
+		"mengzi": {
+			TypeName: "四书五经",
+			Category: "四书五经",
+		},
+		"yuanqu": {
+			TypeName: "元曲",
+			Category: "曲",
+		},
+		"wudai-huajianji": {
+			TypeName: "五代词",
+			Category: "词",
+		},
+		"wudai-nantang": {
+			TypeName: "五代词",
+			Category: "词",
+		},
+		"nalanxingde": {
+			TypeName: "宋词", // 纳兰性德是清代，但词的形式与宋词相同
+			Category: "宋词",
+		},
+	}
+
+	if typeInfo, ok := datasetTypeMap[datasetKey]; ok {
+		return typeInfo, true
+	}
+
+	return PoetryTypeInfo{}, false
 }
 
 // classifyByStructure classifies poetry based on line count and characters per line
