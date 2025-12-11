@@ -38,7 +38,7 @@ func (Author) TableName() string {
 
 // PoetryType represents a type of poetry
 type PoetryType struct {
-	ID           int64     `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID           int64     `gorm:"primaryKey"               json:"id"`
 	Name         string    `gorm:"not null;uniqueIndex"     json:"name"`
 	Category     string    `gorm:"not null"                 json:"category"`
 	Lines        *int      `                                json:"lines,omitempty"`
