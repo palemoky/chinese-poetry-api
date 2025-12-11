@@ -41,19 +41,9 @@ func formatPoem(poem *database.Poem) map[string]any {
 	var authorData map[string]any
 	if poem.Author != nil {
 		a := poem.Author
-		namePinyin := ""
-		if a.NamePinyin != nil {
-			namePinyin = *a.NamePinyin
-		}
-		namePinyinAbbr := ""
-		if a.NamePinyinAbbr != nil {
-			namePinyinAbbr = *a.NamePinyinAbbr
-		}
 		authorData = map[string]any{
-			"id":               a.ID,
-			"name":             a.Name,
-			"name_pinyin":      namePinyin,
-			"name_pinyin_abbr": namePinyinAbbr,
+			"id":   a.ID,
+			"name": a.Name,
 		}
 	}
 
@@ -75,34 +65,19 @@ func formatPoem(poem *database.Poem) map[string]any {
 		}
 	}
 
-	titlePinyin := ""
-	if poem.TitlePinyin != nil {
-		titlePinyin = *poem.TitlePinyin
-	}
-	titlePinyinAbbr := ""
-	if poem.TitlePinyinAbbr != nil {
-		titlePinyinAbbr = *poem.TitlePinyinAbbr
-	}
 	rhythmic := ""
 	if poem.Rhythmic != nil {
 		rhythmic = *poem.Rhythmic
 	}
-	rhythmicPinyin := ""
-	if poem.RhythmicPinyin != nil {
-		rhythmicPinyin = *poem.RhythmicPinyin
-	}
 
 	return map[string]any{
-		"id":                poem.ID,
-		"type":              typeData,
-		"title":             poem.Title,
-		"title_pinyin":      titlePinyin,
-		"title_pinyin_abbr": titlePinyinAbbr,
-		"rhythmic":          rhythmic,
-		"rhythmic_pinyin":   rhythmicPinyin,
-		"content":           poem.Content,
-		"author":            authorData,
-		"dynasty":           dynastyData,
+		"id":       poem.ID,
+		"type":     typeData,
+		"title":    poem.Title,
+		"rhythmic": rhythmic,
+		"content":  poem.Content,
+		"author":   authorData,
+		"dynasty":  dynastyData,
 	}
 }
 

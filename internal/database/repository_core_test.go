@@ -14,16 +14,14 @@ func TestInsertPoem(t *testing.T) {
 
 	// Create dependencies
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poem := &Poem{
-		ID:              12345678901234,
-		Title:           "静夜思",
-		TitlePinyin:     strPtr("jing ye si"),
-		TitlePinyinAbbr: strPtr("jys"),
-		Content:         datatypes.JSON([]byte(`["床前明月光","疑是地上霜"]`)),
-		AuthorID:        &authorID,
-		DynastyID:       &dynastyID,
+		ID:        12345678901234,
+		Title:     "静夜思",
+		Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜"]`)),
+		AuthorID:  &authorID,
+		DynastyID: &dynastyID,
 	}
 
 	err := repo.InsertPoem(poem)
@@ -40,7 +38,7 @@ func TestGetPoemByID(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poem := &Poem{
 		ID:        12345678901234,
@@ -73,9 +71,9 @@ func TestListPoems(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		poem := &Poem{
 			ID:        int64(10000000000000 + i),
 			Title:     "诗词" + string(rune('A'+i)),
@@ -112,8 +110,8 @@ func TestListPoemsWithFilter(t *testing.T) {
 	// Create test data
 	tangID, _ := repo.GetOrCreateDynasty("唐")
 	songID, _ := repo.GetOrCreateDynasty("宋")
-	libaiID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", tangID)
-	dumuID, _ := repo.GetOrCreateAuthor("杜牧", "du mu", "dm", tangID)
+	libaiID, _ := repo.GetOrCreateAuthor("李白", tangID)
+	dumuID, _ := repo.GetOrCreateAuthor("杜牧", tangID)
 
 	poems := []*Poem{
 		{ID: 10000000000001, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID},
@@ -161,9 +159,9 @@ func TestListAuthorPoems(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		poem := &Poem{
 			ID:        int64(10000000000000 + i),
 			Title:     "诗词" + string(rune('A'+i)),
@@ -196,9 +194,9 @@ func TestListAuthorsWithFilter(t *testing.T) {
 	// Create test data
 	tangID, _ := repo.GetOrCreateDynasty("唐")
 	songID, _ := repo.GetOrCreateDynasty("宋")
-	libaiID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", tangID)
-	dumuID, _ := repo.GetOrCreateAuthor("杜牧", "du mu", "dm", tangID)
-	sushiID, _ := repo.GetOrCreateAuthor("苏轼", "su shi", "ss", songID)
+	libaiID, _ := repo.GetOrCreateAuthor("李白", tangID)
+	dumuID, _ := repo.GetOrCreateAuthor("杜牧", tangID)
+	sushiID, _ := repo.GetOrCreateAuthor("苏轼", songID)
 
 	// Create poems for authors
 	_ = repo.InsertPoem(&Poem{ID: 10000000000001, Title: "诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
@@ -228,8 +226,8 @@ func TestGetStatistics(t *testing.T) {
 	// Create test data
 	tangID, _ := repo.GetOrCreateDynasty("唐")
 	songID, _ := repo.GetOrCreateDynasty("宋")
-	libaiID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", tangID)
-	sushiID, _ := repo.GetOrCreateAuthor("苏轼", "su shi", "ss", songID)
+	libaiID, _ := repo.GetOrCreateAuthor("李白", tangID)
+	sushiID, _ := repo.GetOrCreateAuthor("苏轼", songID)
 
 	_ = repo.InsertPoem(&Poem{ID: 10000000000001, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
 	_ = repo.InsertPoem(&Poem{ID: 10000000000002, Title: "唐诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
@@ -250,7 +248,7 @@ func TestSearchPoems(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poems := []*Poem{
 		{ID: 10000000000001, Title: "静夜思", Content: datatypes.JSON([]byte(`["床前明月光"]`)), AuthorID: &authorID, DynastyID: &dynastyID},

@@ -81,7 +81,7 @@ func TestStatsHandler(t *testing.T) {
 
 	// Create some test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	_, _ = repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	_, _ = repo.GetOrCreateAuthor("李白", dynastyID)
 
 	router := gin.New()
 	router.GET("/stats", StatsHandler(repo))

@@ -23,14 +23,12 @@ func (Dynasty) TableName() string {
 
 // Author represents a poet or author
 type Author struct {
-	ID             int64     `gorm:"primaryKey;autoIncrement" json:"id"` // Auto-increment ID
-	Name           string    `gorm:"not null;uniqueIndex" json:"name"`   // uniqueIndex prevents duplicates
-	NamePinyin     *string   `gorm:"index"                json:"name_pinyin,omitempty"`
-	NamePinyinAbbr *string   `                            json:"name_pinyin_abbr,omitempty"`
-	DynastyID      *int64    `gorm:"index"                json:"dynasty_id,omitempty"`
-	Dynasty        *Dynasty  `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
-	Description    *string   `                            json:"description,omitempty"`
-	CreatedAt      time.Time `gorm:"autoCreateTime"       json:"created_at"`
+	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"` // Auto-increment ID
+	Name        string    `gorm:"not null;uniqueIndex" json:"name"`   // uniqueIndex prevents duplicates
+	DynastyID   *int64    `gorm:"index"                json:"dynasty_id,omitempty"`
+	Dynasty     *Dynasty  `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
+	Description *string   `                            json:"description,omitempty"`
+	CreatedAt   time.Time `gorm:"autoCreateTime"       json:"created_at"`
 }
 
 // TableName specifies the table name for Author
@@ -56,20 +54,17 @@ func (PoetryType) TableName() string {
 
 // Poem represents a poem or ci
 type Poem struct {
-	ID              int64          `gorm:"primaryKey"           json:"id"` // Changed from string to int64
-	TypeID          *int64         `gorm:"index"                json:"type_id,omitempty"`
-	Type            *PoetryType    `gorm:"foreignKey:TypeID"    json:"type,omitempty"`
-	Title           string         `gorm:"not null;index"       json:"title"`
-	TitlePinyin     *string        `gorm:"index"                json:"title_pinyin,omitempty"`
-	TitlePinyinAbbr *string        `                            json:"title_pinyin_abbr,omitempty"`
-	Rhythmic        *string        `                            json:"rhythmic,omitempty"` // 词牌名 or 曲牌名
-	RhythmicPinyin  *string        `                            json:"rhythmic_pinyin,omitempty"`
-	Content         datatypes.JSON `gorm:"type:json;not null"   json:"content"` // JSON array of paragraphs
-	AuthorID        *int64         `gorm:"index"                json:"author_id,omitempty"`
-	Author          *Author        `gorm:"foreignKey:AuthorID"  json:"author,omitempty"`
-	DynastyID       *int64         `gorm:"index"                json:"dynasty_id,omitempty"`
-	Dynasty         *Dynasty       `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
-	CreatedAt       time.Time      `gorm:"autoCreateTime"       json:"created_at"`
+	ID        int64          `gorm:"primaryKey"           json:"id"` // Changed from string to int64
+	TypeID    *int64         `gorm:"index"                json:"type_id,omitempty"`
+	Type      *PoetryType    `gorm:"foreignKey:TypeID"    json:"type,omitempty"`
+	Title     string         `gorm:"not null;index"       json:"title"`
+	Rhythmic  *string        `                            json:"rhythmic,omitempty"` // 词牌名 or 曲牌名
+	Content   datatypes.JSON `gorm:"type:json;not null"   json:"content"`            // JSON array of paragraphs
+	AuthorID  *int64         `gorm:"index"                json:"author_id,omitempty"`
+	Author    *Author        `gorm:"foreignKey:AuthorID"  json:"author,omitempty"`
+	DynastyID *int64         `gorm:"index"                json:"dynasty_id,omitempty"`
+	Dynasty   *Dynasty       `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
+	CreatedAt time.Time      `gorm:"autoCreateTime"       json:"created_at"`
 }
 
 // TableName specifies the table name for Poem

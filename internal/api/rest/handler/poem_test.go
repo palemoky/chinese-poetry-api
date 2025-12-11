@@ -48,17 +48,16 @@ func createTestPoem(t *testing.T, repo *database.Repository, id int64, title, co
 	dynastyID, err := repo.GetOrCreateDynasty("唐")
 	require.NoError(t, err)
 
-	authorID, err := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, err := repo.GetOrCreateAuthor("李白", dynastyID)
 	require.NoError(t, err)
 
 	// Create poem
 	poem := &database.Poem{
-		ID:          id,
-		Title:       title,
-		TitlePinyin: stringPtr("jing ye si"),
-		Content:     datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
-		AuthorID:    &authorID,
-		DynastyID:   &dynastyID,
+		ID:        id,
+		Title:     title,
+		Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
+		AuthorID:  &authorID,
+		DynastyID: &dynastyID,
 	}
 	err = repo.InsertPoem(poem)
 	require.NoError(t, err)

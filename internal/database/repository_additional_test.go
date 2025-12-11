@@ -16,8 +16,8 @@ func TestGetAuthorsWithStats(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	author1ID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
-	_, _ = repo.GetOrCreateAuthor("杜甫", "du fu", "df", dynastyID)
+	author1ID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
+	_, _ = repo.GetOrCreateAuthor("杜甫", dynastyID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	// Create poems for authors
@@ -78,7 +78,7 @@ func TestGetAuthorByID(t *testing.T) {
 	repo := NewRepository(db)
 
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	tests := []struct {
 		name    string
@@ -117,11 +117,11 @@ func TestGetPoemsByAuthor(t *testing.T) {
 	repo := NewRepository(db)
 
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	// Create test poems
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		_ = db.Create(&Poem{
 			ID:        int64(200000 + i),
 			Title:     "测试诗歌",
@@ -169,7 +169,7 @@ func TestGetDynastiesWithStats(t *testing.T) {
 	dynasty1ID, _ := repo.GetOrCreateDynasty("唐")
 	_, _ = repo.GetOrCreateDynasty("宋")
 
-	author1ID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynasty1ID)
+	author1ID, _ := repo.GetOrCreateAuthor("李白", dynasty1ID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	_ = db.Create(&Poem{
@@ -242,7 +242,7 @@ func TestGetPoetryTypesWithStats(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	// Create poetry type first
 	poetryType := &PoetryType{
@@ -327,11 +327,11 @@ func TestGetPoemsByType(t *testing.T) {
 	repo := NewRepository(db)
 
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	// Create test poems
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		_ = db.Create(&Poem{
 			ID:        int64(500000 + i),
 			Title:     "测试诗歌",

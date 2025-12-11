@@ -45,23 +45,11 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 			dynastyName = author.Dynasty.Name
 		}
 
-		namePinyin := ""
-		if author.NamePinyin != nil {
-			namePinyin = *author.NamePinyin
-		}
-
-		namePinyinAbbr := ""
-		if author.NamePinyinAbbr != nil {
-			namePinyinAbbr = *author.NamePinyinAbbr
-		}
-
 		data[i] = map[string]any{
-			"id":               author.ID,
-			"name":             author.Name,
-			"name_pinyin":      namePinyin,
-			"name_pinyin_abbr": namePinyinAbbr,
-			"dynasty":          dynastyName,
-			"poem_count":       author.PoemCount,
+			"id":         author.ID,
+			"name":       author.Name,
+			"dynasty":    dynastyName,
+			"poem_count": author.PoemCount,
 		}
 	}
 
@@ -88,23 +76,11 @@ func (h *AuthorHandler) GetAuthor(c *gin.Context) {
 		dynastyName = author.Dynasty.Name
 	}
 
-	namePinyin := ""
-	if author.NamePinyin != nil {
-		namePinyin = *author.NamePinyin
-	}
-
-	namePinyinAbbr := ""
-	if author.NamePinyinAbbr != nil {
-		namePinyinAbbr = *author.NamePinyinAbbr
-	}
-
 	c.JSON(http.StatusOK, gin.H{
 		"data": map[string]any{
-			"id":               author.ID,
-			"name":             author.Name,
-			"name_pinyin":      namePinyin,
-			"name_pinyin_abbr": namePinyinAbbr,
-			"dynasty":          dynastyName,
+			"id":      author.ID,
+			"name":    author.Name,
+			"dynasty": dynastyName,
 		},
 	})
 }

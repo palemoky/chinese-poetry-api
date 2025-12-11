@@ -75,35 +75,29 @@ func TestGetOrCreateAuthor(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name           string
-		authorName     string
-		namePinyin     string
-		namePinyinAbbr string
-		dynastyID      int64
-		wantErr        bool
+		name       string
+		authorName string
+		dynastyID  int64
+		wantErr    bool
 	}{
 		{
-			name:           "create new author",
-			authorName:     "李白",
-			namePinyin:     "li bai",
-			namePinyinAbbr: "lb",
-			dynastyID:      dynastyID,
-			wantErr:        false,
+			name:       "create new author",
+			authorName: "李白",
+			dynastyID:  dynastyID,
+			wantErr:    false,
 		},
 		{
-			name:           "get existing author",
-			authorName:     "李白",
-			namePinyin:     "li bai",
-			namePinyinAbbr: "lb",
-			dynastyID:      dynastyID,
-			wantErr:        false,
+			name:       "get existing author",
+			authorName: "李白",
+			dynastyID:  dynastyID,
+			wantErr:    false,
 		},
 	}
 
 	var firstID int64
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			id, err := repo.GetOrCreateAuthor(tt.authorName, tt.namePinyin, tt.namePinyinAbbr, tt.dynastyID)
+			id, err := repo.GetOrCreateAuthor(tt.authorName, tt.dynastyID)
 
 			if tt.wantErr {
 				assert.Error(t, err)

@@ -16,8 +16,7 @@ type DynastyStats struct {
 	Count   int               `json:"count"`
 }
 
-type Query struct {
-}
+type Query struct{}
 
 type TypeStats struct {
 	Type  *database.PoetryType `json:"type"`
@@ -31,7 +30,6 @@ const (
 	SearchTypeTitle   SearchType = "TITLE"
 	SearchTypeContent SearchType = "CONTENT"
 	SearchTypeAuthor  SearchType = "AUTHOR"
-	SearchTypePinyin  SearchType = "PINYIN"
 )
 
 var AllSearchType = []SearchType{
@@ -39,12 +37,11 @@ var AllSearchType = []SearchType{
 	SearchTypeTitle,
 	SearchTypeContent,
 	SearchTypeAuthor,
-	SearchTypePinyin,
 }
 
 func (e SearchType) IsValid() bool {
 	switch e {
-	case SearchTypeAll, SearchTypeTitle, SearchTypeContent, SearchTypeAuthor, SearchTypePinyin:
+	case SearchTypeAll, SearchTypeTitle, SearchTypeContent, SearchTypeAuthor:
 		return true
 	}
 	return false

@@ -46,8 +46,8 @@ func TestListAuthors(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	_, _ = repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
-	_, _ = repo.GetOrCreateAuthor("杜甫", "du fu", "df", dynastyID)
+	_, _ = repo.GetOrCreateAuthor("李白", dynastyID)
+	_, _ = repo.GetOrCreateAuthor("杜甫", dynastyID)
 
 	router.GET("/authors", handler.ListAuthors)
 
@@ -110,7 +110,7 @@ func TestGetAuthor(t *testing.T) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	router.GET("/authors/:id", handler.GetAuthor)
 
@@ -128,8 +128,6 @@ func TestGetAuthor(t *testing.T) {
 				data := resp["data"].(map[string]any)
 				assert.NotNil(t, data)
 				assert.Equal(t, "李白", data["name"])
-				assert.Equal(t, "li bai", data["name_pinyin"])
-				assert.Equal(t, "lb", data["name_pinyin_abbr"])
 				assert.Equal(t, "唐", data["dynasty"])
 				// Ensure ID is present
 				assert.NotNil(t, data["id"])

@@ -19,7 +19,7 @@ func BenchmarkToTraditional(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = ToTraditional(tc.input)
 			}
 		})
@@ -41,7 +41,7 @@ func BenchmarkToSimplified(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = ToSimplified(tc.input)
 			}
 		})
@@ -65,7 +65,7 @@ func BenchmarkToTraditionalArray(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = ToTraditionalArray(tc.input)
 			}
 		})
@@ -89,7 +89,7 @@ func BenchmarkToSimplifiedArray(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = ToSimplifiedArray(tc.input)
 			}
 		})
@@ -104,7 +104,7 @@ func BenchmarkConvertPoemToTraditional(b *testing.B) {
 	rhythmic := ""
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, _, _, _, _ = ConvertPoemToTraditional(title, author, content, rhythmic)
 	}
 }

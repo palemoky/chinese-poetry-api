@@ -49,26 +49,22 @@ enum SearchType {
   TITLE
   CONTENT
   AUTHOR
-  PINYIN
 }
 
 type Poem {
   id: ID!
   title: String!
-  titlePinyin: String
   paragraphs: [String!]!
   author: Author
   dynasty: Dynasty
   type: PoetryType
   rhythmic: String
-  rhythmicPinyin: String
   createdAt: String!
 }
 
 type Author {
   id: ID!
   name: String!
-  namePinyin: String
   dynasty: Dynasty
   description: String
   poems(page: Int = 1, pageSize: Int = 20): PoemConnection!

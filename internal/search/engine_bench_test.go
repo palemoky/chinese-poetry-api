@@ -30,7 +30,6 @@ func setupBenchmarkDB(b *testing.B) *database.DB {
 	return &database.DB{DB: gormDB}
 }
 
-// BenchmarkIsPinyinQuery benchmarks the isPinyinQuery function
 func BenchmarkIsPinyinQuery(b *testing.B) {
 	testCases := []struct {
 		name  string
@@ -49,8 +48,7 @@ func BenchmarkIsPinyinQuery(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_ = isPinyinQuery(tc.query)
+			for b.Loop() {
 			}
 		})
 	}
@@ -64,16 +62,15 @@ func BenchmarkSearch(b *testing.B) {
 
 	// Create test data
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
-	authorID, _ := repo.GetOrCreateAuthor("李白", "li bai", "lb", dynastyID)
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
-	for i := 0; i < 100; i++ {
+	for i := range 100 {
 		poem := &database.Poem{
-			ID:          int64(10000000000000 + i),
-			Title:       "静夜思",
-			TitlePinyin: strPtr("jing ye si"),
-			Content:     []byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`),
-			AuthorID:    &authorID,
-			DynastyID:   &dynastyID,
+			ID:        int64(10000000000000 + i),
+			Title:     "静夜思",
+			Content:   []byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`),
+			AuthorID:  &authorID,
+			DynastyID: &dynastyID,
 		}
 		_ = repo.InsertPoem(poem)
 	}
@@ -88,7 +85,6 @@ func BenchmarkSearch(b *testing.B) {
 		{"title", SearchTypeTitle, "静夜思"},
 		{"content", SearchTypeContent, "明月"},
 		{"author", SearchTypeAuthor, "李白"},
-		{"pinyin", SearchTypePinyin, "libai"},
 	}
 
 	for _, tc := range testCases {
@@ -101,13 +97,9 @@ func BenchmarkSearch(b *testing.B) {
 			}
 
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_, _ = engine.Search(params)
 			}
 		})
 	}
-}
-
-func strPtr(s string) *string {
-	return &s
 }

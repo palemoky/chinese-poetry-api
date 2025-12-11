@@ -46,7 +46,7 @@ func BenchmarkClassifyPoetryType(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = ClassifyPoetryType(tc.paragraphs, tc.rhythmic)
 			}
 		})
@@ -69,7 +69,7 @@ func BenchmarkRemovePunctuation(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = removePunctuation(tc.input)
 			}
 		})
@@ -91,7 +91,7 @@ func BenchmarkSplitBySentence(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = splitBySentence(tc.input)
 			}
 		})
@@ -112,7 +112,7 @@ func BenchmarkExpandParagraphs(b *testing.B) {
 	for _, tc := range testCases {
 		b.Run(tc.name, func(b *testing.B) {
 			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
+			for b.Loop() {
 				_ = expandParagraphs(tc.paragraphs)
 			}
 		})

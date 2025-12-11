@@ -13,10 +13,11 @@ import (
 
 	"github.com/99designs/gqlgen/graphql"
 	"github.com/99designs/gqlgen/graphql/introspection"
-	"github.com/palemoky/chinese-poetry-api/internal/database"
-	"github.com/palemoky/chinese-poetry-api/internal/graph/model"
 	gqlparser "github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
+
+	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/graph/model"
 )
 
 // region    ************************** generated!.gotpl **************************
@@ -43,14 +44,12 @@ type ResolverRoot interface {
 	AuthorEdge() AuthorEdgeResolver
 	Dynasty() DynastyResolver
 	Poem() PoemResolver
-	PoemEdge() PoemEdgeResolver
 	PoetryType() PoetryTypeResolver
 	Query() QueryResolver
 	Statistics() StatisticsResolver
 }
 
-type DirectiveRoot struct {
-}
+type DirectiveRoot struct{}
 
 type ComplexityRoot struct {
 	Author struct {
@@ -58,7 +57,6 @@ type ComplexityRoot struct {
 		Dynasty     func(childComplexity int) int
 		ID          func(childComplexity int) int
 		Name        func(childComplexity int) int
-		NamePinyin  func(childComplexity int) int
 		PoemCount   func(childComplexity int) int
 		Poems       func(childComplexity int, page *int, pageSize *int) int
 	}
@@ -97,16 +95,14 @@ type ComplexityRoot struct {
 	}
 
 	Poem struct {
-		Author         func(childComplexity int) int
-		CreatedAt      func(childComplexity int) int
-		Dynasty        func(childComplexity int) int
-		ID             func(childComplexity int) int
-		Paragraphs     func(childComplexity int) int
-		Rhythmic       func(childComplexity int) int
-		RhythmicPinyin func(childComplexity int) int
-		Title          func(childComplexity int) int
-		TitlePinyin    func(childComplexity int) int
-		Type           func(childComplexity int) int
+		Author     func(childComplexity int) int
+		CreatedAt  func(childComplexity int) int
+		Dynasty    func(childComplexity int) int
+		ID         func(childComplexity int) int
+		Paragraphs func(childComplexity int) int
+		Rhythmic   func(childComplexity int) int
+		Title      func(childComplexity int) int
+		Type       func(childComplexity int) int
 	}
 
 	PoemConnection struct {
@@ -157,8 +153,6 @@ type ComplexityRoot struct {
 }
 
 type AuthorResolver interface {
-	Dynasty(ctx context.Context, obj *database.Author) (*database.Dynasty, error)
-
 	Poems(ctx context.Context, obj *database.Author, page *int, pageSize *int) (*database.PoemConnection, error)
 	PoemCount(ctx context.Context, obj *database.Author) (int, error)
 }
@@ -171,14 +165,8 @@ type DynastyResolver interface {
 }
 type PoemResolver interface {
 	Paragraphs(ctx context.Context, obj *database.Poem) ([]string, error)
-	Author(ctx context.Context, obj *database.Poem) (*database.Author, error)
-	Dynasty(ctx context.Context, obj *database.Poem) (*database.Dynasty, error)
-	Type(ctx context.Context, obj *database.Poem) (*database.PoetryType, error)
 
 	CreatedAt(ctx context.Context, obj *database.Poem) (string, error)
-}
-type PoemEdgeResolver interface {
-	Node(ctx context.Context, obj *database.PoemEdge) (*database.Poem, error)
 }
 type PoetryTypeResolver interface {
 	PoemCount(ctx context.Context, obj *database.PoetryType) (int, error)
@@ -242,12 +230,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Author.Name(childComplexity), true
-	case "Author.namePinyin":
-		if e.complexity.Author.NamePinyin == nil {
-			break
-		}
-
-		return e.complexity.Author.NamePinyin(childComplexity), true
 	case "Author.poemCount":
 		if e.complexity.Author.PoemCount == nil {
 			break
@@ -415,24 +397,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.complexity.Poem.Rhythmic(childComplexity), true
-	case "Poem.rhythmicPinyin":
-		if e.complexity.Poem.RhythmicPinyin == nil {
-			break
-		}
-
-		return e.complexity.Poem.RhythmicPinyin(childComplexity), true
 	case "Poem.title":
 		if e.complexity.Poem.Title == nil {
 			break
 		}
 
 		return e.complexity.Poem.Title(childComplexity), true
-	case "Poem.titlePinyin":
-		if e.complexity.Poem.TitlePinyin == nil {
-			break
-		}
-
-		return e.complexity.Poem.TitlePinyin(childComplexity), true
 	case "Poem.type":
 		if e.complexity.Poem.Type == nil {
 			break
@@ -784,26 +754,22 @@ enum SearchType {
   TITLE
   CONTENT
   AUTHOR
-  PINYIN
 }
 
 type Poem {
   id: ID!
   title: String!
-  titlePinyin: String
   paragraphs: [String!]!
   author: Author
   dynasty: Dynasty
   type: PoetryType
   rhythmic: String
-  rhythmicPinyin: String
   createdAt: String!
 }
 
 type Author {
   id: ID!
   name: String!
-  namePinyin: String
   dynasty: Dynasty
   description: String
   poems(page: Int = 1, pageSize: Int = 20): PoemConnection!
@@ -1137,35 +1103,6 @@ func (ec *executionContext) fieldContext_Author_name(_ context.Context, field gr
 	return fc, nil
 }
 
-func (ec *executionContext) _Author_namePinyin(ctx context.Context, field graphql.CollectedField, obj *database.Author) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Author_namePinyin,
-		func(ctx context.Context) (any, error) {
-			return obj.NamePinyin, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Author_namePinyin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Author",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Author_dynasty(ctx context.Context, field graphql.CollectedField, obj *database.Author) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -1173,7 +1110,7 @@ func (ec *executionContext) _Author_dynasty(ctx context.Context, field graphql.C
 		field,
 		ec.fieldContext_Author_dynasty,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Author().Dynasty(ctx, obj)
+			return obj.Dynasty, nil
 		},
 		nil,
 		ec.marshalODynasty2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐDynasty,
@@ -1186,8 +1123,8 @@ func (ec *executionContext) fieldContext_Author_dynasty(_ context.Context, field
 	fc = &graphql.FieldContext{
 		Object:     "Author",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -1449,8 +1386,6 @@ func (ec *executionContext) fieldContext_AuthorEdge_node(_ context.Context, fiel
 				return ec.fieldContext_Author_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Author_name(ctx, field)
-			case "namePinyin":
-				return ec.fieldContext_Author_namePinyin(ctx, field)
 			case "dynasty":
 				return ec.fieldContext_Author_dynasty(ctx, field)
 			case "description":
@@ -1898,7 +1833,7 @@ func (ec *executionContext) _Poem_id(ctx context.Context, field graphql.Collecte
 			return obj.ID, nil
 		},
 		nil,
-		ec.marshalNID2string,
+		ec.marshalNID2int64,
 		true,
 		true,
 	)
@@ -1934,35 +1869,6 @@ func (ec *executionContext) _Poem_title(ctx context.Context, field graphql.Colle
 }
 
 func (ec *executionContext) fieldContext_Poem_title(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Poem",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Poem_titlePinyin(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Poem_titlePinyin,
-		func(ctx context.Context) (any, error) {
-			return obj.TitlePinyin, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Poem_titlePinyin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Poem",
 		Field:      field,
@@ -2011,7 +1917,7 @@ func (ec *executionContext) _Poem_author(ctx context.Context, field graphql.Coll
 		field,
 		ec.fieldContext_Poem_author,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Poem().Author(ctx, obj)
+			return obj.Author, nil
 		},
 		nil,
 		ec.marshalOAuthor2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐAuthor,
@@ -2024,16 +1930,14 @@ func (ec *executionContext) fieldContext_Poem_author(_ context.Context, field gr
 	fc = &graphql.FieldContext{
 		Object:     "Poem",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Author_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Author_name(ctx, field)
-			case "namePinyin":
-				return ec.fieldContext_Author_namePinyin(ctx, field)
 			case "dynasty":
 				return ec.fieldContext_Author_dynasty(ctx, field)
 			case "description":
@@ -2056,7 +1960,7 @@ func (ec *executionContext) _Poem_dynasty(ctx context.Context, field graphql.Col
 		field,
 		ec.fieldContext_Poem_dynasty,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Poem().Dynasty(ctx, obj)
+			return obj.Dynasty, nil
 		},
 		nil,
 		ec.marshalODynasty2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐDynasty,
@@ -2069,8 +1973,8 @@ func (ec *executionContext) fieldContext_Poem_dynasty(_ context.Context, field g
 	fc = &graphql.FieldContext{
 		Object:     "Poem",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -2101,7 +2005,7 @@ func (ec *executionContext) _Poem_type(ctx context.Context, field graphql.Collec
 		field,
 		ec.fieldContext_Poem_type,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Poem().Type(ctx, obj)
+			return obj.Type, nil
 		},
 		nil,
 		ec.marshalOPoetryType2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoetryType,
@@ -2114,8 +2018,8 @@ func (ec *executionContext) fieldContext_Poem_type(_ context.Context, field grap
 	fc = &graphql.FieldContext{
 		Object:     "Poem",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
@@ -2156,35 +2060,6 @@ func (ec *executionContext) _Poem_rhythmic(ctx context.Context, field graphql.Co
 }
 
 func (ec *executionContext) fieldContext_Poem_rhythmic(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Poem",
-		Field:      field,
-		IsMethod:   false,
-		IsResolver: false,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return nil, errors.New("field of type String does not have child fields")
-		},
-	}
-	return fc, nil
-}
-
-func (ec *executionContext) _Poem_rhythmicPinyin(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		ec.fieldContext_Poem_rhythmicPinyin,
-		func(ctx context.Context) (any, error) {
-			return obj.RhythmicPinyin, nil
-		},
-		nil,
-		ec.marshalOString2ᚖstring,
-		true,
-		false,
-	)
-}
-
-func (ec *executionContext) fieldContext_Poem_rhythmicPinyin(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Poem",
 		Field:      field,
@@ -2336,10 +2211,10 @@ func (ec *executionContext) _PoemEdge_node(ctx context.Context, field graphql.Co
 		field,
 		ec.fieldContext_PoemEdge_node,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.PoemEdge().Node(ctx, obj)
+			return obj.Node, nil
 		},
 		nil,
-		ec.marshalNPoem2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem,
+		ec.marshalNPoem2githubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem,
 		true,
 		true,
 	)
@@ -2349,16 +2224,14 @@ func (ec *executionContext) fieldContext_PoemEdge_node(_ context.Context, field 
 	fc = &graphql.FieldContext{
 		Object:     "PoemEdge",
 		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
+		IsMethod:   false,
+		IsResolver: false,
 		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 			switch field.Name {
 			case "id":
 				return ec.fieldContext_Poem_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Poem_title(ctx, field)
-			case "titlePinyin":
-				return ec.fieldContext_Poem_titlePinyin(ctx, field)
 			case "paragraphs":
 				return ec.fieldContext_Poem_paragraphs(ctx, field)
 			case "author":
@@ -2369,8 +2242,6 @@ func (ec *executionContext) fieldContext_PoemEdge_node(_ context.Context, field 
 				return ec.fieldContext_Poem_type(ctx, field)
 			case "rhythmic":
 				return ec.fieldContext_Poem_rhythmic(ctx, field)
-			case "rhythmicPinyin":
-				return ec.fieldContext_Poem_rhythmicPinyin(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -2641,8 +2512,6 @@ func (ec *executionContext) fieldContext_Query_poem(ctx context.Context, field g
 				return ec.fieldContext_Poem_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Poem_title(ctx, field)
-			case "titlePinyin":
-				return ec.fieldContext_Poem_titlePinyin(ctx, field)
 			case "paragraphs":
 				return ec.fieldContext_Poem_paragraphs(ctx, field)
 			case "author":
@@ -2653,8 +2522,6 @@ func (ec *executionContext) fieldContext_Query_poem(ctx context.Context, field g
 				return ec.fieldContext_Poem_type(ctx, field)
 			case "rhythmic":
 				return ec.fieldContext_Poem_rhythmic(ctx, field)
-			case "rhythmicPinyin":
-				return ec.fieldContext_Poem_rhythmicPinyin(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -2802,8 +2669,6 @@ func (ec *executionContext) fieldContext_Query_randomPoem(ctx context.Context, f
 				return ec.fieldContext_Poem_id(ctx, field)
 			case "title":
 				return ec.fieldContext_Poem_title(ctx, field)
-			case "titlePinyin":
-				return ec.fieldContext_Poem_titlePinyin(ctx, field)
 			case "paragraphs":
 				return ec.fieldContext_Poem_paragraphs(ctx, field)
 			case "author":
@@ -2814,8 +2679,6 @@ func (ec *executionContext) fieldContext_Query_randomPoem(ctx context.Context, f
 				return ec.fieldContext_Poem_type(ctx, field)
 			case "rhythmic":
 				return ec.fieldContext_Poem_rhythmic(ctx, field)
-			case "rhythmicPinyin":
-				return ec.fieldContext_Poem_rhythmicPinyin(ctx, field)
 			case "createdAt":
 				return ec.fieldContext_Poem_createdAt(ctx, field)
 			}
@@ -2865,8 +2728,6 @@ func (ec *executionContext) fieldContext_Query_author(ctx context.Context, field
 				return ec.fieldContext_Author_id(ctx, field)
 			case "name":
 				return ec.fieldContext_Author_name(ctx, field)
-			case "namePinyin":
-				return ec.fieldContext_Author_namePinyin(ctx, field)
 			case "dynasty":
 				return ec.fieldContext_Author_dynasty(ctx, field)
 			case "description":
@@ -4887,41 +4748,8 @@ func (ec *executionContext) _Author(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "namePinyin":
-			out.Values[i] = ec._Author_namePinyin(ctx, field, obj)
 		case "dynasty":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Author_dynasty(ctx, field, obj)
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			out.Values[i] = ec._Author_dynasty(ctx, field, obj)
 		case "description":
 			out.Values[i] = ec._Author_description(ctx, field, obj)
 		case "poems":
@@ -5378,8 +5206,6 @@ func (ec *executionContext) _Poem(ctx context.Context, sel ast.SelectionSet, obj
 			if out.Values[i] == graphql.Null {
 				atomic.AddUint32(&out.Invalids, 1)
 			}
-		case "titlePinyin":
-			out.Values[i] = ec._Poem_titlePinyin(ctx, field, obj)
 		case "paragraphs":
 			field := field
 
@@ -5417,108 +5243,13 @@ func (ec *executionContext) _Poem(ctx context.Context, sel ast.SelectionSet, obj
 
 			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "author":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Poem_author(ctx, field, obj)
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			out.Values[i] = ec._Poem_author(ctx, field, obj)
 		case "dynasty":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Poem_dynasty(ctx, field, obj)
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			out.Values[i] = ec._Poem_dynasty(ctx, field, obj)
 		case "type":
-			field := field
-
-			innerFunc := func(ctx context.Context, _ *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._Poem_type(ctx, field, obj)
-				return res
-			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
+			out.Values[i] = ec._Poem_type(ctx, field, obj)
 		case "rhythmic":
 			out.Values[i] = ec._Poem_rhythmic(ctx, field, obj)
-		case "rhythmicPinyin":
-			out.Values[i] = ec._Poem_rhythmicPinyin(ctx, field, obj)
 		case "createdAt":
 			field := field
 
@@ -5639,45 +5370,14 @@ func (ec *executionContext) _PoemEdge(ctx context.Context, sel ast.SelectionSet,
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("PoemEdge")
 		case "node":
-			field := field
-
-			innerFunc := func(ctx context.Context, fs *graphql.FieldSet) (res graphql.Marshaler) {
-				defer func() {
-					if r := recover(); r != nil {
-						ec.Error(ctx, ec.Recover(ctx, r))
-					}
-				}()
-				res = ec._PoemEdge_node(ctx, field, obj)
-				if res == graphql.Null {
-					atomic.AddUint32(&fs.Invalids, 1)
-				}
-				return res
+			out.Values[i] = ec._PoemEdge_node(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				out.Invalids++
 			}
-
-			if field.Deferrable != nil {
-				dfs, ok := deferred[field.Deferrable.Label]
-				di := 0
-				if ok {
-					dfs.AddField(field)
-					di = len(dfs.Values) - 1
-				} else {
-					dfs = graphql.NewFieldSet([]graphql.CollectedField{field})
-					deferred[field.Deferrable.Label] = dfs
-				}
-				dfs.Concurrently(di, func(ctx context.Context) graphql.Marshaler {
-					return innerFunc(ctx, dfs)
-				})
-
-				// don't run the out.Concurrently() call below
-				out.Values[i] = graphql.Null
-				continue
-			}
-
-			out.Concurrently(i, func(ctx context.Context) graphql.Marshaler { return innerFunc(ctx, out) })
 		case "cursor":
 			out.Values[i] = ec._PoemEdge_cursor(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
+				out.Invalids++
 			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
@@ -6788,16 +6488,6 @@ func (ec *executionContext) marshalNPoem2githubᚗcomᚋpalemokyᚋchineseᚑpoe
 	return ec._Poem(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNPoem2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem(ctx context.Context, sel ast.SelectionSet, v *database.Poem) graphql.Marshaler {
-	if v == nil {
-		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
-			graphql.AddErrorf(ctx, "the requested element is null which the schema does not allow")
-		}
-		return graphql.Null
-	}
-	return ec._Poem(ctx, sel, v)
-}
-
 func (ec *executionContext) marshalNPoemConnection2githubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoemConnection(ctx context.Context, sel ast.SelectionSet, v database.PoemConnection) graphql.Marshaler {
 	return ec._PoemConnection(ctx, sel, &v)
 }
@@ -7379,7 +7069,7 @@ func (ec *executionContext) unmarshalOSearchType2ᚖgithubᚗcomᚋpalemokyᚋch
 	if v == nil {
 		return nil, nil
 	}
-	var res = new(model.SearchType)
+	res := new(model.SearchType)
 	err := res.UnmarshalGQL(v)
 	return res, graphql.ErrorOnPath(ctx, err)
 }

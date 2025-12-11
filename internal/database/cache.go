@@ -78,7 +78,7 @@ func (r *CachedRepository) GetPoetryTypeID(name string) (int64, error) {
 }
 
 // GetOrCreateAuthor gets or creates an author with caching
-func (r *CachedRepository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error) {
+func (r *CachedRepository) GetOrCreateAuthor(name string, dynastyID int64) (int64, error) {
 	// Try to get from cache first (use name as key since it's unique)
 	r.authorCacheMu.RLock()
 	if id, ok := r.authorCache[name]; ok {
@@ -88,7 +88,7 @@ func (r *CachedRepository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr st
 	r.authorCacheMu.RUnlock()
 
 	// Not in cache, get from database
-	id, err := r.Repository.GetOrCreateAuthor(name, namePinyin, namePinyinAbbr, dynastyID)
+	id, err := r.Repository.GetOrCreateAuthor(name, dynastyID)
 	if err != nil {
 		return 0, err
 	}

@@ -13,7 +13,7 @@ import (
 // RepositoryInterface defines the interface for repository operations
 type RepositoryInterface interface {
 	GetOrCreateDynasty(name string) (int64, error)
-	GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error)
+	GetOrCreateAuthor(name string, dynastyID int64) (int64, error)
 	GetPoetryTypeID(name string) (int64, error)
 	InsertPoem(poem *Poem) error
 	BatchInsertPoems(poems []*Poem, batchSize int) error
@@ -70,12 +70,10 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 // Uses Name as unique key and ON CONFLICT to handle concurrent inserts
 // Note: Author's dynasty_id is set on first creation and not updated
 // This is because some authors appear in multiple dynasty datasets
-func (r *Repository) GetOrCreateAuthor(name, namePinyin, namePinyinAbbr string, dynastyID int64) (int64, error) {
+func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, error) {
 	author := Author{
-		Name:           name,
-		NamePinyin:     &namePinyin,
-		NamePinyinAbbr: &namePinyinAbbr,
-		DynastyID:      &dynastyID,
+		Name:      name,
+		DynastyID: &dynastyID,
 	}
 
 	// Try to create the author with ON CONFLICT DO NOTHING

@@ -132,7 +132,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	var errorCount atomic.Int64
 
 	// Start workers to process poems (CPU-intensive work)
-	for i := 0; i < p.workers; i++ {
+	for i := range p.workers {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
@@ -210,7 +210,7 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 		log.Printf("✗ Failed: %d poems", failCount)
 		if len(errors) > 0 {
 			log.Printf("Sample errors (showing %d):", min(len(errors), SampleErrorCount))
-			for i := 0; i < min(len(errors), SampleErrorCount); i++ {
+			for i := range min(len(errors), SampleErrorCount) {
 				log.Printf("  %d. %v", i+1, errors[i])
 			}
 		}
@@ -308,12 +308,8 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to get/create dynasty: %w", err)
 	}
 
-	// Generate pinyin for author
-	authorPinyin := classifier.ToPinyinNoTone(author)
-	authorPinyinAbbr := classifier.ToPinyinAbbr(author)
-
 	// Get or create author
-	authorID, err := p.repo.GetOrCreateAuthor(author, authorPinyin, authorPinyinAbbr, dynastyID)
+	authorID, err := p.repo.GetOrCreateAuthor(author, dynastyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get/create author: %w", err)
 	}
@@ -349,17 +345,6 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		}
 	}
 
-	// Generate pinyin for final title
-	titlePinyin := classifier.ToPinyinNoTone(finalTitle)
-	titlePinyinAbbr := classifier.ToPinyinAbbr(finalTitle)
-
-	// Generate pinyin for rhythmic (keep for search/classification)
-	var rhythmicPinyin *string
-	if rhythmic != "" {
-		rp := classifier.ToPinyinNoTone(rhythmic)
-		rhythmicPinyin = &rp
-	}
-
 	// Use sequential ID assigned during processing
 	poemID := work.ID
 
@@ -371,16 +356,13 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 
 	// Create poem record
 	dbPoem := &database.Poem{
-		ID:              poemID,
-		Title:           finalTitle, // Use merged title (includes rhythmic if present)
-		TitlePinyin:     &titlePinyin,
-		TitlePinyinAbbr: &titlePinyinAbbr,
-		AuthorID:        &authorID,
-		DynastyID:       &dynastyID,
-		TypeID:          &typeID,
-		Content:         datatypes.JSON(contentJSON),
-		Rhythmic:        &rhythmic, // Keep for search/classification
-		RhythmicPinyin:  rhythmicPinyin,
+		ID:        poemID,
+		Title:     finalTitle, // Use merged title (includes rhythmic if present)
+		AuthorID:  &authorID,
+		DynastyID: &dynastyID,
+		TypeID:    &typeID,
+		Content:   datatypes.JSON(contentJSON),
+		Rhythmic:  &rhythmic, // Keep for search/classification
 	}
 
 	return dbPoem, nil

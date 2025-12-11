@@ -6,7 +6,6 @@ require (
 	github.com/99designs/gqlgen v0.17.84
 	github.com/gin-gonic/gin v1.11.0
 	github.com/liuzl/gocc v0.0.0-20231231122217-0372e1059ca5
-	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
