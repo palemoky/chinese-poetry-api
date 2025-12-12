@@ -110,9 +110,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		}
 	} else if authorName := c.Query("author"); authorName != "" {
 		// Look up author by name
-		if author, err := repo.GetAuthorByName(authorName); err == nil {
-			authorID = &author.ID
+		author, err := repo.GetAuthorByName(authorName)
+		if err != nil {
+			respondError(c, http.StatusNotFound, "author not found")
+			return
 		}
+		authorID = &author.ID
 	}
 
 	// Parse type filter (by ID or name)
@@ -122,9 +125,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		}
 	} else if typeName := c.Query("type"); typeName != "" {
 		// Look up type by name
-		if id, err := repo.GetPoetryTypeID(typeName); err == nil {
-			typeID = &id
+		id, err := repo.GetPoetryTypeID(typeName)
+		if err != nil {
+			respondError(c, http.StatusNotFound, "poetry type not found")
+			return
 		}
+		typeID = &id
 	}
 
 	// Parse dynasty filter (by ID or name)
@@ -134,9 +140,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		}
 	} else if dynastyName := c.Query("dynasty"); dynastyName != "" {
 		// Look up dynasty by name
-		if dynasty, err := repo.GetDynastyByName(dynastyName); err == nil {
-			dynastyID = &dynasty.ID
+		dynasty, err := repo.GetDynastyByName(dynastyName)
+		if err != nil {
+			respondError(c, http.StatusNotFound, "dynasty not found")
+			return
 		}
+		dynastyID = &dynasty.ID
 	}
 
 	// Get count of poems matching filters

@@ -232,20 +232,23 @@ func TestRandomPoem(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		query          string
 		setupData      bool
 		expectedStatus int
 		checkResponse  func(*testing.T, map[string]any)
 	}{
 		{
 			name:           "get random poem when database is empty",
+			query:          "",
 			setupData:      false,
-			expectedStatus: http.StatusInternalServerError,
+			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "failed to get random poem", resp["error"])
+				assert.Equal(t, "no poems found matching the criteria", resp["error"])
 			},
 		},
 		{
 			name:           "get random poem with data",
+			query:          "",
 			setupData:      true,
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
@@ -261,6 +264,26 @@ func TestRandomPoem(t *testing.T) {
 				assert.Equal(t, "唐", dynasty["name"])
 			},
 		},
+		{
+			name:           "get random poem with author filter",
+			query:          "?author=李白",
+			setupData:      true,
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.NotEmpty(t, resp["title"])
+				author := resp["author"].(map[string]any)
+				assert.Equal(t, "李白", author["name"])
+			},
+		},
+		{
+			name:           "get random poem with non-existent author filter",
+			query:          "?author=不存在的作者",
+			setupData:      true,
+			expectedStatus: http.StatusNotFound,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.Equal(t, "author not found", resp["error"])
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -274,7 +297,7 @@ func TestRandomPoem(t *testing.T) {
 				createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
 			}
 
-			req := httptest.NewRequest(http.MethodGet, "/random", nil)
+			req := httptest.NewRequest(http.MethodGet, "/random"+tt.query, nil)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
