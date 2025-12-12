@@ -19,6 +19,32 @@ func NewDynastyHandler(repo *database.Repository) *DynastyHandler {
 	return &DynastyHandler{repo: repo}
 }
 
+// formatDynasty formats a dynasty excluding created_at
+func formatDynasty(d *database.Dynasty) map[string]any {
+	result := map[string]any{
+		"id":   d.ID,
+		"name": d.Name,
+	}
+	if d.NameEn != nil {
+		result["name_en"] = *d.NameEn
+	}
+	if d.StartYear != nil {
+		result["start_year"] = *d.StartYear
+	}
+	if d.EndYear != nil {
+		result["end_year"] = *d.EndYear
+	}
+	return result
+}
+
+// formatDynastyWithStats formats a dynasty with stats excluding created_at
+func formatDynastyWithStats(d *database.DynastyWithStats) map[string]any {
+	result := formatDynasty(&d.Dynasty)
+	result["poem_count"] = d.PoemCount
+	result["author_count"] = d.AuthorCount
+	return result
+}
+
 // ListDynasties returns a list of dynasties
 func (h *DynastyHandler) ListDynasties(c *gin.Context) {
 	dynasties, err := h.repo.GetDynastiesWithStats()
@@ -27,7 +53,12 @@ func (h *DynastyHandler) ListDynasties(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dynasties})
+	data := make([]map[string]any, len(dynasties))
+	for i, d := range dynasties {
+		data[i] = formatDynastyWithStats(&d)
+	}
+
+	c.JSON(http.StatusOK, gin.H{"data": data})
 }
 
 // GetDynasty returns a specific dynasty by ID
@@ -45,5 +76,5 @@ func (h *DynastyHandler) GetDynasty(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"data": dynasty})
+	c.JSON(http.StatusOK, gin.H{"data": formatDynasty(dynasty)})
 }
