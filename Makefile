@@ -293,8 +293,8 @@ release:
 	echo "$(BLUE)创建标签 $$VERSION...$(NC)"; \
 	git tag -a $$VERSION -m "Release $$VERSION"; \
 	echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
-	echo "$(BLUE)推送到远程仓库...$(NC)"; \
-	git push --follow-tags; \
+	echo "$(BLUE)推送标签到远程仓库...$(NC)"; \
+	git push origin $$VERSION; \
 	echo "$(GREEN)✓ 发布 $$VERSION 完成$(NC)"
 
 # 允许版本号作为目标
