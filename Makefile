@@ -62,6 +62,9 @@ help:
 	@echo "  make stats              - 显示代码统计"
 	@echo "  make db-stats           - 显示诗词数据库统计"
 	@echo "  make info               - 显示系统信息"
+	@echo ""
+	@echo "$(GREEN)发布命令:$(NC)"
+	@echo "  make release v1.0.0     - 创建并推送版本标签"
 
 ## info: 显示系统信息
 info:
@@ -279,3 +282,21 @@ db-stats:
 		echo "$(YELLOW)数据库文件不存在: $(DATA_DIR)/poetry.db$(NC)"; \
 		echo "请先运行: make process-data"; \
 	fi
+
+## release: 创建并推送版本标签 (用法: make release v1.0.0)
+release:
+	@if [ -z "$(filter-out release,$(MAKECMDGOALS))" ]; then \
+		echo "$(YELLOW)用法: make release v1.0.0$(NC)"; \
+		exit 1; \
+	fi
+	@VERSION="$(filter-out release,$(MAKECMDGOALS))"; \
+	echo "$(BLUE)创建标签 $$VERSION...$(NC)"; \
+	git tag -a $$VERSION -m "Release $$VERSION"; \
+	echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
+	echo "$(BLUE)推送到远程仓库...$(NC)"; \
+	git push --follow-tags; \
+	echo "$(GREEN)✓ 发布 $$VERSION 完成$(NC)"
+
+# 允许版本号作为目标
+v%:
+	@:
