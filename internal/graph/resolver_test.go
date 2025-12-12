@@ -82,15 +82,15 @@ func TestPoemQuery(t *testing.T) {
 	t.Run("get existing poem", func(t *testing.T) {
 		var resp struct {
 			Poem struct {
-				Title      string
-				Paragraphs []string
+				Title   string
+				Content []string
 			}
 		}
 
-		err := c.Post(`query { poem(id: "12345678901234") { title paragraphs } }`, &resp)
+		err := c.Post(`query { poem(id: "12345678901234") { title content } }`, &resp)
 		require.NoError(t, err)
 		assert.Equal(t, "静夜思", resp.Poem.Title)
-		assert.Len(t, resp.Poem.Paragraphs, 4)
+		assert.Len(t, resp.Poem.Content, 4)
 	})
 
 	t.Run("get non-existent poem returns error", func(t *testing.T) {
