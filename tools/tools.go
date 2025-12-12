@@ -1,11 +1,10 @@
 //go:build tools
 // +build tools
 
-package tools
-
-// This file is used to track tool dependencies for the project.
-// It ensures that 'go mod tidy' doesn't remove the tools from go.mod.
+// Package tools pins tool dependencies for the project.
+// This ensures `go mod tidy` keeps these dependencies in go.mod.
 // See: https://github.com/golang/go/wiki/Modules#how-can-i-track-tool-dependencies-for-a-module
+package tools
 
 import (
 	_ "github.com/99designs/gqlgen"
