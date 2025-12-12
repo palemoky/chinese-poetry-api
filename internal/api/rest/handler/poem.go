@@ -128,7 +128,13 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, NewPaginationResponse(result.Poems, pagination, int64(result.TotalCount)))
+	// Format poems to response structure with nested objects
+	data := make([]map[string]any, len(result.Poems))
+	for i, poem := range result.Poems {
+		data[i] = formatPoem(&poem)
+	}
+
+	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(result.TotalCount)))
 }
 
 // RandomPoem returns a random poem
