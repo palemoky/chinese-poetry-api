@@ -41,8 +41,7 @@ jobs:
         run: |
           ./processor \
             --input poetry-data \
-            --output poetry.db \
-            --workers 8
+            --output poetry.db
 
       - name: Compress databases
         run: |
