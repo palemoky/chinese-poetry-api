@@ -41,34 +41,31 @@ jobs:
         run: |
           ./processor \
             --input poetry-data \
-            --output-simplified poetry-simplified.db \
-            --output-traditional poetry-traditional.db \
+            --output poetry.db \
             --workers 8
 
       - name: Compress databases
         run: |
-          gzip -9 poetry-simplified.db
-          gzip -9 poetry-traditional.db
+          gzip -9 poetry.db
           sha256sum *.db.gz > checksums.txt
 
       - name: Collect statistics
         id: stats
         run: |
           # 解压临时统计
-          gunzip -k poetry-simplified.db.gz
-          gunzip -k poetry-traditional.db.gz
+          gunzip -k poetry.db.gz
 
           # 统计数据
-          POEMS=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM poems')
-          AUTHORS=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM authors')
-          DYNASTIES=$(sqlite3 poetry-simplified.db 'SELECT COUNT(*) FROM dynasties')
+          POEMS=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM poems_zh_hans')
+          AUTHORS=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM authors_zh_hans')
+          DYNASTIES=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM dynasties_zh_hans')
 
           echo "poems=$POEMS" >> $GITHUB_OUTPUT
           echo "authors=$AUTHORS" >> $GITHUB_OUTPUT
           echo "dynasties=$DYNASTIES" >> $GITHUB_OUTPUT
 
           # 清理临时文件
-          rm poetry-simplified.db poetry-traditional.db
+          rm poetry.db
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
@@ -77,8 +74,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           make_latest: true
           files: |
-            poetry-simplified.db.gz
-            poetry-traditional.db.gz
+            poetry.db.gz
             checksums.txt
           body: |
             ## 诗词数据库 ${{ github.ref_name }}
@@ -93,17 +89,19 @@ jobs:
             ### 📦 文件说明
             | 文件 | 说明 |
             |------|------|
-            | `poetry-simplified.db.gz` | 简体中文数据库 |
-            | `poetry-traditional.db.gz` | 繁体中文数据库 |
+            | `poetry.db.gz` | 统一数据库（包含简体和繁体表） |
             | `checksums.txt` | SHA256 校验和 |
+
+            ### 🌏 多语言支持
+            API 通过 `?lang=` 参数切换：
+            - `zh-Hans` - 简体中文（默认）
+            - `zh-Hant` - 繁体中文
 
             ### 🚀 快速开始
             容器启动时会自动下载数据库，无需手动下载。
 
             ```bash
-            # 使用 docker-compose
-            wget https://raw.githubusercontent.com/${{ github.repository }}/main/docker-compose.yml
-            docker-compose up -d
+            docker run -d -p 1279:1279 palemoky/chinese-poetry-api:latest
             ```
 
             详细使用说明请参考 [README](https://github.com/${{ github.repository }}#readme)
