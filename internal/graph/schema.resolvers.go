@@ -98,18 +98,13 @@ func (r *dynastyResolver) AuthorCount(ctx context.Context, obj *database.Dynasty
 	return int(count), err
 }
 
-// Paragraphs is the resolver for the paragraphs field.
-func (r *poemResolver) Paragraphs(ctx context.Context, obj *database.Poem) ([]string, error) {
-	var paragraphs []string
-	if err := json.Unmarshal(obj.Content, &paragraphs); err != nil {
+// Content is the resolver for the content field.
+func (r *poemResolver) Content(ctx context.Context, obj *database.Poem) ([]string, error) {
+	var content []string
+	if err := json.Unmarshal(obj.Content, &content); err != nil {
 		return nil, err
 	}
-	return paragraphs, nil
-}
-
-// CreatedAt is the resolver for the createdAt field.
-func (r *poemResolver) CreatedAt(ctx context.Context, obj *database.Poem) (string, error) {
-	return obj.CreatedAt.Format("2006-01-02T15:04:05Z07:00"), nil
+	return content, nil
 }
 
 // PoemCount is the resolver for the poemCount field.
@@ -279,7 +274,7 @@ func (r *queryResolver) Author(ctx context.Context, id string) (*database.Author
 	}
 
 	var author database.Author
-	err = r.DB.First(&author, authorID).Error
+	err = r.DB.Preload("Dynasty").First(&author, authorID).Error
 	if err != nil {
 		return nil, err
 	}

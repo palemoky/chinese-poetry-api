@@ -54,18 +54,16 @@ enum SearchType {
 type Poem {
   id: ID!
   title: String!
-  paragraphs: [String!]!
+  content: [String!]!
   author: Author
   dynasty: Dynasty
   type: PoetryType
-  createdAt: String!
 }
 
 type Author {
   id: ID!
   name: String!
   dynasty: Dynasty
-  description: String
   poems(page: Int = 1, pageSize: Int = 20): PoemConnection!
   poemCount: Int!
 }

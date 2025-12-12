@@ -224,7 +224,7 @@ func (r *Repository) UpsertPoem(poem *Poem) error {
 // GetPoemByID retrieves a poem by ID with all relations preloaded
 func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 	var poem Poem
-	err := r.db.Preload("Author").Preload("Dynasty").Preload("Type").
+	err := r.db.Preload("Author").Preload("Author.Dynasty").Preload("Dynasty").Preload("Type").
 		First(&poem, "id = ?", id).Error
 	if err != nil {
 		return nil, err
