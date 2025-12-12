@@ -60,6 +60,7 @@ help:
 	@echo "  make deps               - 安装依赖"
 	@echo "  make install            - 安装到系统"
 	@echo "  make stats              - 显示代码统计"
+	@echo "  make db-stats           - 显示诗词数据库统计"
 	@echo "  make info               - 显示系统信息"
 
 ## info: 显示系统信息
@@ -261,3 +262,20 @@ stats:
 	@echo ""
 	@echo "目录结构:"
 	@tree -L 2 -I 'vendor|node_modules|.git|poetry-data' || ls -R | grep ":$$" | sed -e 's/:$$//' -e 's/[^-][^\/]*\//--/g' -e 's/^/   /' -e 's/-/|/'
+
+## db-stats: 显示诗词数据库统计
+db-stats:
+	@echo "$(BLUE)诗词数据库统计:$(NC)"
+	@if [ -f "$(DATA_DIR)/poetry.db" ]; then \
+		echo ""; \
+		echo "$(GREEN)简体中文 (zh-Hans):$(NC)"; \
+		sqlite3 -header -column $(DATA_DIR)/poetry.db \
+			"SELECT t.name AS 类型, COUNT(*) AS 数量 FROM poems_zh_hans AS p JOIN poetry_types_zh_hans AS t ON p.type_id = t.id GROUP BY type_id ORDER BY 数量 DESC;"; \
+		echo ""; \
+		echo "$(GREEN)繁体中文 (zh-Hant):$(NC)"; \
+		sqlite3 -header -column $(DATA_DIR)/poetry.db \
+			"SELECT t.name AS 類型, COUNT(*) AS 數量 FROM poems_zh_hant AS p JOIN poetry_types_zh_hant AS t ON p.type_id = t.id GROUP BY type_id ORDER BY 數量 DESC;"; \
+	else \
+		echo "$(YELLOW)数据库文件不存在: $(DATA_DIR)/poetry.db$(NC)"; \
+		echo "请先运行: make process-data"; \
+	fi

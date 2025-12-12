@@ -17,26 +17,74 @@
 
 基于 Go 语言的高性能中国古诗词 API 服务，支持 REST 和 GraphQL 接口，提供简体/繁体中文、拼音搜索等功能。
 
+## 🏗️ 系统架构
+
+```mermaid
+graph TB
+    subgraph Client["客户端"]
+        REST["REST API<br/>?lang=zh-Hans/zh-Hant"]
+        GQL["GraphQL<br/>lang: ZH_HANS/ZH_HANT"]
+    end
+
+    subgraph Server["API Server (Gin)"]
+        Router["Router + Middleware<br/>Rate Limit / CORS"]
+        Handlers["REST Handlers"]
+        Resolvers["GraphQL Resolvers"]
+        Logger["Structured Logging<br/>(zap)"]
+    end
+
+    subgraph Core["Core Layer"]
+        Repo["Repository<br/>WithLang()"]
+        Search["Search Engine<br/>LIKE Search"]
+        Cache["Cache Layer"]
+    end
+
+    subgraph Database["SQLite Database"]
+        Hans["*_zh_hans Tables<br/>简体中文"]
+        Hant["*_zh_hant Tables<br/>繁体中文"]
+    end
+
+    REST --> Router --> Handlers --> Repo
+    GQL --> Router --> Resolvers --> Repo
+    Handlers --> Search
+    Resolvers --> Search
+    Repo --> Hans
+    Repo --> Hant
+    Server --> Logger
+```
+
 ## ✨ 特性
 
 - 🚀 **高性能**: Go 语言编写，支持并发处理，性能优化（简繁转换 ~300ns/op）
-- 📚 **海量数据**: 包含唐诗、宋词、元曲等数十万首诗词
-- 🔍 **强大搜索**: 支持全文搜索、拼音搜索、模糊搜索
-- 🌏 **双语支持**: 同时提供简体和繁体中文版本
+- 📚 **海量数据**: 包含唐诗、宋词、元曲等近40万首诗词
+- 🔍 **强大搜索**: 支持全文搜索、标题/内容/作者分类搜索
+- 🌏 **双语支持**: 同一数据库同时存储简体和繁体中文，通过 `?lang=` 参数切换
 - 🎯 **多种接口**: REST API 和 GraphQL 双接口支持
 - 🛡️ **限流保护**: 内置 IP 限流，防止滥用
 - 🐳 **容器化**: Docker 镜像开箱即用，支持多架构（amd64/arm64）
 - 📊 **智能分类**: 按朝代、作者、诗词类型自动分类
+- 📝 **结构化日志**: 使用 zap 高性能日志库
 - ✅ **高质量代码**: 完整的单元测试、性能测试、模糊测试
 
 ## 📖 数据集
 
 本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，包含:
 
-- 唐诗 5.5万+ 首
-- 宋诗 26万+ 首
-- 宋词 2.1万+ 首
-- 元曲、五代诗词、诗经、楚辞等
+|   分类   | 数量  |
+| :------: | :---: |
+| 五言绝句 | 18895 |
+| 七言绝句 | 85032 |
+| 五言律诗 | 71400 |
+| 七言律诗 | 69028 |
+|  乐府诗  | 9315  |
+|  五代词  |  543  |
+|   宋词   | 21369 |
+|   元曲   | 10905 |
+|   诗经   |  305  |
+|   楚辞   |  65   |
+|   论语   |  20   |
+| 四书五经 |  14   |
+|   其他   | 96232 |
 
 ## 🚀 快速开始
 
@@ -57,150 +105,90 @@ make process-data  # 处理数据
 make run-server    # 启动服务
 ```
 
-所有命令详见 [Makefile](Makefile)。
-
 ## 📡 API 使用
+
+### 多语言支持
+
+所有接口支持 `lang` 参数切换简繁体：
+
+| 参数值 | 说明 |
+|:------:|:----:|
+| `zh-Hans` | 简体中文（默认） |
+| `zh-Hant` | 繁体中文 |
 
 ### REST API
 
-#### 健康检查
 ```bash
-curl http://localhost:1279/api/v1/health
-```
+# 简体中文（默认）
+curl "http://localhost:1279/api/v1/poems"
 
-#### 搜索诗词
-```bash
-# 全文搜索
+# 繁体中文
+curl "http://localhost:1279/api/v1/poems?lang=zh-Hant"
+
+# 搜索诗词
 curl "http://localhost:1279/api/v1/poems/search?q=静夜思"
 
-# 按标题搜索
-curl "http://localhost:1279/api/v1/poems/search?q=静夜思&type=title"
+# 随机诗词
+curl "http://localhost:1279/api/v1/poems/random"
 
-# 按作者搜索
-curl "http://localhost:1279/api/v1/poems/search?q=李白&type=author"
-
-# 拼音搜索
-curl "http://localhost:1279/api/v1/poems/search?q=jingye&type=pinyin"
-```
-
-#### 获取单首诗词
-```bash
-curl http://localhost:1279/api/v1/poems/12345678901234
-```
-
-#### 随机诗词
-```bash
-curl http://localhost:1279/api/v1/poems/random
-```
-
-#### 获取作者列表
-```bash
+# 作者列表
 curl "http://localhost:1279/api/v1/authors?page=1&page_size=20"
-```
 
-#### 获取朝代列表
-```bash
-curl http://localhost:1279/api/v1/dynasties
+# 朝代列表
+curl "http://localhost:1279/api/v1/dynasties"
 ```
 
 ### GraphQL API
 
-`http://localhost:1279/graphql`
-
-#### 查询示例
-
-#### 搜索诗词
+端点: `http://localhost:1279/graphql`
 
 ```graphql
+# 繁体中文查询
 query {
-  searchPoems(query: "静夜思", searchType: TITLE) {
+  poems(lang: ZH_HANT, pageSize: 10) {
     edges {
       node {
         title
-        paragraphs
+        content
         author { name }
       }
     }
     totalCount
   }
 }
-```
 
-#### 获取作者及其诗词
-
-```graphql
+# 搜索诗词
 query {
-  author(id: "1") {
-    name
-    dynasty { name }
-    poems(page: 1, pageSize: 10) {
-      edges {
-        node {
-          title
-          paragraphs
-        }
-      }
+  searchPoems(query: "静夜思", searchType: TITLE) {
+    edges {
+      node { title author { name } }
     }
   }
 }
-```
 
-#### 获取统计信息
-
-```graphql
+# 统计信息
 query {
   statistics {
     totalPoems
     totalAuthors
-    totalDynasties
-    poemsByDynasty {
-      dynasty { name }
-      count
-    }
+    poemsByDynasty { dynasty { name } count }
   }
 }
 ```
 
 ## 🔍 搜索功能
 
-### 1. 全文搜索
-支持标题、内容、作者名的 LIKE 模糊搜索
-
-### 2. 拼音搜索
-- 完整拼音: `jing ye si` → 静夜思
-- 拼音缩写: `jys` → 静夜思
-- 作者拼音: `libai` → 李白
-
-### 3. 智能检测
-自动识别查询是中文还是拼音（>50% ASCII 字母判定为拼音）
-
-### 4. 搜索类型
-- `all`: 全文搜索（默认）
-- `title`: 标题搜索
-- `content`: 内容搜索
-- `author`: 作者搜索
-- `pinyin`: 拼音搜索
-
-## 🏷️ 诗词分类
-
-### 按朝代
-- 唐、宋、元、五代
-- 先秦、两汉、魏晋、南北朝、隋、清
-
-### 按类型（自动识别）
-- **绝句**: 五言绝句（4行5字）、七言绝句（4行7字）
-- **律诗**: 五言律诗（8行5字）、七言律诗（8行7字）
-- **词**: 有词牌名（rhythmic 字段）
-- **其他**: 不规则形式
+| 类型 | 说明 | 示例 |
+|:----:|:----:|:----:|
+| `all` | 全文搜索（默认） | `?q=月` |
+| `title` | 标题搜索 | `?q=静夜思&type=title` |
+| `content` | 内容搜索 | `?q=床前明月光&type=content` |
+| `author` | 作者搜索 | `?q=李白&type=author` |
 
 ## 🙏 致谢
 
 - 数据来源: [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry)
 - 简繁转换: [gocc](https://github.com/liuzl/gocc)
-- 拼音转换: [go-pinyin](https://github.com/mozillazg/go-pinyin)
-- Web 框架: [Gin](https://github.com/gin-gonic/gin)
-- GraphQL: [gqlgen](https://github.com/99designs/gqlgen)
-- ORM: [GORM](https://gorm.io/)
 
 ## 📮 联系方式
 
