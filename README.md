@@ -17,42 +17,6 @@
 
 基于 Go 语言的高性能中国古诗词 API 服务，支持 REST 和 GraphQL 接口，提供简体/繁体中文、拼音搜索等功能。
 
-## 🏗️ 系统架构
-
-```mermaid
-graph TB
-    subgraph Client["客户端"]
-        REST["REST API<br/>?lang=zh-Hans/zh-Hant"]
-        GQL["GraphQL<br/>lang: ZH_HANS/ZH_HANT"]
-    end
-
-    subgraph Server["API Server (Gin)"]
-        Router["Router + Middleware<br/>Rate Limit / CORS"]
-        Handlers["REST Handlers"]
-        Resolvers["GraphQL Resolvers"]
-        Logger["Structured Logging<br/>(zap)"]
-    end
-
-    subgraph Core["Core Layer"]
-        Repo["Repository<br/>WithLang()"]
-        Search["Search Engine<br/>LIKE Search"]
-        Cache["Cache Layer"]
-    end
-
-    subgraph Database["SQLite Database"]
-        Hans["*_zh_hans Tables<br/>简体中文"]
-        Hant["*_zh_hant Tables<br/>繁体中文"]
-    end
-
-    REST --> Router --> Handlers --> Repo
-    GQL --> Router --> Resolvers --> Repo
-    Handlers --> Search
-    Resolvers --> Search
-    Repo --> Hans
-    Repo --> Hant
-    Server --> Logger
-```
-
 ## ✨ 特性
 
 - 🚀 **高性能**: Go 语言编写，支持并发处理，性能优化（简繁转换 ~300ns/op）
@@ -65,26 +29,6 @@ graph TB
 - 📊 **智能分类**: 按朝代、作者、诗词类型自动分类
 - 📝 **结构化日志**: 使用 zap 高性能日志库
 - ✅ **高质量代码**: 完整的单元测试、性能测试、模糊测试
-
-## 📖 数据集
-
-本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，包含:
-
-|   分类   | 数量  |
-| :------: | :---: |
-| 五言绝句 | 18895 |
-| 七言绝句 | 85032 |
-| 五言律诗 | 71400 |
-| 七言律诗 | 69028 |
-|  乐府诗  | 9315  |
-|  五代词  |  543  |
-|   宋词   | 21369 |
-|   元曲   | 10905 |
-|   诗经   |  305  |
-|   楚辞   |  65   |
-|   论语   |  20   |
-| 四书五经 |  14   |
-|   其他   | 96232 |
 
 ## 🚀 快速开始
 
@@ -184,6 +128,63 @@ query {
 | `title` | 标题搜索 | `?q=静夜思&type=title` |
 | `content` | 内容搜索 | `?q=床前明月光&type=content` |
 | `author` | 作者搜索 | `?q=李白&type=author` |
+
+## 📖 数据集
+
+本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，包含:
+
+|   分类   | 数量  |
+| :------: | :---: |
+| 五言绝句 | 18895 |
+| 七言绝句 | 85032 |
+| 五言律诗 | 71400 |
+| 七言律诗 | 69028 |
+|  乐府诗  | 9315  |
+|  五代词  |  543  |
+|   宋词   | 21369 |
+|   元曲   | 10905 |
+|   诗经   |  305  |
+|   楚辞   |  65   |
+|   论语   |  20   |
+| 四书五经 |  14   |
+|   其他   | 96232 |
+
+
+## 🏗️ 系统架构
+
+```mermaid
+graph TB
+    subgraph Client["客户端"]
+        REST["REST API<br/>?lang=zh-Hans/zh-Hant"]
+        GQL["GraphQL<br/>lang: ZH_HANS/ZH_HANT"]
+    end
+
+    subgraph Server["API Server (Gin)"]
+        Router["Router + Middleware<br/>Rate Limit / CORS"]
+        Handlers["REST Handlers"]
+        Resolvers["GraphQL Resolvers"]
+        Logger["Structured Logging<br/>(zap)"]
+    end
+
+    subgraph Core["Core Layer"]
+        Repo["Repository<br/>WithLang()"]
+        Search["Search Engine<br/>LIKE Search"]
+        Cache["Cache Layer"]
+    end
+
+    subgraph Database["SQLite Database"]
+        Hans["*_zh_hans Tables<br/>简体中文"]
+        Hant["*_zh_hant Tables<br/>繁体中文"]
+    end
+
+    REST --> Router --> Handlers --> Repo
+    GQL --> Router --> Resolvers --> Repo
+    Handlers --> Search
+    Resolvers --> Search
+    Repo --> Hans
+    Repo --> Hant
+    Server --> Logger
+```
 
 ## 🙏 致谢
 
