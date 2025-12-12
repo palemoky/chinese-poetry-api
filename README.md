@@ -7,7 +7,7 @@
 </h2>
 
 [![Docker Image](https://img.shields.io/docker/v/palemoky/chinese-poetry-api?sort=semver&label=docker)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
-[![Docker Image Size](https://img.shields.io/docker/image-size/palemoky/paper-pi/latest)](https://hub.docker.com/r/palemoky/paper-pi)
+[![Docker Image Size](https://img.shields.io/docker/image-size/palemoky/chinese-poetry-api/latest)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
 [![Go Report Card](https://goreportcard.com/badge/github.com/palemoky/chinese-poetry-api)](https://goreportcard.com/report/github.com/palemoky/chinese-poetry-api)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/palemoky/chinese-poetry-api)](https://github.com/palemoky/chinese-poetry-api/blob/main/go.mod)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
