@@ -2,12 +2,14 @@ package database
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
+	"go.uber.org/zap"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/palemoky/chinese-poetry-api/internal/logger"
 )
 
 // RepositoryInterface defines the interface for repository operations
@@ -190,8 +192,11 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 		)
 	}
 
-	log.Printf("[Database] Starting batch insertion: %d poems in %d transactions (batch size: %d)",
-		len(poems), totalTransactions, batchSize)
+	logger.Info("Starting batch insertion",
+		zap.Int("poems", len(poems)),
+		zap.Int("transactions", totalTransactions),
+		zap.Int("batch_size", batchSize),
+	)
 
 	// Process poems in large transaction chunks
 	for i := 0; i < len(poems); i += transactionSize {

@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -13,11 +12,14 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+
 	"github.com/palemoky/chinese-poetry-api/internal/api/rest"
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
+	"github.com/palemoky/chinese-poetry-api/internal/logger"
 	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
@@ -40,21 +42,27 @@ func playgroundHandler() gin.HandlerFunc {
 }
 
 func main() {
+	// Initialize logger
+	debug := os.Getenv("GIN_MODE") != "release"
+	logger.Init(debug)
+	defer logger.Sync()
+
 	// Load configuration
 	cfg, err := config.Load("config.yaml")
 	if err != nil {
-		log.Printf("Warning: failed to load config file: %v, using defaults", err)
+		logger.Warn("Failed to load config file, using defaults", zap.Error(err))
 		cfg, _ = config.Load("")
 	}
 
-	log.Printf("Starting Chinese Poetry API server...")
-	log.Printf("Database: %s", cfg.Database.Path)
-	log.Printf("Port: %d", cfg.Server.Port)
+	logger.Info("Starting Chinese Poetry API server",
+		zap.String("database", cfg.Database.Path),
+		zap.Int("port", cfg.Server.Port),
+	)
 
 	// Open database
 	db, err := database.Open(cfg.Database.Path)
 	if err != nil {
-		log.Fatalf("Failed to open database: %v", err)
+		logger.Fatal("Failed to open database", zap.Error(err))
 	}
 	defer func() { _ = db.Close() }()
 
@@ -74,7 +82,7 @@ func main() {
 	router.POST("/graphql", graphqlHandler(resolver))
 	if cfg.GraphQL.Playground {
 		router.GET("/playground", playgroundHandler())
-		log.Println("GraphQL Playground enabled at /playground")
+		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))
 	}
 
 	// Create HTTP server
@@ -85,15 +93,14 @@ func main() {
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("Server listening on port %d", cfg.Server.Port)
-		log.Printf("REST API: http://localhost:%d/api/v1", cfg.Server.Port)
-		log.Printf("GraphQL: http://localhost:%d/graphql", cfg.Server.Port)
-		if cfg.GraphQL.Playground {
-			log.Printf("Playground: http://localhost:%d/playground", cfg.Server.Port)
-		}
+		logger.Info("Server started",
+			zap.Int("port", cfg.Server.Port),
+			zap.String("rest_api", fmt.Sprintf("http://localhost:%d/api/v1", cfg.Server.Port)),
+			zap.String("graphql", fmt.Sprintf("http://localhost:%d/graphql", cfg.Server.Port)),
+		)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+			logger.Fatal("Failed to start server", zap.Error(err))
 		}
 	}()
 
@@ -102,15 +109,15 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	logger.Info("Shutting down server...")
 
 	// Graceful shutdown with timeout
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	if err := srv.Shutdown(ctx); err != nil {
-		log.Printf("Server forced to shutdown: %v", err)
+		logger.Warn("Server forced to shutdown", zap.Error(err))
 	}
 
-	log.Println("Server exited")
+	logger.Info("Server exited")
 }

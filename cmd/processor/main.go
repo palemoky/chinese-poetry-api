@@ -2,14 +2,15 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/loader"
+	"github.com/palemoky/chinese-poetry-api/internal/logger"
 	"github.com/palemoky/chinese-poetry-api/internal/processor"
 )
 
@@ -21,6 +22,10 @@ var (
 )
 
 func main() {
+	// Initialize logger (always debug mode for processor)
+	logger.Init(true)
+	defer logger.Sync()
+
 	rootCmd := &cobra.Command{
 		Use:   "processor",
 		Short: "Chinese Poetry Data Processor",
@@ -34,7 +39,7 @@ func main() {
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to datas.json config file (default: <input>/loader/datas.json)")
 
 	if err := rootCmd.Execute(); err != nil {
-		log.Fatal(err)
+		logger.Fatal("Command execution failed", zap.Error(err))
 	}
 }
 
@@ -44,7 +49,7 @@ func run(cmd *cobra.Command, args []string) error {
 		configPath = filepath.Join(inputDir, "loader", "datas.json")
 	}
 
-	log.Printf("Loading poetry data from %s...", configPath)
+	logger.Info("Loading poetry data", zap.String("config", configPath))
 
 	// Load all poetry data
 	jsonLoader, err := loader.NewJSONLoader(configPath)
@@ -57,20 +62,19 @@ func run(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to load poems: %w", err)
 	}
 
-	log.Printf("Loaded %d poems from JSON files", len(poems))
+	logger.Info("Loaded poems from JSON files", zap.Int("count", len(poems)))
 
 	// Process unified database with both language variants
-	log.Println("\n=== Processing Unified Database ===")
+	logger.Info("Processing unified database")
 	if err := processUnifiedDatabase(outputDB, poems, workers); err != nil {
 		return fmt.Errorf("failed to process database: %w", err)
 	}
 
-	log.Println("\n=== Processing Complete ===")
-	log.Printf("Unified database: %s", outputDB)
+	logger.Info("Processing complete", zap.String("database", outputDB))
 
 	// Print statistics
 	if err := printStatistics(outputDB); err != nil {
-		log.Printf("Warning: failed to print statistics: %v", err)
+		logger.Warn("Failed to print statistics", zap.Error(err))
 	}
 
 	return nil
@@ -90,13 +94,13 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 	defer func() { _ = db.Close() }()
 
 	// Run migrations - creates tables for both language variants
-	log.Println("Creating database schema (simplified + traditional tables)...")
+	logger.Info("Creating database schema (simplified + traditional tables)")
 	if err := db.Migrate(); err != nil {
 		return fmt.Errorf("failed to migrate database: %w", err)
 	}
 
 	// Process simplified Chinese version
-	log.Println("\n--- Processing Simplified Chinese (zh-Hans) ---")
+	logger.Info("Processing language variant", zap.String("lang", "zh-Hans"))
 	repoSimp := database.NewRepositoryWithLang(db, database.LangHans)
 	procSimp := processor.NewProcessor(repoSimp, workers, false)
 	if err := procSimp.Process(poems); err != nil {
@@ -104,7 +108,7 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 	}
 
 	// Process traditional Chinese version
-	log.Println("\n--- Processing Traditional Chinese (zh-Hant) ---")
+	logger.Info("Processing language variant", zap.String("lang", "zh-Hant"))
 	repoTrad := database.NewRepositoryWithLang(db, database.LangHant)
 	procTrad := processor.NewProcessor(repoTrad, workers, true)
 	if err := procTrad.Process(poems); err != nil {
@@ -112,13 +116,13 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 	}
 
 	// Optimize database
-	log.Println("Optimizing database...")
+	logger.Info("Optimizing database")
 	if err := db.Exec("VACUUM").Error; err != nil {
-		log.Printf("Warning: failed to vacuum database: %v", err)
+		logger.Warn("Failed to vacuum database", zap.Error(err))
 	}
 
 	if err := db.Exec("ANALYZE").Error; err != nil {
-		log.Printf("Warning: failed to analyze database: %v", err)
+		logger.Warn("Failed to analyze database", zap.Error(err))
 	}
 
 	return nil

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"log"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -13,11 +12,13 @@ import (
 
 	"github.com/vbauerster/mpb/v8"
 	"github.com/vbauerster/mpb/v8/decor"
+	"go.uber.org/zap"
 	"gorm.io/datatypes"
 
 	"github.com/palemoky/chinese-poetry-api/internal/classifier"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/loader"
+	"github.com/palemoky/chinese-poetry-api/internal/logger"
 )
 
 const (
@@ -95,7 +96,11 @@ func (p *Processor) SetBatchSize(size int) {
 // Process processes all poems with concurrent workers and batch insertion
 func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	total := len(poems)
-	log.Printf("Processing %d poems with %d workers (batch size: %d)...\n", total, p.workers, p.batchSize)
+	logger.Info("Processing poems",
+		zap.Int("total", total),
+		zap.Int("workers", p.workers),
+		zap.Int("batch_size", p.batchSize),
+	)
 
 	// Create progress container
 	progress := mpb.New(
@@ -214,18 +219,20 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	failCount := errorCount.Load()
 
 	if failCount > 0 {
-		log.Printf("✓ Successfully processed: %d/%d poems", successCount-failCount, total)
-		log.Printf("✗ Failed: %d poems", failCount)
+		logger.Warn("Processing completed with errors",
+			zap.Int64("success", successCount-failCount),
+			zap.Int64("failed", failCount),
+			zap.Int("total", total),
+		)
 		if len(errors) > 0 {
-			log.Printf("Sample errors (showing %d):", min(len(errors), SampleErrorCount))
 			for i := range min(len(errors), SampleErrorCount) {
-				log.Printf("  %d. %v", i+1, errors[i])
+				logger.Debug("Sample error", zap.Int("index", i+1), zap.Error(errors[i]))
 			}
 		}
 		return fmt.Errorf("processing completed with %d errors", failCount)
 	}
 
-	log.Printf("✓ Successfully processed all %d poems", total)
+	logger.Info("Processing completed successfully", zap.Int("total", total))
 	return nil
 }
 
@@ -246,7 +253,7 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 		return nil
 	}
 
-	log.Printf("[Batch Inserter] Collected %d poems, starting transaction-based insertion...", len(allPoems))
+	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)))
 
 	// Create a new progress container for insertion
 	progress := mpb.New(
@@ -268,7 +275,7 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 		return fmt.Errorf("failed to insert poems with transactions: %w", err)
 	}
 
-	log.Printf("[Batch Inserter] Successfully inserted %d poems using large transactions", len(allPoems))
+	logger.Info("Batch insertion complete", zap.Int("inserted", len(allPoems)))
 	return nil
 }
 

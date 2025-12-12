@@ -64,6 +64,12 @@ func Open(path string) (*DB, error) {
 	return &DB{db}, nil
 }
 
+// NewDBFromGorm wraps an existing gorm.DB connection.
+// This is useful for testing with custom database configurations.
+func NewDBFromGorm(db *gorm.DB) *DB {
+	return &DB{db}
+}
+
 // Migrate creates all tables, indexes, and initial data for both language variants
 func (db *DB) Migrate() error {
 	// Create metadata table first

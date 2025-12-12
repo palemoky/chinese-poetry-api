@@ -25,7 +25,6 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
-	Type string `mapstructure:"type"` // simplified or traditional
 	Path string `mapstructure:"path"`
 }
 
@@ -89,7 +88,6 @@ func Load(configPath string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "release")
-	v.SetDefault("database.type", "simplified")
 	v.SetDefault("download.enabled", true)
 	v.SetDefault("download.release_version", "latest")
 	v.SetDefault("rate_limit.enabled", true)
@@ -147,10 +145,6 @@ func (c *Config) Validate() error {
 
 	if c.Server.Mode != "debug" && c.Server.Mode != "release" && c.Server.Mode != "test" {
 		return fmt.Errorf("invalid server mode: %s (must be 'debug', 'release', or 'test')", c.Server.Mode)
-	}
-
-	if c.Database.Type != "simplified" && c.Database.Type != "traditional" && c.Database.Type != "both" {
-		return fmt.Errorf("invalid database mode: %s (must be 'simplified', 'traditional', or 'both')", c.Database.Type)
 	}
 
 	if c.Database.Path == "" {
