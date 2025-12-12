@@ -2,7 +2,6 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -23,34 +22,21 @@ func NewAuthorHandler(repo *database.Repository) *AuthorHandler {
 func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 	pagination := ParsePagination(c)
 
-	// Get authors from database
 	authors, err := h.repo.GetAuthorsWithStats(pagination.PageSize, pagination.Offset())
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch authors"})
+		respondError(c, http.StatusInternalServerError, "Failed to fetch authors")
 		return
 	}
 
-	// Get total count
 	total, err := h.repo.CountAuthors()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count authors"})
+		respondError(c, http.StatusInternalServerError, "Failed to count authors")
 		return
 	}
 
-	// Map to response format
 	data := make([]map[string]any, len(authors))
 	for i, author := range authors {
-		dynastyName := ""
-		if author.Dynasty != nil {
-			dynastyName = author.Dynasty.Name
-		}
-
-		data[i] = map[string]any{
-			"id":         author.ID,
-			"name":       author.Name,
-			"dynasty":    dynastyName,
-			"poem_count": author.PoemCount,
-		}
+		data[i] = formatAuthorWithStats(&author)
 	}
 
 	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
@@ -58,29 +44,16 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 
 // GetAuthor returns a specific author by ID
 func (h *AuthorHandler) GetAuthor(c *gin.Context) {
-	idStr := c.Param("id")
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid author ID"})
+	id, ok := parseID(c, "id", "author")
+	if !ok {
 		return
 	}
 
 	author, err := h.repo.GetAuthorByID(id)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Author not found"})
+		respondError(c, http.StatusNotFound, "Author not found")
 		return
 	}
 
-	dynastyName := ""
-	if author.Dynasty != nil {
-		dynastyName = author.Dynasty.Name
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"data": map[string]any{
-			"id":      author.ID,
-			"name":    author.Name,
-			"dynasty": dynastyName,
-		},
-	})
+	respondOK(c, formatAuthor(author))
 }
