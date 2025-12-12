@@ -24,16 +24,12 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *database.Repository, *gorm.DB)
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	// Auto migrate
-	err = gormDB.AutoMigrate(
-		&database.Dynasty{},
-		&database.Author{},
-		&database.PoetryType{},
-		&database.Poem{},
-	)
+	db := &database.DB{DB: gormDB}
+
+	// Use Migrate() to create language-specific tables
+	err = db.Migrate()
 	require.NoError(t, err)
 
-	db := &database.DB{DB: gormDB}
 	repo := database.NewRepository(db)
 
 	router := gin.New()

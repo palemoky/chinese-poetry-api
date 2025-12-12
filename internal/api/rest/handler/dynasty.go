@@ -19,8 +19,12 @@ func NewDynastyHandler(repo *database.Repository) *DynastyHandler {
 }
 
 // ListDynasties returns a list of dynasties
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *DynastyHandler) ListDynasties(c *gin.Context) {
-	dynasties, err := h.repo.GetDynastiesWithStats()
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
+	dynasties, err := repo.GetDynastiesWithStats()
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to fetch dynasties")
 		return
@@ -35,13 +39,17 @@ func (h *DynastyHandler) ListDynasties(c *gin.Context) {
 }
 
 // GetDynasty returns a specific dynasty by ID
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *DynastyHandler) GetDynasty(c *gin.Context) {
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
 	id, ok := parseID(c, "id", "dynasty")
 	if !ok {
 		return
 	}
 
-	dynasty, err := h.repo.GetDynastyByID(id)
+	dynasty, err := repo.GetDynastyByID(id)
 	if err != nil {
 		respondError(c, http.StatusNotFound, "Dynasty not found")
 		return

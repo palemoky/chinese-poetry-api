@@ -19,8 +19,12 @@ func NewPoetryTypeHandler(repo *database.Repository) *PoetryTypeHandler {
 }
 
 // ListPoetryTypes returns a list of poetry types
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *PoetryTypeHandler) ListPoetryTypes(c *gin.Context) {
-	types, err := h.repo.GetPoetryTypesWithStats()
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
+	types, err := repo.GetPoetryTypesWithStats()
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "Failed to fetch poetry types")
 		return
@@ -35,13 +39,17 @@ func (h *PoetryTypeHandler) ListPoetryTypes(c *gin.Context) {
 }
 
 // GetPoetryType returns a specific poetry type by ID
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *PoetryTypeHandler) GetPoetryType(c *gin.Context) {
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
 	id, ok := parseID(c, "id", "poetry type")
 	if !ok {
 		return
 	}
 
-	poetryType, err := h.repo.GetPoetryTypeByID(id)
+	poetryType, err := repo.GetPoetryTypeByID(id)
 	if err != nil {
 		respondError(c, http.StatusNotFound, "Poetry type not found")
 		return

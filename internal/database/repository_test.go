@@ -10,15 +10,28 @@ import (
 )
 
 // setupTestDB creates an in-memory SQLite database for testing
+// Creates language-specific tables (zh_hans) for the default language
 func setupTestDB(t *testing.T) *DB {
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err, "Failed to create test database")
 
-	// Run migrations
-	err = gormDB.AutoMigrate(&Dynasty{}, &Author{}, &PoetryType{}, &Poem{})
+	db := &DB{DB: gormDB}
+
+	// Create tables for default language (zh_hans)
+	err = db.migrateTablesForLang(LangHans)
 	require.NoError(t, err, "Failed to run migrations")
 
-	return &DB{DB: gormDB}
+	return db
+}
+
+// createTestPoem is a helper to create poems in tests using dynamic table names
+func createTestPoem(repo *Repository, poem *Poem) error {
+	return repo.db.Table(repo.poemsTable()).Create(poem).Error
+}
+
+// createTestPoetryType is a helper to create poetry types in tests using dynamic table names
+func createTestPoetryType(repo *Repository, ptype *PoetryType) error {
+	return repo.db.Table(repo.poetryTypesTable()).Create(ptype).Error
 }
 
 func TestNewRepository(t *testing.T) {
@@ -120,12 +133,12 @@ func TestGetPoetryTypeID(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewRepository(db)
 
-	// First, create a poetry type for testing
+	// First, create a poetry type for testing using dynamic table name
 	poetryType := &PoetryType{
 		Name:     "五言绝句",
 		Category: "诗",
 	}
-	err := db.Create(poetryType).Error
+	err := db.Table(repo.poetryTypesTable()).Create(poetryType).Error
 	require.NoError(t, err, "Failed to create test poetry type")
 
 	tests := []struct {

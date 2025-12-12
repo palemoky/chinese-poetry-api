@@ -119,35 +119,9 @@ func bindEnvVars(v *viper.Viper) {
 	// Hardcoded data directory (matches docker-compose volume mount)
 	dataDir := "data"
 
-	// Database
-	if dbMode := os.Getenv("DATABASE_MODE"); dbMode != "" {
-		// Convert numeric values to string (0=both, 1=simplified, 2=traditional)
-		var modeStr string
-		switch dbMode {
-		case "0":
-			modeStr = "both"
-		case "1":
-			modeStr = "simplified"
-		case "2":
-			modeStr = "traditional"
-		default:
-			// Invalid value, use default
-			modeStr = "simplified"
-		}
-
-		v.Set("database.type", modeStr)
-		// Update path based on mode (for simplified/traditional only)
-		if modeStr != "both" {
-			v.Set("database.path", fmt.Sprintf("%s/poetry-%s.db", dataDir, modeStr))
-		}
-	} else {
-		// Use default path with data directory
-		dbType := v.GetString("database.type")
-		if dbType == "" {
-			dbType = "simplified"
-		}
-		v.Set("database.path", fmt.Sprintf("%s/poetry-%s.db", dataDir, dbType))
-	}
+	// Database - use unified poetry.db (contains both simplified and traditional tables)
+	// The lang parameter in API requests determines which tables to query
+	v.Set("database.path", fmt.Sprintf("%s/poetry.db", dataDir))
 
 	// Rate Limit
 	if enabled := os.Getenv("RATE_LIMIT_ENABLED"); enabled != "" {

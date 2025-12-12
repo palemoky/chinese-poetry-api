@@ -71,7 +71,7 @@ func (r *poetryTypeResolver) PoemCount(ctx context.Context, obj *database.Poetry
 }
 
 // Poem is the resolver for the poem field.
-func (r *queryResolver) Poem(ctx context.Context, id string) (*database.Poem, error) {
+func (r *queryResolver) Poem(ctx context.Context, id string, lang *database.Lang) (*database.Poem, error) {
 	poem, err := r.Repo.GetPoemByID(id)
 	if err != nil {
 		return nil, err
@@ -80,7 +80,7 @@ func (r *queryResolver) Poem(ctx context.Context, id string) (*database.Poem, er
 }
 
 // Poems is the resolver for the poems field.
-func (r *queryResolver) Poems(ctx context.Context, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
+func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
 	pag := parsePagination(page, pageSize)
 
 	// Parse filter IDs
@@ -106,7 +106,7 @@ func (r *queryResolver) Poems(ctx context.Context, page *int, pageSize *int, dyn
 }
 
 // SearchPoems is the resolver for the searchPoems field.
-func (r *queryResolver) SearchPoems(ctx context.Context, query string, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error) {
+func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error) {
 	p := 1
 	if page != nil {
 		p = *page
@@ -154,10 +154,11 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, searchTyp
 }
 
 // RandomPoem is the resolver for the randomPoem field.
-func (r *queryResolver) RandomPoem(ctx context.Context, dynastyID *string, typeID *string) (*database.Poem, error) {
-	// Simple random query
+func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error) {
+	// Simple random query - use dynamic table name
+	poemTable := database.PoemsTable(database.LangHans)
 	var id string
-	if err := r.DB.Raw(`SELECT id FROM poems ORDER BY RANDOM() LIMIT 1`).Scan(&id).Error; err != nil {
+	if err := r.DB.Raw(`SELECT id FROM ` + poemTable + ` ORDER BY RANDOM() LIMIT 1`).Scan(&id).Error; err != nil {
 		return nil, err
 	}
 
@@ -169,22 +170,18 @@ func (r *queryResolver) RandomPoem(ctx context.Context, dynastyID *string, typeI
 }
 
 // Author is the resolver for the author field.
-func (r *queryResolver) Author(ctx context.Context, id string) (*database.Author, error) {
+func (r *queryResolver) Author(ctx context.Context, id string, lang *database.Lang) (*database.Author, error) {
 	authorID, err := strconv.ParseInt(id, 10, 64)
 	if err != nil {
 		return nil, err
 	}
 
-	var author database.Author
-	err = r.DB.Preload("Dynasty").First(&author, authorID).Error
-	if err != nil {
-		return nil, err
-	}
-	return &author, nil
+	// Use Repository method which handles dynamic table names
+	return r.Repo.GetAuthorByID(authorID)
 }
 
 // Authors is the resolver for the authors field.
-func (r *queryResolver) Authors(ctx context.Context, page *int, pageSize *int, dynastyID *string) (*database.AuthorConnection, error) {
+func (r *queryResolver) Authors(ctx context.Context, lang *database.Lang, page *int, pageSize *int, dynastyID *string) (*database.AuthorConnection, error) {
 	pag := parsePagination(page, pageSize)
 
 	dynastyIDInt, err := parseOptionalID(dynastyID)
@@ -201,9 +198,10 @@ func (r *queryResolver) Authors(ctx context.Context, page *int, pageSize *int, d
 }
 
 // Dynasties is the resolver for the dynasties field.
-func (r *queryResolver) Dynasties(ctx context.Context) ([]*database.Dynasty, error) {
+func (r *queryResolver) Dynasties(ctx context.Context, lang *database.Lang) ([]*database.Dynasty, error) {
 	var dynasties []*database.Dynasty
-	err := r.DB.Order("id").Find(&dynasties).Error
+	// Use default language (simplified) for now - TODO: add lang parameter
+	err := r.DB.Table(database.DynastiesTable(database.LangHans)).Order("id").Find(&dynasties).Error
 	if err != nil {
 		return nil, err
 	}
@@ -211,9 +209,10 @@ func (r *queryResolver) Dynasties(ctx context.Context) ([]*database.Dynasty, err
 }
 
 // PoemTypes is the resolver for the poemTypes field.
-func (r *queryResolver) PoemTypes(ctx context.Context) ([]*database.PoetryType, error) {
+func (r *queryResolver) PoemTypes(ctx context.Context, lang *database.Lang) ([]*database.PoetryType, error) {
 	var types []*database.PoetryType
-	err := r.DB.Order("id").Find(&types).Error
+	// Use default language (simplified) for now - TODO: add lang parameter
+	err := r.DB.Table(database.PoetryTypesTable(database.LangHans)).Order("id").Find(&types).Error
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +220,7 @@ func (r *queryResolver) PoemTypes(ctx context.Context) ([]*database.PoetryType, 
 }
 
 // Statistics is the resolver for the statistics field.
-func (r *queryResolver) Statistics(ctx context.Context) (*database.Statistics, error) {
+func (r *queryResolver) Statistics(ctx context.Context, lang *database.Lang) (*database.Statistics, error) {
 	return r.Repo.GetStatistics()
 }
 

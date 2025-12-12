@@ -64,20 +64,9 @@ func Open(path string) (*DB, error) {
 	return &DB{db}, nil
 }
 
-// Migrate creates all tables, indexes, and initial data
-// convertToTraditional: if true, convert initial data to traditional Chinese
-func (db *DB) Migrate(convertToTraditional bool) error {
-	// Use GORM AutoMigrate for standard tables
-	if err := db.AutoMigrate(
-		&Dynasty{},
-		&Author{},
-		&PoetryType{},
-		&Poem{},
-	); err != nil {
-		return fmt.Errorf("failed to auto-migrate: %w", err)
-	}
-
-	// Create metadata table manually (not a model)
+// Migrate creates all tables, indexes, and initial data for both language variants
+func (db *DB) Migrate() error {
+	// Create metadata table first
 	if err := db.Exec(`CREATE TABLE IF NOT EXISTS metadata (
 		key TEXT PRIMARY KEY,
 		value TEXT NOT NULL,
@@ -86,33 +75,16 @@ func (db *DB) Migrate(convertToTraditional bool) error {
 		return fmt.Errorf("failed to create metadata table: %w", err)
 	}
 
-	// Prepare initial data SQL (convert if needed)
-	dynastiesSQL := InitialDynastiesSQL
-	poetryTypesSQL := InitialPoetryTypesSQL
-
-	if convertToTraditional {
-		// Convert dynasties to traditional Chinese
-		var err error
-		dynastiesSQL, err = convertSQLToTraditional(InitialDynastiesSQL)
-		if err != nil {
-			return fmt.Errorf("failed to convert dynasties SQL: %w", err)
+	// Create tables for both language variants
+	for _, lang := range []Lang{LangHans, LangHant} {
+		if err := db.migrateTablesForLang(lang); err != nil {
+			return fmt.Errorf("failed to migrate tables for %s: %w", lang, err)
 		}
 
-		// Convert poetry types to traditional Chinese
-		poetryTypesSQL, err = convertSQLToTraditional(InitialPoetryTypesSQL)
-		if err != nil {
-			return fmt.Errorf("failed to convert poetry types SQL: %w", err)
+		// Insert initial data for this language variant
+		if err := db.insertInitialDataForLang(lang); err != nil {
+			return fmt.Errorf("failed to insert initial data for %s: %w", lang, err)
 		}
-	}
-
-	// Insert initial dynasties
-	if err := db.Exec(dynastiesSQL).Error; err != nil {
-		return fmt.Errorf("failed to insert dynasties: %w", err)
-	}
-
-	// Insert initial poetry types
-	if err := db.Exec(poetryTypesSQL).Error; err != nil {
-		return fmt.Errorf("failed to insert poetry types: %w", err)
 	}
 
 	// Update schema version
@@ -123,6 +95,117 @@ func (db *DB) Migrate(convertToTraditional bool) error {
 		time.Now(),
 	).Error; err != nil {
 		return fmt.Errorf("failed to update schema version: %w", err)
+	}
+
+	return nil
+}
+
+// migrateTablesForLang creates all tables for a specific language variant
+func (db *DB) migrateTablesForLang(lang Lang) error {
+	dynastyTable := dynastiesTable(lang)
+	authorTable := authorsTable(lang)
+	poetryTypeTable := poetryTypesTable(lang)
+	poemTable := poemsTable(lang)
+
+	// Create dynasties table
+	dynastySQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		name_en TEXT,
+		start_year INTEGER,
+		end_year INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`, dynastyTable)
+	if err := db.Exec(dynastySQL).Error; err != nil {
+		return fmt.Errorf("failed to create %s: %w", dynastyTable, err)
+	}
+
+	// Create authors table
+	authorSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		dynasty_id INTEGER,
+		description TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (dynasty_id) REFERENCES %s(id)
+	)`, authorTable, dynastyTable)
+	if err := db.Exec(authorSQL).Error; err != nil {
+		return fmt.Errorf("failed to create %s: %w", authorTable, err)
+	}
+	// Create index on dynasty_id
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", authorTable, authorTable))
+
+	// Create poetry_types table
+	poetryTypeSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id INTEGER PRIMARY KEY,
+		name TEXT NOT NULL UNIQUE,
+		category TEXT NOT NULL,
+		lines INTEGER,
+		chars_per_line INTEGER,
+		description TEXT,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	)`, poetryTypeTable)
+	if err := db.Exec(poetryTypeSQL).Error; err != nil {
+		return fmt.Errorf("failed to create %s: %w", poetryTypeTable, err)
+	}
+
+	// Create poems table
+	poemSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		id INTEGER PRIMARY KEY,
+		type_id INTEGER,
+		title TEXT NOT NULL,
+		content TEXT NOT NULL,
+		content_hash TEXT,
+		author_id INTEGER,
+		dynasty_id INTEGER,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (type_id) REFERENCES %s(id),
+		FOREIGN KEY (author_id) REFERENCES %s(id),
+		FOREIGN KEY (dynasty_id) REFERENCES %s(id)
+	)`, poemTable, poetryTypeTable, authorTable, dynastyTable)
+	if err := db.Exec(poemSQL).Error; err != nil {
+		return fmt.Errorf("failed to create %s: %w", poemTable, err)
+	}
+
+	// Create indexes for poems
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_type ON %s(type_id)", poemTable, poemTable))
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_title ON %s(title)", poemTable, poemTable))
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_author ON %s(author_id)", poemTable, poemTable))
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", poemTable, poemTable))
+	db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique ON %s(title, author_id, content_hash)", poemTable, poemTable))
+
+	return nil
+}
+
+// insertInitialDataForLang inserts initial data for a specific language variant
+func (db *DB) insertInitialDataForLang(lang Lang) error {
+	dynastyTable := dynastiesTable(lang)
+	poetryTypeTable := poetryTypesTable(lang)
+
+	// Prepare SQL - convert to traditional if needed
+	dynastiesSQL := strings.ReplaceAll(InitialDynastiesSQL, "dynasties", dynastyTable)
+	poetryTypesSQL := strings.ReplaceAll(InitialPoetryTypesSQL, "poetry_types", poetryTypeTable)
+
+	if lang == LangHant {
+		var err error
+		dynastiesSQL, err = convertSQLToTraditional(dynastiesSQL)
+		if err != nil {
+			return fmt.Errorf("failed to convert dynasties SQL: %w", err)
+		}
+		poetryTypesSQL, err = convertSQLToTraditional(poetryTypesSQL)
+		if err != nil {
+			return fmt.Errorf("failed to convert poetry types SQL: %w", err)
+		}
+	}
+
+	// Insert dynasties
+	if err := db.Exec(dynastiesSQL).Error; err != nil {
+		return fmt.Errorf("failed to insert dynasties: %w", err)
+	}
+
+	// Insert poetry types
+	if err := db.Exec(poetryTypesSQL).Error; err != nil {
+		return fmt.Errorf("failed to insert poetry types: %w", err)
 	}
 
 	return nil

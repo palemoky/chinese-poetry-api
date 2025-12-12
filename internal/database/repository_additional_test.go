@@ -31,7 +31,7 @@ func TestGetAuthorsWithStats(t *testing.T) {
 
 	// Create poems for authors
 	content1 := []byte(`["床前明月光"]`)
-	_ = db.Create(&Poem{
+	_ = createTestPoem(repo, &Poem{
 		ID:          100001,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content1),
@@ -39,10 +39,10 @@ func TestGetAuthorsWithStats(t *testing.T) {
 		AuthorID:    &author1ID,
 		DynastyID:   &dynastyID,
 		TypeID:      &typeID,
-	}).Error
+	})
 
 	content2 := []byte(`["日照香炉生紫烟"]`)
-	_ = db.Create(&Poem{
+	_ = createTestPoem(repo, &Poem{
 		ID:          100002,
 		Title:       "望庐山瀑布",
 		Content:     datatypes.JSON(content2),
@@ -50,7 +50,7 @@ func TestGetAuthorsWithStats(t *testing.T) {
 		AuthorID:    &author1ID,
 		DynastyID:   &dynastyID,
 		TypeID:      &typeID,
-	}).Error
+	})
 
 	tests := []struct {
 		name    string
@@ -136,7 +136,7 @@ func TestGetPoemsByAuthor(t *testing.T) {
 	// Create test poems with unique content
 	for i := range 5 {
 		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
-		_ = db.Create(&Poem{
+		_ = createTestPoem(repo, &Poem{
 			ID:          int64(200000 + i),
 			Title:       fmt.Sprintf("测试诗歌%d", i),
 			Content:     datatypes.JSON(content),
@@ -144,7 +144,7 @@ func TestGetPoemsByAuthor(t *testing.T) {
 			AuthorID:    &authorID,
 			DynastyID:   &dynastyID,
 			TypeID:      &typeID,
-		}).Error
+		})
 	}
 
 	tests := []struct {
@@ -178,7 +178,7 @@ func TestGetDynastiesWithStats(t *testing.T) {
 	typeID, _ := repo.GetPoetryTypeID("五言绝句")
 
 	content3 := []byte(`["床前明月光"]`)
-	_ = db.Create(&Poem{
+	_ = createTestPoem(repo, &Poem{
 		ID:          300001,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content3),
@@ -186,7 +186,7 @@ func TestGetDynastiesWithStats(t *testing.T) {
 		AuthorID:    &author1ID,
 		DynastyID:   &dynasty1ID,
 		TypeID:      &typeID,
-	}).Error
+	})
 
 	dynasties, err := repo.GetDynastiesWithStats()
 	require.NoError(t, err)
@@ -248,11 +248,11 @@ func TestGetPoetryTypesWithStats(t *testing.T) {
 		Name:     "五言绝句",
 		Category: "诗",
 	}
-	_ = db.Create(poetryType).Error
+	_ = createTestPoetryType(repo, poetryType)
 	typeID := poetryType.ID
 
 	content4 := []byte(`["床前明月光"]`)
-	_ = db.Create(&Poem{
+	_ = createTestPoem(repo, &Poem{
 		ID:          400001,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content4),
@@ -260,7 +260,7 @@ func TestGetPoetryTypesWithStats(t *testing.T) {
 		AuthorID:    &authorID,
 		DynastyID:   &dynastyID,
 		TypeID:      &typeID,
-	}).Error
+	})
 
 	types, err := repo.GetPoetryTypesWithStats()
 	require.NoError(t, err)
@@ -288,7 +288,7 @@ func TestGetPoetryTypeByID(t *testing.T) {
 		Name:     "五言绝句",
 		Category: "诗",
 	}
-	err := db.Create(poetryType).Error
+	err := createTestPoetryType(repo, poetryType)
 	require.NoError(t, err)
 	typeID := poetryType.ID
 
@@ -334,7 +334,7 @@ func TestGetPoemsByType(t *testing.T) {
 	// Create test poems with unique content
 	for i := range 3 {
 		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
-		_ = db.Create(&Poem{
+		_ = createTestPoem(repo, &Poem{
 			ID:          int64(500000 + i),
 			Title:       fmt.Sprintf("测试诗歌%d", i),
 			Content:     datatypes.JSON(content),
@@ -342,7 +342,7 @@ func TestGetPoemsByType(t *testing.T) {
 			AuthorID:    &authorID,
 			DynastyID:   &dynastyID,
 			TypeID:      &typeID,
-		}).Error
+		})
 	}
 
 	tests := []struct {

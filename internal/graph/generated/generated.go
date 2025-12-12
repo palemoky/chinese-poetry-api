@@ -124,15 +124,15 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Author      func(childComplexity int, id string) int
-		Authors     func(childComplexity int, page *int, pageSize *int, dynastyID *string) int
-		Dynasties   func(childComplexity int) int
-		Poem        func(childComplexity int, id string) int
-		PoemTypes   func(childComplexity int) int
-		Poems       func(childComplexity int, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) int
-		RandomPoem  func(childComplexity int, dynastyID *string, typeID *string) int
-		SearchPoems func(childComplexity int, query string, searchType *model.SearchType, page *int, pageSize *int) int
-		Statistics  func(childComplexity int) int
+		Author      func(childComplexity int, id string, lang *database.Lang) int
+		Authors     func(childComplexity int, lang *database.Lang, page *int, pageSize *int, dynastyID *string) int
+		Dynasties   func(childComplexity int, lang *database.Lang) int
+		Poem        func(childComplexity int, id string, lang *database.Lang) int
+		PoemTypes   func(childComplexity int, lang *database.Lang) int
+		Poems       func(childComplexity int, lang *database.Lang, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) int
+		RandomPoem  func(childComplexity int, lang *database.Lang, dynastyID *string, typeID *string) int
+		SearchPoems func(childComplexity int, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) int
+		Statistics  func(childComplexity int, lang *database.Lang) int
 	}
 
 	Statistics struct {
@@ -167,15 +167,15 @@ type PoetryTypeResolver interface {
 	PoemCount(ctx context.Context, obj *database.PoetryType) (int, error)
 }
 type QueryResolver interface {
-	Poem(ctx context.Context, id string) (*database.Poem, error)
-	Poems(ctx context.Context, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error)
-	SearchPoems(ctx context.Context, query string, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error)
-	RandomPoem(ctx context.Context, dynastyID *string, typeID *string) (*database.Poem, error)
-	Author(ctx context.Context, id string) (*database.Author, error)
-	Authors(ctx context.Context, page *int, pageSize *int, dynastyID *string) (*database.AuthorConnection, error)
-	Dynasties(ctx context.Context) ([]*database.Dynasty, error)
-	PoemTypes(ctx context.Context) ([]*database.PoetryType, error)
-	Statistics(ctx context.Context) (*database.Statistics, error)
+	Poem(ctx context.Context, id string, lang *database.Lang) (*database.Poem, error)
+	Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error)
+	SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error)
+	RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error)
+	Author(ctx context.Context, id string, lang *database.Lang) (*database.Author, error)
+	Authors(ctx context.Context, lang *database.Lang, page *int, pageSize *int, dynastyID *string) (*database.AuthorConnection, error)
+	Dynasties(ctx context.Context, lang *database.Lang) ([]*database.Dynasty, error)
+	PoemTypes(ctx context.Context, lang *database.Lang) ([]*database.PoetryType, error)
+	Statistics(ctx context.Context, lang *database.Lang) (*database.Statistics, error)
 }
 type StatisticsResolver interface {
 	PoemsByDynasty(ctx context.Context, obj *database.Statistics) ([]*model.DynastyStats, error)
@@ -472,7 +472,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Author(childComplexity, args["id"].(string)), true
+		return e.complexity.Query.Author(childComplexity, args["id"].(string), args["lang"].(*database.Lang)), true
 	case "Query.authors":
 		if e.complexity.Query.Authors == nil {
 			break
@@ -483,13 +483,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Authors(childComplexity, args["page"].(*int), args["pageSize"].(*int), args["dynastyId"].(*string)), true
+		return e.complexity.Query.Authors(childComplexity, args["lang"].(*database.Lang), args["page"].(*int), args["pageSize"].(*int), args["dynastyId"].(*string)), true
 	case "Query.dynasties":
 		if e.complexity.Query.Dynasties == nil {
 			break
 		}
 
-		return e.complexity.Query.Dynasties(childComplexity), true
+		args, err := ec.field_Query_dynasties_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Dynasties(childComplexity, args["lang"].(*database.Lang)), true
 	case "Query.poem":
 		if e.complexity.Query.Poem == nil {
 			break
@@ -500,13 +505,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Poem(childComplexity, args["id"].(string)), true
+		return e.complexity.Query.Poem(childComplexity, args["id"].(string), args["lang"].(*database.Lang)), true
 	case "Query.poemTypes":
 		if e.complexity.Query.PoemTypes == nil {
 			break
 		}
 
-		return e.complexity.Query.PoemTypes(childComplexity), true
+		args, err := ec.field_Query_poemTypes_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.PoemTypes(childComplexity, args["lang"].(*database.Lang)), true
 	case "Query.poems":
 		if e.complexity.Query.Poems == nil {
 			break
@@ -517,7 +527,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.Poems(childComplexity, args["page"].(*int), args["pageSize"].(*int), args["dynastyId"].(*string), args["authorId"].(*string), args["typeId"].(*string)), true
+		return e.complexity.Query.Poems(childComplexity, args["lang"].(*database.Lang), args["page"].(*int), args["pageSize"].(*int), args["dynastyId"].(*string), args["authorId"].(*string), args["typeId"].(*string)), true
 	case "Query.randomPoem":
 		if e.complexity.Query.RandomPoem == nil {
 			break
@@ -528,7 +538,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.RandomPoem(childComplexity, args["dynastyId"].(*string), args["typeId"].(*string)), true
+		return e.complexity.Query.RandomPoem(childComplexity, args["lang"].(*database.Lang), args["dynastyId"].(*string), args["typeId"].(*string)), true
 	case "Query.searchPoems":
 		if e.complexity.Query.SearchPoems == nil {
 			break
@@ -539,13 +549,18 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.complexity.Query.SearchPoems(childComplexity, args["query"].(string), args["searchType"].(*model.SearchType), args["page"].(*int), args["pageSize"].(*int)), true
+		return e.complexity.Query.SearchPoems(childComplexity, args["query"].(string), args["lang"].(*database.Lang), args["searchType"].(*model.SearchType), args["page"].(*int), args["pageSize"].(*int)), true
 	case "Query.statistics":
 		if e.complexity.Query.Statistics == nil {
 			break
 		}
 
-		return e.complexity.Query.Statistics(childComplexity), true
+		args, err := ec.field_Query_statistics_args(ctx, rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Statistics(childComplexity, args["lang"].(*database.Lang)), true
 
 	case "Statistics.poemsByDynasty":
 		if e.complexity.Statistics.PoemsByDynasty == nil {
@@ -682,12 +697,21 @@ func (ec *executionContext) introspectType(name string) (*introspection.Type, er
 var sources = []*ast.Source{
 	{Name: "../schema.graphqls", Input: `# GraphQL Schema for Chinese Poetry API
 
+"""Language variant for Chinese text"""
+enum Lang {
+  """Simplified Chinese (zh-Hans)"""
+  ZH_HANS
+  """Traditional Chinese (zh-Hant)"""
+  ZH_HANT
+}
+
 type Query {
   "Get a single poem by ID"
-  poem(id: ID!): Poem
+  poem(id: ID!, lang: Lang = ZH_HANS): Poem
 
   "Get a list of poems with pagination and filters"
   poems(
+    lang: Lang = ZH_HANS
     page: Int = 1
     pageSize: Int = 20
     dynastyId: ID
@@ -698,32 +722,34 @@ type Query {
   "Search poems by query"
   searchPoems(
     query: String!
+    lang: Lang = ZH_HANS
     searchType: SearchType = ALL
     page: Int = 1
     pageSize: Int = 20
   ): PoemConnection!
 
   "Get a random poem"
-  randomPoem(dynastyId: ID, typeId: ID): Poem
+  randomPoem(lang: Lang = ZH_HANS, dynastyId: ID, typeId: ID): Poem
 
   "Get an author by ID"
-  author(id: ID!): Author
+  author(id: ID!, lang: Lang = ZH_HANS): Author
 
   "Get a list of authors"
   authors(
+    lang: Lang = ZH_HANS
     page: Int = 1
     pageSize: Int = 20
     dynastyId: ID
   ): AuthorConnection!
 
   "Get all dynasties"
-  dynasties: [Dynasty!]!
+  dynasties(lang: Lang = ZH_HANS): [Dynasty!]!
 
   "Get all poetry types"
-  poemTypes: [PoetryType!]!
+  poemTypes(lang: Lang = ZH_HANS): [PoetryType!]!
 
   "Get overall statistics"
-  statistics: Statistics!
+  statistics(lang: Lang = ZH_HANS): Statistics!
 }
 
 enum SearchType {
@@ -732,6 +758,7 @@ enum SearchType {
   CONTENT
   AUTHOR
 }
+
 
 type Poem {
   id: ID!
@@ -859,27 +886,59 @@ func (ec *executionContext) field_Query_author_args(ctx context.Context, rawArgs
 		return nil, err
 	}
 	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
+	if err != nil {
+		return nil, err
+	}
+	args["lang"] = arg1
 	return args, nil
 }
 
 func (ec *executionContext) field_Query_authors_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
 	if err != nil {
 		return nil, err
 	}
-	args["page"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
+	args["lang"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["pageSize"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
+	args["page"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["dynastyId"] = arg2
+	args["pageSize"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["dynastyId"] = arg3
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_dynasties_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
+	if err != nil {
+		return nil, err
+	}
+	args["lang"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_poemTypes_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
+	if err != nil {
+		return nil, err
+	}
+	args["lang"] = arg0
 	return args, nil
 }
 
@@ -891,53 +950,68 @@ func (ec *executionContext) field_Query_poem_args(ctx context.Context, rawArgs m
 		return nil, err
 	}
 	args["id"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
+	if err != nil {
+		return nil, err
+	}
+	args["lang"] = arg1
 	return args, nil
 }
 
 func (ec *executionContext) field_Query_poems_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
 	if err != nil {
 		return nil, err
 	}
-	args["page"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
+	args["lang"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["pageSize"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
+	args["page"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["dynastyId"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "authorId", ec.unmarshalOID2ᚖstring)
+	args["pageSize"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["authorId"] = arg3
-	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "typeId", ec.unmarshalOID2ᚖstring)
+	args["dynastyId"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "authorId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["typeId"] = arg4
+	args["authorId"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "typeId", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["typeId"] = arg5
 	return args, nil
 }
 
 func (ec *executionContext) field_Query_randomPoem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
 	if err != nil {
 		return nil, err
 	}
-	args["dynastyId"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "typeId", ec.unmarshalOID2ᚖstring)
+	args["lang"] = arg0
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId", ec.unmarshalOID2ᚖstring)
 	if err != nil {
 		return nil, err
 	}
-	args["typeId"] = arg1
+	args["dynastyId"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "typeId", ec.unmarshalOID2ᚖstring)
+	if err != nil {
+		return nil, err
+	}
+	args["typeId"] = arg2
 	return args, nil
 }
 
@@ -949,21 +1023,37 @@ func (ec *executionContext) field_Query_searchPoems_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["query"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "searchType", ec.unmarshalOSearchType2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋgraphᚋmodelᚐSearchType)
+	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
 	if err != nil {
 		return nil, err
 	}
-	args["searchType"] = arg1
-	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
+	args["lang"] = arg1
+	arg2, err := graphql.ProcessArgField(ctx, rawArgs, "searchType", ec.unmarshalOSearchType2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋgraphᚋmodelᚐSearchType)
 	if err != nil {
 		return nil, err
 	}
-	args["page"] = arg2
-	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
+	args["searchType"] = arg2
+	arg3, err := graphql.ProcessArgField(ctx, rawArgs, "page", ec.unmarshalOInt2ᚖint)
 	if err != nil {
 		return nil, err
 	}
-	args["pageSize"] = arg3
+	args["page"] = arg3
+	arg4, err := graphql.ProcessArgField(ctx, rawArgs, "pageSize", ec.unmarshalOInt2ᚖint)
+	if err != nil {
+		return nil, err
+	}
+	args["pageSize"] = arg4
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_statistics_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
+	var err error
+	args := map[string]any{}
+	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "lang", ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang)
+	if err != nil {
+		return nil, err
+	}
+	args["lang"] = arg0
 	return args, nil
 }
 
@@ -2370,7 +2460,7 @@ func (ec *executionContext) _Query_poem(ctx context.Context, field graphql.Colle
 		ec.fieldContext_Query_poem,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().Poem(ctx, fc.Args["id"].(string))
+			return ec.resolvers.Query().Poem(ctx, fc.Args["id"].(string), fc.Args["lang"].(*database.Lang))
 		},
 		nil,
 		ec.marshalOPoem2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem,
@@ -2425,7 +2515,7 @@ func (ec *executionContext) _Query_poems(ctx context.Context, field graphql.Coll
 		ec.fieldContext_Query_poems,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().Poems(ctx, fc.Args["page"].(*int), fc.Args["pageSize"].(*int), fc.Args["dynastyId"].(*string), fc.Args["authorId"].(*string), fc.Args["typeId"].(*string))
+			return ec.resolvers.Query().Poems(ctx, fc.Args["lang"].(*database.Lang), fc.Args["page"].(*int), fc.Args["pageSize"].(*int), fc.Args["dynastyId"].(*string), fc.Args["authorId"].(*string), fc.Args["typeId"].(*string))
 		},
 		nil,
 		ec.marshalNPoemConnection2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoemConnection,
@@ -2474,7 +2564,7 @@ func (ec *executionContext) _Query_searchPoems(ctx context.Context, field graphq
 		ec.fieldContext_Query_searchPoems,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().SearchPoems(ctx, fc.Args["query"].(string), fc.Args["searchType"].(*model.SearchType), fc.Args["page"].(*int), fc.Args["pageSize"].(*int))
+			return ec.resolvers.Query().SearchPoems(ctx, fc.Args["query"].(string), fc.Args["lang"].(*database.Lang), fc.Args["searchType"].(*model.SearchType), fc.Args["page"].(*int), fc.Args["pageSize"].(*int))
 		},
 		nil,
 		ec.marshalNPoemConnection2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoemConnection,
@@ -2523,7 +2613,7 @@ func (ec *executionContext) _Query_randomPoem(ctx context.Context, field graphql
 		ec.fieldContext_Query_randomPoem,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().RandomPoem(ctx, fc.Args["dynastyId"].(*string), fc.Args["typeId"].(*string))
+			return ec.resolvers.Query().RandomPoem(ctx, fc.Args["lang"].(*database.Lang), fc.Args["dynastyId"].(*string), fc.Args["typeId"].(*string))
 		},
 		nil,
 		ec.marshalOPoem2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem,
@@ -2578,7 +2668,7 @@ func (ec *executionContext) _Query_author(ctx context.Context, field graphql.Col
 		ec.fieldContext_Query_author,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().Author(ctx, fc.Args["id"].(string))
+			return ec.resolvers.Query().Author(ctx, fc.Args["id"].(string), fc.Args["lang"].(*database.Lang))
 		},
 		nil,
 		ec.marshalOAuthor2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐAuthor,
@@ -2631,7 +2721,7 @@ func (ec *executionContext) _Query_authors(ctx context.Context, field graphql.Co
 		ec.fieldContext_Query_authors,
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.resolvers.Query().Authors(ctx, fc.Args["page"].(*int), fc.Args["pageSize"].(*int), fc.Args["dynastyId"].(*string))
+			return ec.resolvers.Query().Authors(ctx, fc.Args["lang"].(*database.Lang), fc.Args["page"].(*int), fc.Args["pageSize"].(*int), fc.Args["dynastyId"].(*string))
 		},
 		nil,
 		ec.marshalNAuthorConnection2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐAuthorConnection,
@@ -2679,7 +2769,8 @@ func (ec *executionContext) _Query_dynasties(ctx context.Context, field graphql.
 		field,
 		ec.fieldContext_Query_dynasties,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Query().Dynasties(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Dynasties(ctx, fc.Args["lang"].(*database.Lang))
 		},
 		nil,
 		ec.marshalNDynasty2ᚕᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐDynastyᚄ,
@@ -2688,7 +2779,7 @@ func (ec *executionContext) _Query_dynasties(ctx context.Context, field graphql.
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_dynasties(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_dynasties(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -2714,6 +2805,17 @@ func (ec *executionContext) fieldContext_Query_dynasties(_ context.Context, fiel
 			return nil, fmt.Errorf("no field named %q was found under type Dynasty", field.Name)
 		},
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_dynasties_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
 	return fc, nil
 }
 
@@ -2724,7 +2826,8 @@ func (ec *executionContext) _Query_poemTypes(ctx context.Context, field graphql.
 		field,
 		ec.fieldContext_Query_poemTypes,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Query().PoemTypes(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().PoemTypes(ctx, fc.Args["lang"].(*database.Lang))
 		},
 		nil,
 		ec.marshalNPoetryType2ᚕᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoetryTypeᚄ,
@@ -2733,7 +2836,7 @@ func (ec *executionContext) _Query_poemTypes(ctx context.Context, field graphql.
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_poemTypes(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_poemTypes(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -2759,6 +2862,17 @@ func (ec *executionContext) fieldContext_Query_poemTypes(_ context.Context, fiel
 			return nil, fmt.Errorf("no field named %q was found under type PoetryType", field.Name)
 		},
 	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_poemTypes_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
+	}
 	return fc, nil
 }
 
@@ -2769,7 +2883,8 @@ func (ec *executionContext) _Query_statistics(ctx context.Context, field graphql
 		field,
 		ec.fieldContext_Query_statistics,
 		func(ctx context.Context) (any, error) {
-			return ec.resolvers.Query().Statistics(ctx)
+			fc := graphql.GetFieldContext(ctx)
+			return ec.resolvers.Query().Statistics(ctx, fc.Args["lang"].(*database.Lang))
 		},
 		nil,
 		ec.marshalNStatistics2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐStatistics,
@@ -2778,7 +2893,7 @@ func (ec *executionContext) _Query_statistics(ctx context.Context, field graphql
 	)
 }
 
-func (ec *executionContext) fieldContext_Query_statistics(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+func (ec *executionContext) fieldContext_Query_statistics(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
 	fc = &graphql.FieldContext{
 		Object:     "Query",
 		Field:      field,
@@ -2799,6 +2914,17 @@ func (ec *executionContext) fieldContext_Query_statistics(_ context.Context, fie
 			}
 			return nil, fmt.Errorf("no field named %q was found under type Statistics", field.Name)
 		},
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			err = ec.Recover(ctx, r)
+			ec.Error(ctx, err)
+		}
+	}()
+	ctx = graphql.WithFieldContext(ctx, fc)
+	if fc.Args, err = ec.field_Query_statistics_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
+		ec.Error(ctx, err)
+		return fc, err
 	}
 	return fc, nil
 }
@@ -6877,6 +7003,25 @@ func (ec *executionContext) marshalOInt2ᚖint(ctx context.Context, sel ast.Sele
 	_ = sel
 	_ = ctx
 	res := graphql.MarshalInt(*v)
+	return res
+}
+
+func (ec *executionContext) unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang(ctx context.Context, v any) (*database.Lang, error) {
+	if v == nil {
+		return nil, nil
+	}
+	tmp, err := graphql.UnmarshalString(v)
+	res := database.Lang(tmp)
+	return &res, graphql.ErrorOnPath(ctx, err)
+}
+
+func (ec *executionContext) marshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang(ctx context.Context, sel ast.SelectionSet, v *database.Lang) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	_ = sel
+	_ = ctx
+	res := graphql.MarshalString(string(*v))
 	return res
 }
 

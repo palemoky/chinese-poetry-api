@@ -21,15 +21,10 @@ func setupPoetryTypeTestRouter(t *testing.T) (*gin.Engine, *database.Repository)
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = gormDB.AutoMigrate(
-		&database.Dynasty{},
-		&database.Author{},
-		&database.PoetryType{},
-		&database.Poem{},
-	)
+	db := &database.DB{DB: gormDB}
+	err = db.Migrate()
 	require.NoError(t, err)
 
-	db := &database.DB{DB: gormDB}
 	repo := database.NewRepository(db)
 
 	router := gin.New()

@@ -1,11 +1,20 @@
 # GraphQL Schema for Chinese Poetry API
 
+"""Language variant for Chinese text"""
+enum Lang {
+  """Simplified Chinese (zh-Hans)"""
+  ZH_HANS
+  """Traditional Chinese (zh-Hant)"""
+  ZH_HANT
+}
+
 type Query {
   "Get a single poem by ID"
-  poem(id: ID!): Poem
+  poem(id: ID!, lang: Lang = ZH_HANS): Poem
 
   "Get a list of poems with pagination and filters"
   poems(
+    lang: Lang = ZH_HANS
     page: Int = 1
     pageSize: Int = 20
     dynastyId: ID
@@ -16,32 +25,34 @@ type Query {
   "Search poems by query"
   searchPoems(
     query: String!
+    lang: Lang = ZH_HANS
     searchType: SearchType = ALL
     page: Int = 1
     pageSize: Int = 20
   ): PoemConnection!
 
   "Get a random poem"
-  randomPoem(dynastyId: ID, typeId: ID): Poem
+  randomPoem(lang: Lang = ZH_HANS, dynastyId: ID, typeId: ID): Poem
 
   "Get an author by ID"
-  author(id: ID!): Author
+  author(id: ID!, lang: Lang = ZH_HANS): Author
 
   "Get a list of authors"
   authors(
+    lang: Lang = ZH_HANS
     page: Int = 1
     pageSize: Int = 20
     dynastyId: ID
   ): AuthorConnection!
 
   "Get all dynasties"
-  dynasties: [Dynasty!]!
+  dynasties(lang: Lang = ZH_HANS): [Dynasty!]!
 
   "Get all poetry types"
-  poemTypes: [PoetryType!]!
+  poemTypes(lang: Lang = ZH_HANS): [PoetryType!]!
 
   "Get overall statistics"
-  statistics: Statistics!
+  statistics(lang: Lang = ZH_HANS): Statistics!
 }
 
 enum SearchType {
@@ -50,6 +61,7 @@ enum SearchType {
   CONTENT
   AUTHOR
 }
+
 
 type Poem {
   id: ID!

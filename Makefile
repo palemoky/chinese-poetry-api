@@ -191,12 +191,10 @@ process-data: build-processor
 	@mkdir -p $(DATA_DIR)
 	@$(PROCESSOR_BINARY) \
 		--input $(POETRY_DATA_DIR) \
-		--output-simplified $(DATA_DIR)/poetry-simplified.db \
-		--output-traditional $(DATA_DIR)/poetry-traditional.db \
+		--output $(DATA_DIR)/poetry.db \
 		--workers $(WORKERS)
 	@echo "$(GREEN)✓ 数据处理完成$(NC)"
-	@echo "  简体数据库: $(DATA_DIR)/poetry-simplified.db"
-	@echo "  繁体数据库: $(DATA_DIR)/poetry-traditional.db"
+	@echo "  统一数据库: $(DATA_DIR)/poetry.db (包含简体和繁体表)"
 
 ## rebuild-and-process: 重新构建并处理数据（开发时使用）
 rebuild-and-process: clean build-processor
@@ -204,10 +202,10 @@ rebuild-and-process: clean build-processor
 	@mkdir -p $(DATA_DIR)
 	@$(PROCESSOR_BINARY) \
 		--input $(POETRY_DATA_DIR) \
-		--output-simplified $(DATA_DIR)/poetry-simplified.db \
-		--output-traditional $(DATA_DIR)/poetry-traditional.db \
+		--output $(DATA_DIR)/poetry.db \
 		--workers $(WORKERS)
 	@echo "$(GREEN)✓ 重新构建并处理完成$(NC)"
+	@echo "  统一数据库: $(DATA_DIR)/poetry.db (包含简体和繁体表)"
 
 ## dev: 开发模式（需要安装 air）
 dev:

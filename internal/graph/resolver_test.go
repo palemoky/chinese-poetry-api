@@ -24,16 +24,12 @@ func setupTestResolver(t *testing.T) (*Resolver, *database.Repository) {
 	gormDB, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
 
-	// Auto migrate
-	err = gormDB.AutoMigrate(
-		&database.Dynasty{},
-		&database.Author{},
-		&database.PoetryType{},
-		&database.Poem{},
-	)
+	db := &database.DB{DB: gormDB}
+
+	// Use Migrate() to create language-specific tables
+	err = db.Migrate()
 	require.NoError(t, err)
 
-	db := &database.DB{DB: gormDB}
 	repo := database.NewRepository(db)
 	searchEngine := search.NewEngine(db)
 
@@ -227,12 +223,7 @@ func TestDynastiesQuery(t *testing.T) {
 func TestPoemTypesQuery(t *testing.T) {
 	resolver, _ := setupTestResolver(t)
 
-	// Insert a poetry type manually since it's usually seeded in migration
-	resolver.DB.Create(&database.PoetryType{
-		ID:       1,
-		Name:     "五言绝句",
-		Category: "诗",
-	})
+	// Poetry types are already seeded by Migrate(), no need to create manually
 
 	c := createTestClient(t, resolver)
 
@@ -297,8 +288,8 @@ func TestResolverWithContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	// Test poem resolver directly
-	poem, err := resolver.Query().Poem(ctx, "12345678901234")
+	// Test poem resolver directly (nil lang = default to simplified Chinese)
+	poem, err := resolver.Query().Poem(ctx, "12345678901234", nil)
 	require.NoError(t, err)
 	assert.NotNil(t, poem)
 	assert.Equal(t, "静夜思", poem.Title)
@@ -323,14 +314,9 @@ func createExtendedTestData(t *testing.T, resolver *Resolver, repo *database.Rep
 	dumuAuthorID, err = repo.GetOrCreateAuthor("杜牧", tangDynastyID)
 	require.NoError(t, err)
 
-	// Create poetry type
-	poetryType := &database.PoetryType{
-		ID:       1,
-		Name:     "七言绝句",
-		Category: "唐诗",
-	}
-	resolver.DB.Create(poetryType)
-	typeID = poetryType.ID
+	// Poetry types are already seeded by Migrate()
+	// Use the pre-seeded ID for "七言绝句" which has ID 12
+	typeID = 12
 
 	// Create poems with different authors and types
 	poems := []*database.Poem{

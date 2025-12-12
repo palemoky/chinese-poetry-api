@@ -3,6 +3,7 @@ package handler
 import (
 	"math/rand"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 
@@ -25,16 +26,19 @@ func NewPoemHandler(repo *database.Repository, searchEngine *search.Engine) *Poe
 }
 
 // ListPoems retrieves a paginated list of poems
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *PoemHandler) ListPoems(c *gin.Context) {
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
 	pagination := ParsePagination(c)
 
-	poems, err := h.repo.ListPoems(pagination.PageSize, pagination.Offset())
+	poems, err := repo.ListPoems(pagination.PageSize, pagination.Offset())
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to retrieve poems")
 		return
 	}
 
-	total, err := h.repo.CountPoems()
+	total, err := repo.CountPoems()
 	if err != nil {
 		total = 0
 	}
@@ -48,6 +52,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 }
 
 // SearchPoems searches for poems
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	query := c.Query("q")
 	if query == "" {
@@ -55,9 +60,12 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		return
 	}
 
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
 	searchType := search.SearchType(c.DefaultQuery("type", "all"))
 	pagination := ParsePagination(c)
 
+	// Note: Search engine uses the default repo, but results are filtered by lang
 	result, err := h.search.Search(search.SearchParams{
 		Query:      query,
 		SearchType: searchType,
@@ -69,24 +77,35 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		return
 	}
 
+	// Re-fetch poems with lang-aware repo to get correct content
 	data := make([]map[string]any, len(result.Poems))
 	for i, poem := range result.Poems {
-		data[i] = formatPoem(&poem)
+		// Get poem from lang-aware repo if needed for proper content
+		poemID := strconv.FormatInt(poem.ID, 10)
+		if p, err := repo.GetPoemByID(poemID); err == nil {
+			data[i] = formatPoem(p)
+		} else {
+			data[i] = formatPoem(&poem)
+		}
 	}
 
 	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(result.TotalCount)))
 }
 
 // RandomPoem returns a random poem
+// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
 func (h *PoemHandler) RandomPoem(c *gin.Context) {
-	count, err := h.repo.CountPoems()
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
+	count, err := repo.CountPoems()
 	if err != nil || count == 0 {
 		respondError(c, http.StatusInternalServerError, "failed to get random poem")
 		return
 	}
 
 	offset := rand.Intn(count)
-	poems, err := h.repo.ListPoems(1, offset)
+	poems, err := repo.ListPoems(1, offset)
 
 	if err != nil || len(poems) == 0 {
 		respondError(c, http.StatusInternalServerError, "failed to get random poem")

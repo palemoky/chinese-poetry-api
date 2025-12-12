@@ -5,6 +5,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
 
 // parseID extracts and validates an int64 ID from a URL parameter.
@@ -27,4 +29,12 @@ func respondError(c *gin.Context, status int, message string) {
 // respondOK sends a JSON success response with the given data.
 func respondOK(c *gin.Context, data any) {
 	c.JSON(http.StatusOK, gin.H{"data": data})
+}
+
+// parseLang extracts language variant from query parameter.
+// Supported values: "zh-Hans" (simplified), "zh-Hant" (traditional)
+// Defaults to simplified Chinese (zh-Hans).
+func parseLang(c *gin.Context) database.Lang {
+	lang := c.DefaultQuery("lang", "zh-Hans")
+	return database.ParseLang(lang)
 }
