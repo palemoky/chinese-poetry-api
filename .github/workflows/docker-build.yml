@@ -23,8 +23,8 @@ jobs:
       - name: Wait for Test Success
         uses: lewagon/wait-on-check-action@v1.4.1
         with:
-          ref: ${{ github.ref }}
-          check-name: 'Tests'
+          ref: ${{ github.sha }}
+          check-name: 'test'
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
           allowed-conclusions: success
