@@ -1,18 +1,16 @@
 # Chinese Poetry API
 
-<p align="center">
-  <a href="https://github.com/chinese-poetry/chinese-poetry">
-      <img src="https://avatars3.githubusercontent.com/u/30764933?s=200&v=4" alt="chinese-poetry">
-  </a>
-</p>
+<h2 align="center">
+  <img src="https://avatars3.githubusercontent.com/u/30764933?s=200&v=4" alt="chinese-poetry" height="100px">
+  <br>
+  中国古诗词 API 服务
+</h2>
 
-<h2 align="center">中国古诗词 API 服务</h2>
-
-[![Test Status](https://github.com/palemoky/chinese-poetry-api/actions/workflows/test.yml/badge.svg)](https://github.com/palemoky/chinese-poetry-api/actions/workflows/test.yml)
-[![Docker Build](https://github.com/palemoky/chinese-poetry-api/actions/workflows/docker-build.yml/badge.svg)](https://github.com/palemoky/chinese-poetry-api/actions/workflows/docker-build.yml)
 [![Docker Image](https://img.shields.io/docker/v/palemoky/chinese-poetry-api?sort=semver&label=docker)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
+[![Docker Image Size](https://img.shields.io/docker/image-size/palemoky/paper-pi/latest)](https://hub.docker.com/r/palemoky/paper-pi)
 [![Go Report Card](https://goreportcard.com/badge/github.com/palemoky/chinese-poetry-api)](https://goreportcard.com/report/github.com/palemoky/chinese-poetry-api)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/palemoky/chinese-poetry-api)](https://github.com/palemoky/chinese-poetry-api/blob/main/go.mod)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![License](https://img.shields.io/github/license/palemoky/chinese-poetry-api)](https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE)
 
 基于 Go 语言的高性能中国古诗词 API 服务，支持 REST 和 GraphQL 接口，提供简体/繁体中文、拼音搜索等功能。
