@@ -73,6 +73,25 @@ func (r *Repository) GetAuthorByID(id int64) (*Author, error) {
 	return &author, nil
 }
 
+// GetAuthorByName returns an author by name
+func (r *Repository) GetAuthorByName(name string) (*Author, error) {
+	var author Author
+	err := r.db.Table(r.authorsTable()).Where("name = ?", name).First(&author).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Load dynasty
+	if author.DynastyID != nil {
+		var dynasty Dynasty
+		if err := r.db.Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
+			author.Dynasty = &dynasty
+		}
+	}
+
+	return &author, nil
+}
+
 // GetPoemsByAuthor returns poems by a specific author
 func (r *Repository) GetPoemsByAuthor(authorID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
@@ -113,6 +132,13 @@ func (r *Repository) GetDynastiesWithStats() ([]DynastyWithStats, error) {
 func (r *Repository) GetDynastyByID(id int64) (*Dynasty, error) {
 	var dynasty Dynasty
 	err := r.db.Table(r.dynastiesTable()).First(&dynasty, id).Error
+	return &dynasty, err
+}
+
+// GetDynastyByName returns a dynasty by name
+func (r *Repository) GetDynastyByName(name string) (*Dynasty, error) {
+	var dynasty Dynasty
+	err := r.db.Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
 	return &dynasty, err
 }
 

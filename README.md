@@ -73,6 +73,12 @@ curl "http://localhost:1279/api/v1/poems/search?q=静夜思"
 # 随机诗词
 curl "http://localhost:1279/api/v1/poems/random"
 
+# 随机诗词（带过滤）
+curl "http://localhost:1279/api/v1/poems/random?author=李白"
+curl "http://localhost:1279/api/v1/poems/random?type=五言绝句"
+curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句"
+curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句&dynasty=唐"
+
 # 作者列表
 curl "http://localhost:1279/api/v1/authors?page=1&page_size=20"
 

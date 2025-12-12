@@ -92,20 +92,63 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(result.TotalCount)))
 }
 
-// RandomPoem returns a random poem
+// RandomPoem returns a random poem with optional filters
 // Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
+// Supports filters: ?author=李白&type=五言绝句&dynasty=唐
+// Or by ID: ?author_id=123&type_id=456&dynasty_id=789
 func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	lang := parseLang(c)
 	repo := h.repo.WithLang(lang)
 
-	count, err := repo.CountPoems()
+	// Parse filter parameters
+	var authorID, typeID, dynastyID *int64
+
+	// Parse author filter (by ID or name)
+	if authorIDStr := c.Query("author_id"); authorIDStr != "" {
+		if id, err := strconv.ParseInt(authorIDStr, 10, 64); err == nil {
+			authorID = &id
+		}
+	} else if authorName := c.Query("author"); authorName != "" {
+		// Look up author by name
+		if author, err := repo.GetAuthorByName(authorName); err == nil {
+			authorID = &author.ID
+		}
+	}
+
+	// Parse type filter (by ID or name)
+	if typeIDStr := c.Query("type_id"); typeIDStr != "" {
+		if id, err := strconv.ParseInt(typeIDStr, 10, 64); err == nil {
+			typeID = &id
+		}
+	} else if typeName := c.Query("type"); typeName != "" {
+		// Look up type by name
+		if id, err := repo.GetPoetryTypeID(typeName); err == nil {
+			typeID = &id
+		}
+	}
+
+	// Parse dynasty filter (by ID or name)
+	if dynastyIDStr := c.Query("dynasty_id"); dynastyIDStr != "" {
+		if id, err := strconv.ParseInt(dynastyIDStr, 10, 64); err == nil {
+			dynastyID = &id
+		}
+	} else if dynastyName := c.Query("dynasty"); dynastyName != "" {
+		// Look up dynasty by name
+		if dynasty, err := repo.GetDynastyByName(dynastyName); err == nil {
+			dynastyID = &dynasty.ID
+		}
+	}
+
+	// Get count of poems matching filters
+	_, count, err := repo.ListPoemsWithFilter(1, 0, dynastyID, authorID, typeID)
 	if err != nil || count == 0 {
-		respondError(c, http.StatusInternalServerError, "failed to get random poem")
+		respondError(c, http.StatusNotFound, "no poems found matching the criteria")
 		return
 	}
 
+	// Get a random poem from the filtered set
 	offset := rand.Intn(count)
-	poems, err := repo.ListPoems(1, offset)
+	poems, _, err := repo.ListPoemsWithFilter(1, offset, dynastyID, authorID, typeID)
 
 	if err != nil || len(poems) == 0 {
 		respondError(c, http.StatusInternalServerError, "failed to get random poem")
