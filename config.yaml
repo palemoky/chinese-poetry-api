@@ -2,9 +2,6 @@ server:
   port: 1279
   mode: release  # debug, release, test
 
-database:
-  type: simplified  # simplified or traditional
-
 rate_limit:
   enabled: true
   requests_per_second: 10
@@ -21,5 +18,3 @@ graphql:
 search:
   max_results: 1000
   default_page_size: 20
-  enable_pinyin: true
-  enable_fuzzy: true

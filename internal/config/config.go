@@ -48,10 +48,8 @@ type GraphQLConfig struct {
 
 // SearchConfig holds search configuration
 type SearchConfig struct {
-	MaxResults      int  `mapstructure:"max_results"`
-	DefaultPageSize int  `mapstructure:"default_page_size"`
-	EnablePinyin    bool `mapstructure:"enable_pinyin"`
-	EnableFuzzy     bool `mapstructure:"enable_fuzzy"`
+	MaxResults      int `mapstructure:"max_results"`
+	DefaultPageSize int `mapstructure:"default_page_size"`
 }
 
 // Load loads configuration from file and environment variables
@@ -99,8 +97,6 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("graphql.complexity_limit", 1000)
 	v.SetDefault("search.max_results", 1000)
 	v.SetDefault("search.default_page_size", 20)
-	v.SetDefault("search.enable_pinyin", true)
-	v.SetDefault("search.enable_fuzzy", true)
 }
 
 func bindEnvVars(v *viper.Viper) {

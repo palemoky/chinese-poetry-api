@@ -186,14 +186,6 @@ func TestSearchPoems(t *testing.T) {
 			},
 		},
 		{
-			name:           "search with pinyin",
-			query:          "?q=jingye&type=pinyin",
-			expectedStatus: http.StatusOK,
-			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp, "data")
-			},
-		},
-		{
 			name:           "search without query parameter",
 			query:          "",
 			expectedStatus: http.StatusBadRequest,
