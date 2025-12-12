@@ -200,8 +200,8 @@ func (r *queryResolver) Authors(ctx context.Context, lang *database.Lang, page *
 // Dynasties is the resolver for the dynasties field.
 func (r *queryResolver) Dynasties(ctx context.Context, lang *database.Lang) ([]*database.Dynasty, error) {
 	var dynasties []*database.Dynasty
-	// Use default language (simplified) for now - TODO: add lang parameter
-	err := r.DB.Table(database.DynastiesTable(database.LangHans)).Order("id").Find(&dynasties).Error
+	langVal := parseLang(lang)
+	err := r.DB.Table(database.DynastiesTable(langVal)).Order("id").Find(&dynasties).Error
 	if err != nil {
 		return nil, err
 	}
@@ -211,8 +211,8 @@ func (r *queryResolver) Dynasties(ctx context.Context, lang *database.Lang) ([]*
 // PoemTypes is the resolver for the poemTypes field.
 func (r *queryResolver) PoemTypes(ctx context.Context, lang *database.Lang) ([]*database.PoetryType, error) {
 	var types []*database.PoetryType
-	// Use default language (simplified) for now - TODO: add lang parameter
-	err := r.DB.Table(database.PoetryTypesTable(database.LangHans)).Order("id").Find(&types).Error
+	langVal := parseLang(lang)
+	err := r.DB.Table(database.PoetryTypesTable(langVal)).Order("id").Find(&types).Error
 	if err != nil {
 		return nil, err
 	}

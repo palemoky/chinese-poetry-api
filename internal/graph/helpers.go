@@ -47,6 +47,15 @@ func parseOptionalID(id *string) (*int64, error) {
 	return &parsed, nil
 }
 
+// parseLang converts an optional Lang pointer to a Lang value.
+// Returns LangHans (simplified) as default if nil.
+func parseLang(lang *database.Lang) database.Lang {
+	if lang == nil {
+		return database.LangHans
+	}
+	return *lang
+}
+
 // buildPoemConnection creates a PoemConnection from poems slice and pagination info.
 func buildPoemConnection(poems []database.Poem, pag Pagination, totalCount int) *database.PoemConnection {
 	edges := make([]database.PoemEdge, len(poems))
