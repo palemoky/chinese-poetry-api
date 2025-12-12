@@ -16,7 +16,7 @@ if [ -f "$DB_PATH" ]; then
     echo "Database found: $DB_PATH"
 else
     echo "Downloading unified database..."
-    local url="https://github.com/palemoky/chinese-poetry-api/releases/latest/download/${DB_FILE}.gz"
+    url="https://github.com/palemoky/chinese-poetry-api/releases/latest/download/${DB_FILE}.gz"
 
     if ! curl -L -f -o "${DB_PATH}.gz" "$url"; then
         echo "ERROR: Failed to download database"
