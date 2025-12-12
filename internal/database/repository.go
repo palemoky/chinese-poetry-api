@@ -381,7 +381,7 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 
 	// Apply dynasty filter
 	if dynastyID != nil {
-		query = query.Where("dynasty_id = ?", *dynastyID)
+		query = query.Where("authors.dynasty_id = ?", *dynastyID)
 	}
 
 	// Get total count

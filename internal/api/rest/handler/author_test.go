@@ -137,19 +137,121 @@ func TestGetAuthor(t *testing.T) {
 			name:           "get non-existent author",
 			authorID:       "999999",
 			expectedStatus: http.StatusNotFound,
-			checkResponse:  nil,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.Equal(t, "Author not found", resp["error"])
+			},
 		},
 		{
 			name:           "invalid author ID",
 			authorID:       "invalid",
 			expectedStatus: http.StatusBadRequest,
-			checkResponse:  nil,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				assert.Equal(t, "Invalid author ID", resp["error"])
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodGet, "/authors/"+tt.authorID, nil)
+			w := httptest.NewRecorder()
+
+			router.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.expectedStatus, w.Code)
+
+			if tt.checkResponse != nil {
+				var response map[string]any
+				err := json.Unmarshal(w.Body.Bytes(), &response)
+				require.NoError(t, err)
+				tt.checkResponse(t, response)
+			}
+		})
+	}
+}
+
+// TestPaginationBoundariesREST tests edge cases in REST API pagination
+func TestPaginationBoundariesREST(t *testing.T) {
+	router, repo, _ := setupTestRouter(t)
+	handler := NewAuthorHandler(repo)
+
+	// Create test data - 5 authors
+	dynastyID, _ := repo.GetOrCreateDynasty("唐")
+	for _, name := range []string{"李白", "杜甫", "白居易", "王维", "孟浩然"} {
+		_, _ = repo.GetOrCreateAuthor(name, dynastyID)
+	}
+
+	router.GET("/authors", handler.ListAuthors)
+
+	tests := []struct {
+		name           string
+		query          string
+		expectedStatus int
+		checkResponse  func(*testing.T, map[string]any)
+	}{
+		{
+			name:           "page_size 0 defaults to 20",
+			query:          "?page_size=0",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(20), pagination["page_size"])
+			},
+		},
+		{
+			name:           "page 0 defaults to 1",
+			query:          "?page=0",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(1), pagination["page"])
+			},
+		},
+		{
+			name:           "negative page defaults to 1",
+			query:          "?page=-1",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(1), pagination["page"])
+			},
+		},
+		{
+			name:           "very large page_size is capped at 100",
+			query:          "?page_size=500",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				pagination := resp["pagination"].(map[string]any)
+				assert.Equal(t, float64(100), pagination["page_size"])
+			},
+		},
+		{
+			name:           "total_pages is calculated correctly",
+			query:          "?page_size=2",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				pagination := resp["pagination"].(map[string]any)
+				total := pagination["total"].(float64)
+				pageSize := pagination["page_size"].(float64)
+				totalPages := pagination["total_pages"].(float64)
+				expectedTotalPages := (int(total) + int(pageSize) - 1) / int(pageSize)
+				assert.Equal(t, float64(expectedTotalPages), totalPages)
+			},
+		},
+		{
+			name:           "page beyond total returns empty data",
+			query:          "?page=100&page_size=10",
+			expectedStatus: http.StatusOK,
+			checkResponse: func(t *testing.T, resp map[string]any) {
+				data := resp["data"].([]any)
+				assert.Empty(t, data)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet, "/authors"+tt.query, nil)
 			w := httptest.NewRecorder()
 
 			router.ServeHTTP(w, req)
