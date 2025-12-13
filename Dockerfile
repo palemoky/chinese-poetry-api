@@ -31,20 +31,18 @@ RUN apk add --no-cache ca-certificates curl gzip
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser
 
+# Switch to non-root user early
+USER appuser
+
 WORKDIR /app
 
-# Copy binary, config, and startup script
-COPY --from=builder /build/server .
-COPY config.yaml .
-COPY scripts/startup.sh .
-RUN chmod +x startup.sh server
+# Copy binary, config, and startup script with executable permissions
+COPY --from=builder --chmod=755 /build/server .
+COPY --chmod=644 config.yaml .
+COPY --chmod=755 scripts/startup.sh .
 
-# Create data directory and set ownership
-RUN mkdir -p /app/data && \
-    chown -R appuser:appuser /app
-
-# Switch to non-root user
-USER appuser
+# Create data directory (automatically owned by appuser)
+RUN mkdir -p /app/data
 
 # Minimal environment variables (others via .env)
 ENV PORT=1279 \
