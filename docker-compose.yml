@@ -3,11 +3,13 @@ services:
     image: palemoky/chinese-poetry-api:latest
     container_name: poetry-api
     restart: unless-stopped
+    env_file: .env
     ports:
       - "${PORT:-1279}:${PORT:-1279}"
-    env_file:
-      - .env
     environment:
       - TZ=Asia/Shanghai
+      # Optional: Override database connection pool (default: auto-detect based on CPU cores)
+      # - DB_MAX_OPEN_CONNS=20
+      # - DB_MAX_IDLE_CONNS=10
     volumes:
       - ./data:/app/data

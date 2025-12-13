@@ -86,8 +86,8 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 		return fmt.Errorf("failed to remove existing database: %w", err)
 	}
 
-	// Open database
-	db, err := database.Open(dbPath)
+	// Open database with single connection (safe for data processing)
+	db, err := database.Open(dbPath, 1, 1)
 	if err != nil {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
@@ -129,7 +129,8 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 }
 
 func printStatistics(dbPath string) error {
-	db, err := database.Open(dbPath)
+	// Use single connection for statistics (read-only)
+	db, err := database.Open(dbPath, 1, 1)
 	if err != nil {
 		return err
 	}

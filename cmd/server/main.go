@@ -57,10 +57,12 @@ func main() {
 	logger.Info("Starting Chinese Poetry API server",
 		zap.String("database", cfg.Database.Path),
 		zap.Int("port", cfg.Server.Port),
+		zap.Int("max_open_conns", cfg.Database.MaxOpenConns),
+		zap.Int("max_idle_conns", cfg.Database.MaxIdleConns),
 	)
 
-	// Open database
-	db, err := database.Open(cfg.Database.Path)
+	// Open database with configured connection pool
+	db, err := database.Open(cfg.Database.Path, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.Error(err))
 	}

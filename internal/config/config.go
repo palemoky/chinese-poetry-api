@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"runtime"
 	"strconv"
 
 	"github.com/spf13/viper"
@@ -25,7 +26,9 @@ type ServerConfig struct {
 
 // DatabaseConfig holds database configuration
 type DatabaseConfig struct {
-	Path string `mapstructure:"path"`
+	Path         string `mapstructure:"path"`
+	MaxOpenConns int    `mapstructure:"max_open_conns"` // Maximum number of open connections
+	MaxIdleConns int    `mapstructure:"max_idle_conns"` // Maximum number of idle connections
 }
 
 type DownloadConfig struct {
@@ -75,6 +78,9 @@ func Load(configPath string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	// Auto-detect connection pool size based on CPU cores if not configured
+	cfg.applyConnectionPoolDefaults()
+
 	// Validate configuration
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid configuration: %w", err)
@@ -97,6 +103,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("graphql.complexity_limit", 1000)
 	v.SetDefault("search.max_results", 1000)
 	v.SetDefault("search.default_page_size", 20)
+	// Database connection pool - auto-detect based on CPU cores
+	// 0 means auto-detect (will be set to runtime.NumCPU() in Load())
+	v.SetDefault("database.max_open_conns", 0)
+	v.SetDefault("database.max_idle_conns", 0)
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -131,6 +141,18 @@ func bindEnvVars(v *viper.Viper) {
 			v.Set("rate_limit.burst", b)
 		}
 	}
+
+	// Database connection pool
+	if maxOpen := os.Getenv("DB_MAX_OPEN_CONNS"); maxOpen != "" {
+		if m, err := strconv.Atoi(maxOpen); err == nil {
+			v.Set("database.max_open_conns", m)
+		}
+	}
+	if maxIdle := os.Getenv("DB_MAX_IDLE_CONNS"); maxIdle != "" {
+		if m, err := strconv.Atoi(maxIdle); err == nil {
+			v.Set("database.max_idle_conns", m)
+		}
+	}
 }
 
 // Validate validates the configuration
@@ -156,4 +178,28 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
+}
+
+// applyConnectionPoolDefaults sets intelligent defaults for connection pool based on CPU cores
+func (c *Config) applyConnectionPoolDefaults() {
+	numCPU := runtime.NumCPU()
+
+	// Auto-detect max_open_conns if not configured (0 or negative)
+	if c.Database.MaxOpenConns <= 0 {
+		// Adaptive strategy based on CPU count:
+		// - Multi-core (>4): Use NumCPU directly (sufficient parallelism)
+		// - Few cores (≤4): Use NumCPU*2 to better utilize I/O wait time
+		// - Cap at 50 to prevent excessive connections
+		if numCPU > 4 {
+			c.Database.MaxOpenConns = min(numCPU, 50)
+		} else {
+			c.Database.MaxOpenConns = min(numCPU*2, 50)
+		}
+	}
+
+	// Auto-detect max_idle_conns if not configured
+	if c.Database.MaxIdleConns <= 0 {
+		// Idle connections should be about half of max open connections
+		c.Database.MaxIdleConns = max(c.Database.MaxOpenConns/2, 1)
+	}
 }

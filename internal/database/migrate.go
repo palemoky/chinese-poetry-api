@@ -18,7 +18,9 @@ type DB struct {
 }
 
 // Open opens a connection to the SQLite database using GORM
-func Open(path string) (*DB, error) {
+// maxOpenConns: maximum number of open connections (0 = use default of 1 for safety)
+// maxIdleConns: maximum number of idle connections (0 = use default of 1)
+func Open(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
 	// Configure GORM
 	config := &gorm.Config{
 		Logger:  logger.Default.LogMode(logger.Silent), // Change to logger.Info for debugging
@@ -48,12 +50,18 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("failed to get underlying sql.DB: %w", err)
 	}
 
-	// Set connection pool settings for SQLite
-	// SQLite works best with limited concurrent writers
-	// MaxOpenConns=1 ensures serialized writes (no lock conflicts)
-	// For read-heavy workloads, you can increase this
-	sqlDB.SetMaxOpenConns(1) // Single writer to avoid "database is locked"
-	sqlDB.SetMaxIdleConns(1)
+	// Set connection pool settings
+	// Default to 1 connection for safety (data processing)
+	// Can be increased for read-heavy API serving
+	if maxOpenConns <= 0 {
+		maxOpenConns = 1 // Safe default for write-heavy workloads
+	}
+	if maxIdleConns <= 0 {
+		maxIdleConns = 1
+	}
+
+	sqlDB.SetMaxOpenConns(maxOpenConns)
+	sqlDB.SetMaxIdleConns(maxIdleConns)
 	sqlDB.SetConnMaxLifetime(5 * time.Minute)
 
 	// Test connection

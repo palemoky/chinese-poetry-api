@@ -2,6 +2,13 @@ server:
   port: 1279
   mode: release  # debug, release, test
 
+database:
+  # Connection pool settings (0 = auto-detect based on CPU cores)
+  # Auto-detection: max_open_conns = min(NumCPU, 50), max_idle_conns = max_open_conns/2
+  # Manual override: set to specific values (e.g., 10, 20)
+  max_open_conns: 0  # 0 = auto (recommended), or set manually
+  max_idle_conns: 0  # 0 = auto (recommended), or set manually
+
 rate_limit:
   enabled: true
   requests_per_second: 10
