@@ -35,23 +35,23 @@ func setupTestEngine(t *testing.T) *Engine {
 	}
 	gormDB.Create(author)
 
-	poems := []database.Poem{
+	poems := []*database.Poem{
 		{
-			ID:        12345678901234,
+			ID:        1,
 			Title:     "静夜思",
 			Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
 			AuthorID:  &author.ID,
 			DynastyID: &dynasty.ID,
 		},
 		{
-			ID:        12345678901235,
+			ID:        2,
 			Title:     "望庐山瀑布",
 			Content:   datatypes.JSON([]byte(`["日照香炉生紫烟","遥看瀑布挂前川","飞流直下三千尺","疑是银河落九天"]`)),
 			AuthorID:  &author.ID,
 			DynastyID: &dynasty.ID,
 		},
 		{
-			ID:        12345678901236,
+			ID:        3,
 			Title:     "早发白帝城",
 			Content:   datatypes.JSON([]byte(`["朝辞白帝彩云间","千里江陵一日还","两岸猿声啼不住","轻舟已过万重山"]`)),
 			AuthorID:  &author.ID,

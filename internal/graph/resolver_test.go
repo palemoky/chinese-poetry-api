@@ -59,7 +59,7 @@ func createTestData(t *testing.T, repo *database.Repository) (dynastyID, authorI
 
 	// Create poem
 	poem := &database.Poem{
-		ID:        12345678901234,
+		ID:        1,
 		Title:     "静夜思",
 		Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
 		AuthorID:  &authorID,
@@ -84,7 +84,7 @@ func TestPoemQuery(t *testing.T) {
 			}
 		}
 
-		err := c.Post(`query { poem(id: "12345678901234") { title content } }`, &resp)
+		err := c.Post(`query { poem(id: "1") { title content } }`, &resp)
 		require.NoError(t, err)
 		assert.Equal(t, "静夜思", resp.Poem.Title)
 		assert.Len(t, resp.Poem.Content, 4)
@@ -98,7 +98,7 @@ func TestPoemQuery(t *testing.T) {
 		}
 
 		// Non-existent poem returns an error in GraphQL
-		err := c.Post(`query { poem(id: "99999999999999") { title } }`, &resp)
+		err := c.Post(`query { poem(id: "999") { title } }`, &resp)
 		// The error is expected since the poem doesn't exist
 		assert.Error(t, err)
 	})
@@ -289,7 +289,7 @@ func TestResolverWithContext(t *testing.T) {
 	ctx := context.Background()
 
 	// Test poem resolver directly (nil lang = default to simplified Chinese)
-	poem, err := resolver.Query().Poem(ctx, "12345678901234", nil)
+	poem, err := resolver.Query().Poem(ctx, "1", nil)
 	require.NoError(t, err)
 	assert.NotNil(t, poem)
 	assert.Equal(t, "静夜思", poem.Title)

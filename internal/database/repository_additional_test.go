@@ -32,7 +32,7 @@ func TestGetAuthorsWithStats(t *testing.T) {
 	// Create poems for authors
 	content1 := []byte(`["床前明月光"]`)
 	_ = createTestPoem(repo, &Poem{
-		ID:          100001,
+		ID:          1,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content1),
 		ContentHash: calculateTestHash(content1),
@@ -43,7 +43,7 @@ func TestGetAuthorsWithStats(t *testing.T) {
 
 	content2 := []byte(`["日照香炉生紫烟"]`)
 	_ = createTestPoem(repo, &Poem{
-		ID:          100002,
+		ID:          2,
 		Title:       "望庐山瀑布",
 		Content:     datatypes.JSON(content2),
 		ContentHash: calculateTestHash(content2),
@@ -137,7 +137,7 @@ func TestGetPoemsByAuthor(t *testing.T) {
 	for i := range 5 {
 		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
 		_ = createTestPoem(repo, &Poem{
-			ID:          int64(200000 + i),
+			ID:          int64(10 + i),
 			Title:       fmt.Sprintf("测试诗歌%d", i),
 			Content:     datatypes.JSON(content),
 			ContentHash: calculateTestHash(content),
@@ -179,7 +179,7 @@ func TestGetDynastiesWithStats(t *testing.T) {
 
 	content3 := []byte(`["床前明月光"]`)
 	_ = createTestPoem(repo, &Poem{
-		ID:          300001,
+		ID:          20,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content3),
 		ContentHash: calculateTestHash(content3),
@@ -253,7 +253,7 @@ func TestGetPoetryTypesWithStats(t *testing.T) {
 
 	content4 := []byte(`["床前明月光"]`)
 	_ = createTestPoem(repo, &Poem{
-		ID:          400001,
+		ID:          30,
 		Title:       "静夜思",
 		Content:     datatypes.JSON(content4),
 		ContentHash: calculateTestHash(content4),
@@ -335,7 +335,7 @@ func TestGetPoemsByType(t *testing.T) {
 	for i := range 3 {
 		content := []byte(fmt.Sprintf(`["测试内容%d"]`, i))
 		_ = createTestPoem(repo, &Poem{
-			ID:          int64(500000 + i),
+			ID:          int64(40 + i),
 			Title:       fmt.Sprintf("测试诗歌%d", i),
 			Content:     datatypes.JSON(content),
 			ContentHash: calculateTestHash(content),

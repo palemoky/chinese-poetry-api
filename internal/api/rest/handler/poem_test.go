@@ -66,8 +66,8 @@ func TestListPoems(t *testing.T) {
 	handler := NewPoemHandler(repo, searchEngine)
 
 	// Create test poems
-	createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
-	createTestPoem(t, repo, 12345678901235, "春晓", "test content 2")
+	createTestPoem(t, repo, 1, "静夜思", "test content")
+	createTestPoem(t, repo, 2, "春晓", "test content 2")
 
 	router.GET("/poems", handler.ListPoems)
 
@@ -143,7 +143,7 @@ func TestSearchPoems(t *testing.T) {
 	handler := NewPoemHandler(repo, searchEngine)
 
 	// Create test poems
-	createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
+	createTestPoem(t, repo, 1, "静夜思", "test content")
 
 	router.GET("/poems/search", handler.SearchPoems)
 
@@ -294,7 +294,7 @@ func TestRandomPoem(t *testing.T) {
 			router.GET("/random", handler.RandomPoem)
 
 			if tt.setupData {
-				createTestPoem(t, repo, 12345678901234, "静夜思", "test content")
+				createTestPoem(t, repo, 1, "静夜思", "test content")
 			}
 
 			req := httptest.NewRequest(http.MethodGet, "/random"+tt.query, nil)

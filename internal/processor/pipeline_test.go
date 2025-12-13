@@ -100,26 +100,6 @@ func TestSetBatchSize(t *testing.T) {
 	}
 }
 
-func TestMin(t *testing.T) {
-	tests := []struct {
-		name string
-		a    int
-		b    int
-		want int
-	}{
-		{"a < b", 5, 10, 5},
-		{"a > b", 10, 5, 5},
-		{"a == b", 5, 5, 5},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := min(tt.a, tt.b)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 // Benchmark tests
 func BenchmarkGetOptimalConfig(b *testing.B) {
 	for b.Loop() {
