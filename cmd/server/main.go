@@ -20,7 +20,6 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
-	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
 // Defining the Graphql handler
@@ -71,14 +70,11 @@ func main() {
 	// Create repository
 	repo := database.NewRepository(db)
 
-	// Create search engine
-	searchEngine := search.NewEngine(db)
-
 	// Create GraphQL resolver
-	resolver := graph.NewResolver(db, repo, searchEngine)
+	resolver := graph.NewResolver(db, repo)
 
 	// Setup Gin router
-	router := rest.SetupRouter(cfg, db, repo, searchEngine)
+	router := rest.SetupRouter(cfg, db, repo)
 
 	// Add GraphQL endpoints
 	router.POST("/graphql", graphqlHandler(resolver))

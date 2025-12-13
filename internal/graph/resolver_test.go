@@ -15,7 +15,6 @@ import (
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
-	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
 // setupTestResolver creates a test resolver with an in-memory database
@@ -31,9 +30,8 @@ func setupTestResolver(t *testing.T) (*Resolver, *database.Repository) {
 	require.NoError(t, err)
 
 	repo := database.NewRepository(db)
-	searchEngine := search.NewEngine(db)
 
-	resolver := NewResolver(db, repo, searchEngine)
+	resolver := NewResolver(db, repo)
 	return resolver, repo
 }
 

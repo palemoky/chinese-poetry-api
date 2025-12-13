@@ -14,11 +14,10 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
-	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
-// setupPoemTestRouter creates a test router with database and search engine
-func setupPoemTestRouter(t *testing.T) (*gin.Engine, *database.Repository, *search.Engine) {
+// setupPoemTestRouter creates a test router with database
+func setupPoemTestRouter(t *testing.T) (*gin.Engine, *database.Repository) {
 	gin.SetMode(gin.TestMode)
 
 	// Create in-memory database
@@ -32,10 +31,9 @@ func setupPoemTestRouter(t *testing.T) (*gin.Engine, *database.Repository, *sear
 	require.NoError(t, err)
 
 	repo := database.NewRepository(db)
-	searchEngine := search.NewEngine(db)
 
 	router := gin.New()
-	return router, repo, searchEngine
+	return router, repo
 }
 
 // createTestPoem creates a test poem in the database
@@ -62,8 +60,8 @@ func createTestPoem(t *testing.T, repo *database.Repository, id int64, title, co
 }
 
 func TestListPoems(t *testing.T) {
-	router, repo, searchEngine := setupPoemTestRouter(t)
-	handler := NewPoemHandler(repo, searchEngine)
+	router, repo := setupPoemTestRouter(t)
+	handler := NewPoemHandler(repo)
 
 	// Create test poems
 	createTestPoem(t, repo, 1, "静夜思", "test content")
@@ -139,8 +137,8 @@ func TestListPoems(t *testing.T) {
 }
 
 func TestSearchPoems(t *testing.T) {
-	router, repo, searchEngine := setupPoemTestRouter(t)
-	handler := NewPoemHandler(repo, searchEngine)
+	router, repo := setupPoemTestRouter(t)
+	handler := NewPoemHandler(repo)
 
 	// Create test poems
 	createTestPoem(t, repo, 1, "静夜思", "test content")
@@ -225,8 +223,8 @@ func TestSearchPoems(t *testing.T) {
 }
 
 func TestRandomPoem(t *testing.T) {
-	router, repo, searchEngine := setupPoemTestRouter(t)
-	handler := NewPoemHandler(repo, searchEngine)
+	router, repo := setupPoemTestRouter(t)
+	handler := NewPoemHandler(repo)
 
 	router.GET("/random", handler.RandomPoem)
 
@@ -289,8 +287,8 @@ func TestRandomPoem(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create fresh router for each test to avoid data pollution
-			router, repo, searchEngine := setupPoemTestRouter(t)
-			handler := NewPoemHandler(repo, searchEngine)
+			router, repo := setupPoemTestRouter(t)
+			handler := NewPoemHandler(repo)
 			router.GET("/random", handler.RandomPoem)
 
 			if tt.setupData {

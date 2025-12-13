@@ -13,7 +13,6 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
 	"github.com/palemoky/chinese-poetry-api/internal/graph/model"
-	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
 // Poems is the resolver for the poems field.
@@ -116,57 +115,64 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *dat
 		ps = *pageSize
 	}
 
-	st := search.SearchTypeAll
+	// Map GraphQL search type to repository search type
+	st := "all"
 	if searchType != nil {
 		switch *searchType {
 		case model.SearchTypeTitle:
-			st = search.SearchTypeTitle
+			st = "title"
 		case model.SearchTypeContent:
-			st = search.SearchTypeContent
+			st = "content"
 		case model.SearchTypeAuthor:
-			st = search.SearchTypeAuthor
+			st = "author"
 		}
 	}
 
-	result, err := r.Search.Search(search.SearchParams{
-		Query:      query,
-		SearchType: st,
-		Page:       p,
-		PageSize:   ps,
-	})
+	// Use repository's SearchPoems with language context
+	langVal := parseLang(lang)
+	repo := r.Repo.WithLang(langVal)
+	poems, total, err := repo.SearchPoems(query, st, p, ps)
 	if err != nil {
 		return nil, err
 	}
 
-	edges := make([]database.PoemEdge, len(result.Poems))
-	for i, poem := range result.Poems {
+	edges := make([]database.PoemEdge, len(poems))
+	for i, poem := range poems {
 		edges[i] = database.PoemEdge{
 			Node:   poem,
 			Cursor: strconv.Itoa(i),
 		}
 	}
 
+	hasMore := (p * ps) < int(total)
 	return &database.PoemConnection{
 		Edges:      edges,
-		PageInfo:   database.PageInfo{HasNextPage: result.HasMore, HasPreviousPage: p > 1},
-		TotalCount: result.TotalCount,
+		PageInfo:   database.PageInfo{HasNextPage: hasMore, HasPreviousPage: p > 1},
+		TotalCount: int(total),
 	}, nil
 }
 
 // RandomPoem is the resolver for the randomPoem field.
 func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error) {
-	// Simple random query - use dynamic table name
-	poemTable := database.PoemsTable(database.LangHans)
-	var id string
-	if err := r.DB.Raw(`SELECT id FROM ` + poemTable + ` ORDER BY RANDOM() LIMIT 1`).Scan(&id).Error; err != nil {
-		return nil, err
+	// Parse filter IDs
+	var dynastyIDInt, typeIDInt *int64
+	if dynastyID != nil {
+		id, err := strconv.ParseInt(*dynastyID, 10, 64)
+		if err == nil {
+			dynastyIDInt = &id
+		}
+	}
+	if typeID != nil {
+		id, err := strconv.ParseInt(*typeID, 10, 64)
+		if err == nil {
+			typeIDInt = &id
+		}
 	}
 
-	poem, err := r.Repo.GetPoemByID(id)
-	if err != nil {
-		return nil, err
-	}
-	return poem, nil
+	// Use repository's GetRandomPoem with language context (same as REST)
+	langVal := parseLang(lang)
+	repo := r.Repo.WithLang(langVal)
+	return repo.GetRandomPoem(dynastyIDInt, nil, typeIDInt)
 }
 
 // Author is the resolver for the author field.

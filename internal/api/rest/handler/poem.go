@@ -7,20 +7,17 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
-	"github.com/palemoky/chinese-poetry-api/internal/search"
 )
 
 // PoemHandler handles poem-related requests
 type PoemHandler struct {
-	repo   *database.Repository
-	search *search.Engine
+	repo *database.Repository
 }
 
 // NewPoemHandler creates a new poem handler
-func NewPoemHandler(repo *database.Repository, searchEngine *search.Engine) *PoemHandler {
+func NewPoemHandler(repo *database.Repository) *PoemHandler {
 	return &PoemHandler{
-		repo:   repo,
-		search: searchEngine,
+		repo: repo,
 	}
 }
 

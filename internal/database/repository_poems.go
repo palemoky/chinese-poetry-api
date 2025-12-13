@@ -1,6 +1,11 @@
 package database
 
-import "gorm.io/gorm"
+import (
+	"math/rand"
+	"strconv"
+
+	"gorm.io/gorm"
+)
 
 // Poem query methods for the Repository
 
@@ -196,8 +201,8 @@ func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID,
 }
 
 // GetRandomPoem returns a random poem with optional filters
-// This is much more efficient than using COUNT + OFFSET approach
-// Uses SQLite's ORDER BY RANDOM() LIMIT 1 for optimal performance
+// This uses an optimized algorithm based on MAX(id) for O(log n) performance
+// instead of ORDER BY RANDOM() which requires O(n) full table scan
 func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, error) {
 	query := r.db.Table(r.poemsTable())
 
@@ -212,21 +217,30 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, e
 		query = query.Where("type_id = ?", *typeID)
 	}
 
-	// Get a random poem using SQLite's RANDOM()
-	var poems []Poem
-	err := query.Order("RANDOM()").Limit(1).Find(&poems).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// Check if we found a poem
-	if len(poems) == 0 {
+	// Get max ID with filters (fast - uses primary key index)
+	var maxID int64
+	err := query.Select("MAX(id)").Scan(&maxID).Error
+	if err != nil || maxID == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Load relations for the poem
-	r.loadPoemRelations(poems)
-	return &poems[0], nil
+	// Generate random ID between 1 and maxID
+	randomID := rand.Int63n(maxID) + 1
+
+	// Try to find poem with id >= randomID (handles ID gaps)
+	var id int64
+	err = query.Select("id").Where("id >= ?", randomID).Order("id ASC").Limit(1).Scan(&id).Error
+	if err != nil || id == 0 {
+		// Fallback: find poem with id <= randomID
+		// This ensures we always find a poem even with ID gaps
+		err = query.Select("id").Where("id <= ?", randomID).Order("id DESC").Limit(1).Scan(&id).Error
+		if err != nil || id == 0 {
+			return nil, gorm.ErrRecordNotFound
+		}
+	}
+
+	// Load the full poem by ID with all relations
+	return r.GetPoemByID(strconv.FormatInt(id, 10))
 }
 
 // ListAuthorPoems returns a paginated list of poems by a specific author

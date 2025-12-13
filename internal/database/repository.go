@@ -51,3 +51,9 @@ func (r *Repository) poemsTable() string       { return PoemsTable(r.lang) }
 func (r *Repository) authorsTable() string     { return AuthorsTable(r.lang) }
 func (r *Repository) dynastiesTable() string   { return DynastiesTable(r.lang) }
 func (r *Repository) poetryTypesTable() string { return PoetryTypesTable(r.lang) }
+
+// Public accessors for external packages (e.g., search engine)
+func (r *Repository) DB() *DB                { return r.db }
+func (r *Repository) PoemsTable() string     { return r.poemsTable() }
+func (r *Repository) AuthorsTable() string   { return r.authorsTable() }
+func (r *Repository) DynastiesTable() string { return r.dynastiesTable() }

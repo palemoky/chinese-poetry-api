@@ -4,6 +4,7 @@ import (
 	"strconv"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/helpers"
 )
 
 // Pagination holds parsed pagination parameters
@@ -35,25 +36,15 @@ func parsePagination(page, pageSize *int) Pagination {
 }
 
 // parseOptionalID parses an optional string ID to int64 pointer.
-// Returns nil if the input is nil or empty.
+// Uses common helper function.
 func parseOptionalID(id *string) (*int64, error) {
-	if id == nil || *id == "" {
-		return nil, nil
-	}
-	parsed, err := strconv.ParseInt(*id, 10, 64)
-	if err != nil {
-		return nil, err
-	}
-	return &parsed, nil
+	return helpers.ParseOptionalInt64(id)
 }
 
 // parseLang converts an optional Lang pointer to a Lang value.
-// Returns LangHans (simplified) as default if nil.
+// Uses common helper function.
 func parseLang(lang *database.Lang) database.Lang {
-	if lang == nil {
-		return database.LangHans
-	}
-	return *lang
+	return helpers.ParseLangPointer(lang)
 }
 
 // buildPoemConnection creates a PoemConnection from poems slice and pagination info.
