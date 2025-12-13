@@ -1,7 +1,8 @@
 services:
   poetry-api:
     image: palemoky/chinese-poetry-api:latest
-    container_name: chinese-poetry-api
+    container_name: poetry-api
+    restart: unless-stopped
     ports:
       - "${PORT:-1279}:${PORT:-1279}"
     env_file:
@@ -10,4 +11,3 @@ services:
       - TZ=Asia/Shanghai
     volumes:
       - ./data:/app/data
-    restart: unless-stopped
