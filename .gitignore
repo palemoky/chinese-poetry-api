@@ -49,3 +49,7 @@ data/
 # Config overrides
 config.local.yaml
 .env
+
+# Load test results
+tests/load/results.json
+tests/load/*.har
