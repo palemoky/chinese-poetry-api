@@ -27,6 +27,10 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates curl gzip
 
+# Create non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser
+
 WORKDIR /app
 
 # Copy binary, config, and startup script
@@ -34,6 +38,13 @@ COPY --from=builder /build/server .
 COPY config.yaml .
 COPY scripts/startup.sh .
 RUN chmod +x startup.sh server
+
+# Create data directory and set ownership
+RUN mkdir -p /app/data && \
+    chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
 
 # Minimal environment variables (others via .env)
 ENV PORT=1279 \
