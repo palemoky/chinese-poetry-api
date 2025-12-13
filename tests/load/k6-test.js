@@ -44,7 +44,7 @@ export default function () {
 
     sleep(1);
 
-    // Scenario 3: Random poem with filter (new feature)
+    // Scenario 3: Random poem with filter
     const filteredRandomRes = http.get(`${BASE_URL}/api/v1/poems/random?author=李白`);
     check(filteredRandomRes, {
         'filtered random status 200': (r) => r.status === 200,

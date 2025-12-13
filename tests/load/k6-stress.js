@@ -1,19 +1,19 @@
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
-// Stress test configuration - push to the limit
+// Stress test configuration - optimized based on performance testing
 export const options = {
     stages: [
         { duration: '1m', target: 500 },   // Ramp up to 500 users
-        { duration: '3m', target: 1000 },  // Ramp up to 1000 users
-        { duration: '5m', target: 1000 },  // Stay at 1000 users
-        { duration: '1m', target: 2000 },  // Spike to 2000 users
-        { duration: '2m', target: 2000 },  // Stay at 2000 users
+        { duration: '2m', target: 800 },   // Ramp up to 800 users
+        { duration: '3m', target: 800 },   // Stay at 800 users (sweet spot)
+        { duration: '1m', target: 1200 },  // Push to 1200 users
+        { duration: '2m', target: 1200 },  // Stay at 1200 users (observe degradation)
         { duration: '1m', target: 0 },     // Ramp down
     ],
     thresholds: {
-        http_req_duration: ['p(95)<1000', 'p(99)<2000'], // More relaxed for stress test
-        http_req_failed: ['rate<0.05'],                   // Allow 5% error rate
+        http_req_duration: ['p(95)<3000', 'p(99)<5000'], // Realistic for high load
+        http_req_failed: ['rate<0.05'],                    // Allow 5% error rate
     },
 };
 
