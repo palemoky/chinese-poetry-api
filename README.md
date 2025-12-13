@@ -18,7 +18,7 @@
 ## ✨ 特性
 
 - 🚀 **高性能**: Go 语言编写，支持并发处理，性能优化（简繁转换 ~300ns/op）
-- 📚 **海量数据**: 包含唐诗、宋词、元曲等近40万首诗词
+- 📚 **海量数据**: 包含唐诗、宋词、元曲等近 40 万首诗词
 - 🔍 **强大搜索**: 支持全文搜索、标题/内容/作者分类搜索
 - 🌏 **双语支持**: 同一数据库同时存储简体和繁体中文，通过 `?lang=` 参数切换
 - 🎯 **多种接口**: REST API 和 GraphQL 双接口支持
@@ -68,10 +68,10 @@ git submodule update --init
 
 所有接口支持 `lang` 参数切换简繁体：
 
-| 参数值 | 说明 |
-|:------:|:----:|
+|  参数值   |       说明       |
+| :-------: | :--------------: |
 | `zh-Hans` | 简体中文（默认） |
-| `zh-Hant` | 繁体中文 |
+| `zh-Hant` |     繁体中文     |
 
 ### REST API
 
@@ -113,7 +113,9 @@ query {
       node {
         title
         content
-        author { name }
+        author {
+          name
+        }
       }
     }
     totalCount
@@ -124,7 +126,12 @@ query {
 query {
   searchPoems(query: "静夜思", searchType: TITLE) {
     edges {
-      node { title author { name } }
+      node {
+        title
+        author {
+          name
+        }
+      }
     }
   }
 }
@@ -134,19 +141,43 @@ query {
   statistics {
     totalPoems
     totalAuthors
-    poemsByDynasty { dynasty { name } count }
+    poemsByDynasty {
+      dynasty {
+        name
+      }
+      count
+    }
   }
 }
 ```
 
 ## 🔍 搜索功能
 
-| 类型 | 说明 | 示例 |
-|:----:|:----:|:----:|
-| `all` | 全文搜索（默认） | `?q=月` |
-| `title` | 标题搜索 | `?q=静夜思&type=title` |
-| `content` | 内容搜索 | `?q=床前明月光&type=content` |
-| `author` | 作者搜索 | `?q=李白&type=author` |
+|   类型    |       说明       |             示例             |
+| :-------: | :--------------: | :--------------------------: |
+|   `all`   | 全文搜索（默认） |           `?q=月`            |
+|  `title`  |     标题搜索     |    `?q=静夜思&type=title`    |
+| `content` |     内容搜索     | `?q=床前明月光&type=content` |
+| `author`  |     作者搜索     |    `?q=李白&type=author`     |
+
+### ⚠️ 性能说明
+
+**搜索端点性能特性**：
+
+- 当前实现使用全表扫描（`LIKE` 查询）
+- 在高性能设备上响应时间：~1 秒
+- 在树莓派等低功耗设备上可能有明显延迟：
+  - **Raspberry Pi 5**: ~5 秒
+  - **Raspberry Pi 4**: ~10 秒
+  - **Raspberry Pi 3B+**: 15-20 秒（实测）
+
+**随机诗词端点**（`/api/v1/poems/random`）：
+
+- 使用优化的 MAX(id) 算法
+- 所有设备响应时间：<100ms ⚡
+- 推荐作为主要使用方式
+
+> 💡 **提示**: 如果您需要高性能搜索功能，欢迎提交 Issue。我们可以实施 FTS5 全文搜索优化，将搜索时间降低到 <100ms。
 
 ## 📖 数据集
 
@@ -167,7 +198,6 @@ query {
 |   论语   |  20   |
 | 四书五经 |  14   |
 |   其他   | 96232 |
-
 
 ## 🏗️ 系统架构
 
