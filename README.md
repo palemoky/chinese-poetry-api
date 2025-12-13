@@ -47,6 +47,21 @@ make process-data  # 处理数据
 make run-server    # 启动服务
 ```
 
+### 克隆仓库
+
+本项目使用 Git Submodules 管理诗词数据，推荐使用以下命令快速克隆：
+
+```bash
+# 完整克隆（包含 submodules）
+git clone --recurse-submodules --depth=1 https://github.com/palemoky/chinese-poetry-api.git
+```
+
+如果已经克隆了仓库，可以单独更新 submodules：
+
+```bash
+git submodule update --init
+```
+
 ## 📡 API 使用
 
 ### 多语言支持
