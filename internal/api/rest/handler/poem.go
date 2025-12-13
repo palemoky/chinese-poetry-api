@@ -51,45 +51,33 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
 }
 
-// SearchPoems searches for poems
-// Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
+// SearchPoems searches for poems by query string
 func (h *PoemHandler) SearchPoems(c *gin.Context) {
+	lang := parseLang(c)
+	repo := h.repo.WithLang(lang)
+
 	query := c.Query("q")
 	if query == "" {
 		respondError(c, http.StatusBadRequest, "query parameter 'q' is required")
 		return
 	}
 
-	lang := parseLang(c)
-	repo := h.repo.WithLang(lang)
-	searchType := search.SearchType(c.DefaultQuery("type", "all"))
+	searchType := c.DefaultQuery("type", "all")
 	pagination := ParsePagination(c)
 
-	// Note: Search engine uses the default repo, but results are filtered by lang
-	result, err := h.search.Search(search.SearchParams{
-		Query:      query,
-		SearchType: searchType,
-		Page:       pagination.Page,
-		PageSize:   pagination.PageSize,
-	})
+	// Use repository's search method instead of search engine
+	poems, total, err := repo.SearchPoems(query, searchType, pagination.Page, pagination.PageSize)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "search failed")
 		return
 	}
 
-	// Re-fetch poems with lang-aware repo to get correct content
-	data := make([]map[string]any, len(result.Poems))
-	for i, poem := range result.Poems {
-		// Get poem from lang-aware repo if needed for proper content
-		poemID := strconv.FormatInt(poem.ID, 10)
-		if p, err := repo.GetPoemByID(poemID); err == nil {
-			data[i] = formatPoem(p)
-		} else {
-			data[i] = formatPoem(&poem)
-		}
+	data := make([]map[string]any, len(poems))
+	for i, poem := range poems {
+		data[i] = formatPoem(&poem)
 	}
 
-	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(result.TotalCount)))
+	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, total))
 }
 
 // RandomPoem returns a random poem with optional filters

@@ -29,7 +29,7 @@ type RepositoryInterface interface {
 	ListPoemsWithFilter(limit, offset int, dynastyID, authorID, typeID *int64) ([]Poem, int, error)
 	ListAuthorPoems(authorID int64, limit, offset int) ([]Poem, int, error)
 	ListAuthorsWithFilter(limit, offset int, dynastyID *int64) ([]AuthorWithStats, int, error)
-	SearchPoems(query string, limit int) ([]Poem, error)
+	SearchPoems(query string, searchType string, page, pageSize int) ([]Poem, int64, error)
 }
 
 // Repository handles database operations
@@ -595,24 +595,81 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 	return authors, int(totalCount), nil
 }
 
-// SearchPoems searches poems using LIKE query across title, content, and author
-func (r *Repository) SearchPoems(query string, limit int) ([]Poem, error) {
+// SearchPoems searches for poems with full-text search support
+// searchType can be: "all", "title", "content", "author"
+func (r *Repository) SearchPoems(query string, searchType string, page, pageSize int) ([]Poem, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+
+	offset := (page - 1) * pageSize
 	pattern := "%" + query + "%"
 	poemTable := r.poemsTable()
 	authorTable := r.authorsTable()
 
 	var poems []Poem
-	err := r.db.Table(poemTable).
-		Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-		Where(poemTable+".title LIKE ? OR "+poemTable+".content LIKE ? OR "+authorTable+".name LIKE ?",
-			pattern, pattern, pattern).
-		Limit(limit).
-		Find(&poems).Error
-	if err != nil {
-		return nil, err
+	var total int64
+
+	switch searchType {
+	case "title":
+		// Search in title only
+		r.db.Table(poemTable).Where("title LIKE ?", pattern).Count(&total)
+		err := r.db.Table(poemTable).
+			Where("title LIKE ?", pattern).
+			Limit(pageSize).Offset(offset).
+			Find(&poems).Error
+		if err != nil {
+			return nil, 0, err
+		}
+
+	case "content":
+		// Search in content only
+		r.db.Table(poemTable).Where("content LIKE ?", pattern).Count(&total)
+		err := r.db.Table(poemTable).
+			Where("content LIKE ?", pattern).
+			Limit(pageSize).Offset(offset).
+			Find(&poems).Error
+		if err != nil {
+			return nil, 0, err
+		}
+
+	case "author":
+		// Search in author name
+		r.db.Table(poemTable).
+			Joins("JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
+			Where(authorTable+".name LIKE ?", pattern).
+			Count(&total)
+		err := r.db.Table(poemTable).
+			Joins("JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
+			Where(authorTable+".name LIKE ?", pattern).
+			Limit(pageSize).Offset(offset).
+			Find(&poems).Error
+		if err != nil {
+			return nil, 0, err
+		}
+
+	default: // "all"
+		// Search in title, content, and author name
+		r.db.Table(poemTable).
+			Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
+			Where(poemTable+".title LIKE ? OR "+poemTable+".content LIKE ? OR "+authorTable+".name LIKE ?",
+				pattern, pattern, pattern).
+			Count(&total)
+		err := r.db.Table(poemTable).
+			Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
+			Where(poemTable+".title LIKE ? OR "+poemTable+".content LIKE ? OR "+authorTable+".name LIKE ?",
+				pattern, pattern, pattern).
+			Limit(pageSize).Offset(offset).
+			Find(&poems).Error
+		if err != nil {
+			return nil, 0, err
+		}
 	}
 
 	// Load relations
 	r.loadPoemRelations(poems)
-	return poems, nil
+	return poems, total, nil
 }

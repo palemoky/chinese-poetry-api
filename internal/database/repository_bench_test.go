@@ -34,7 +34,7 @@ func BenchmarkGetPoemByID(b *testing.B) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poem := &Poem{
-		ID:        12345678901234,
+		ID:        1,
 		Title:     "静夜思",
 		Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜","举头望明月","低头思故乡"]`)),
 		AuthorID:  &authorID,
@@ -43,7 +43,7 @@ func BenchmarkGetPoemByID(b *testing.B) {
 	_ = repo.InsertPoem(poem)
 
 	for b.Loop() {
-		_, _ = repo.GetPoemByID("12345678901234")
+		_, _ = repo.GetPoemByID("1")
 	}
 }
 
@@ -55,15 +55,17 @@ func BenchmarkListPoems(b *testing.B) {
 	dynastyID, _ := repo.GetOrCreateDynasty("唐")
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
-	for i := range 100 {
-		poem := &Poem{
-			ID:        int64(10000000000000 + i),
-			Title:     "静夜思",
-			Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜"]`)),
+	// Prepare poems for insertion
+	poems := make([]*Poem, 100)
+	for i := 0; i < 100; i++ {
+		poems[i] = &Poem{
+			ID:        int64(i + 1), // Simple sequential ID
+			Title:     "测试诗词" + string(rune('A'+i%26)),
+			Content:   datatypes.JSON([]byte(`["测试内容"]`)),
 			AuthorID:  &authorID,
 			DynastyID: &dynastyID,
 		}
-		_ = repo.InsertPoem(poem)
+		_ = repo.InsertPoem(poems[i])
 	}
 
 	testCases := []struct {
@@ -123,7 +125,7 @@ func BenchmarkInsertPoem(b *testing.B) {
 	for i := range b.N {
 		b.StopTimer()
 		poem := &Poem{
-			ID:        int64(10000000000000 + i),
+			ID:        int64(i + 1),
 			Title:     "静夜思",
 			Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜"]`)),
 			AuthorID:  &authorID,

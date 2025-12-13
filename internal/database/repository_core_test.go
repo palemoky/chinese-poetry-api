@@ -17,7 +17,7 @@ func TestInsertPoem(t *testing.T) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poem := &Poem{
-		ID:        12345678901234,
+		ID:        1,
 		Title:     "静夜思",
 		Content:   datatypes.JSON([]byte(`["床前明月光","疑是地上霜"]`)),
 		AuthorID:  &authorID,
@@ -41,7 +41,7 @@ func TestGetPoemByID(t *testing.T) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poem := &Poem{
-		ID:        12345678901234,
+		ID:        2,
 		Title:     "静夜思",
 		Content:   datatypes.JSON([]byte(`["床前明月光"]`)),
 		AuthorID:  &authorID,
@@ -50,7 +50,7 @@ func TestGetPoemByID(t *testing.T) {
 	_ = repo.InsertPoem(poem)
 
 	t.Run("get existing poem", func(t *testing.T) {
-		result, err := repo.GetPoemByID("12345678901234")
+		result, err := repo.GetPoemByID("2")
 		require.NoError(t, err)
 		assert.NotNil(t, result)
 		assert.Equal(t, "静夜思", result.Title)
@@ -59,7 +59,7 @@ func TestGetPoemByID(t *testing.T) {
 	})
 
 	t.Run("get non-existent poem", func(t *testing.T) {
-		result, err := repo.GetPoemByID("99999999999999")
+		result, err := repo.GetPoemByID("999")
 		assert.Error(t, err)
 		assert.Nil(t, result)
 	})
@@ -75,7 +75,7 @@ func TestListPoems(t *testing.T) {
 
 	for i := range 5 {
 		poem := &Poem{
-			ID:        int64(10000000000000 + i),
+			ID:        int64(10 + i),
 			Title:     "诗词" + string(rune('A'+i)),
 			Content:   datatypes.JSON([]byte(`["内容"]`)),
 			AuthorID:  &authorID,
@@ -114,10 +114,10 @@ func TestListPoemsWithFilter(t *testing.T) {
 	dumuID, _ := repo.GetOrCreateAuthor("杜牧", tangID)
 
 	poems := []*Poem{
-		{ID: 10000000000001, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID},
-		{ID: 10000000000002, Title: "唐诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID},
-		{ID: 10000000000003, Title: "唐诗3", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &tangID},
-		{ID: 10000000000004, Title: "宋诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &songID},
+		{ID: 1, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID},
+		{ID: 2, Title: "唐诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID},
+		{ID: 3, Title: "唐诗3", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &tangID},
+		{ID: 4, Title: "宋诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &songID},
 	}
 
 	for _, poem := range poems {
@@ -163,7 +163,7 @@ func TestListAuthorPoems(t *testing.T) {
 
 	for i := range 3 {
 		poem := &Poem{
-			ID:        int64(10000000000000 + i),
+			ID:        int64(20 + i),
 			Title:     "诗词" + string(rune('A'+i)),
 			Content:   datatypes.JSON([]byte(`["内容"]`)),
 			AuthorID:  &authorID,
@@ -199,9 +199,9 @@ func TestListAuthorsWithFilter(t *testing.T) {
 	sushiID, _ := repo.GetOrCreateAuthor("苏轼", songID)
 
 	// Create poems for authors
-	_ = repo.InsertPoem(&Poem{ID: 10000000000001, Title: "诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
-	_ = repo.InsertPoem(&Poem{ID: 10000000000002, Title: "诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &tangID})
-	_ = repo.InsertPoem(&Poem{ID: 10000000000003, Title: "诗3", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &sushiID, DynastyID: &songID})
+	_ = repo.InsertPoem(&Poem{ID: 30, Title: "诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
+	_ = repo.InsertPoem(&Poem{ID: 31, Title: "诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &dumuID, DynastyID: &tangID})
+	_ = repo.InsertPoem(&Poem{ID: 32, Title: "诗3", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &sushiID, DynastyID: &songID})
 
 	// Note: filter by dynasty test is commented out due to SQL ambiguity bug in ListAuthorsWithFilter
 	// t.Run("filter by dynasty", func(t *testing.T) {
@@ -229,9 +229,9 @@ func TestGetStatistics(t *testing.T) {
 	libaiID, _ := repo.GetOrCreateAuthor("李白", tangID)
 	sushiID, _ := repo.GetOrCreateAuthor("苏轼", songID)
 
-	_ = repo.InsertPoem(&Poem{ID: 10000000000001, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
-	_ = repo.InsertPoem(&Poem{ID: 10000000000002, Title: "唐诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
-	_ = repo.InsertPoem(&Poem{ID: 10000000000003, Title: "宋诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &sushiID, DynastyID: &songID})
+	_ = repo.InsertPoem(&Poem{ID: 40, Title: "唐诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
+	_ = repo.InsertPoem(&Poem{ID: 41, Title: "唐诗2", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &libaiID, DynastyID: &tangID})
+	_ = repo.InsertPoem(&Poem{ID: 42, Title: "宋诗1", Content: datatypes.JSON([]byte(`["内容"]`)), AuthorID: &sushiID, DynastyID: &songID})
 
 	stats, err := repo.GetStatistics()
 	require.NoError(t, err)
@@ -251,9 +251,9 @@ func TestSearchPoems(t *testing.T) {
 	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
 
 	poems := []*Poem{
-		{ID: 10000000000001, Title: "静夜思", Content: datatypes.JSON([]byte(`["床前明月光"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
-		{ID: 10000000000002, Title: "望庐山瀑布", Content: datatypes.JSON([]byte(`["日照香炉生紫烟"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
-		{ID: 10000000000003, Title: "早发白帝城", Content: datatypes.JSON([]byte(`["朝辞白帝彩云间"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
+		{ID: 50, Title: "静夜思", Content: datatypes.JSON([]byte(`["床前明月光"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
+		{ID: 51, Title: "望庐山瀑布", Content: datatypes.JSON([]byte(`["日照香炉生紫烟"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
+		{ID: 52, Title: "早发白帝城", Content: datatypes.JSON([]byte(`["朝辞白帝彩云间"]`)), AuthorID: &authorID, DynastyID: &dynastyID},
 	}
 
 	for _, poem := range poems {
@@ -261,20 +261,23 @@ func TestSearchPoems(t *testing.T) {
 	}
 
 	t.Run("search by title", func(t *testing.T) {
-		results, err := repo.SearchPoems("静夜思", 10)
+		results, total, err := repo.SearchPoems("静夜思", "all", 1, 10)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(results), 1)
+		assert.GreaterOrEqual(t, int(total), 1)
 	})
 
 	t.Run("search by content", func(t *testing.T) {
-		results, err := repo.SearchPoems("明月", 10)
+		results, total, err := repo.SearchPoems("明月", "all", 1, 10)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(t, len(results), 1)
+		assert.GreaterOrEqual(t, int(total), 1)
 	})
 
 	t.Run("no results", func(t *testing.T) {
-		results, err := repo.SearchPoems("不存在的内容", 10)
+		results, total, err := repo.SearchPoems("不存在的内容", "all", 1, 10)
 		require.NoError(t, err)
 		assert.Len(t, results, 0)
+		assert.Equal(t, int64(0), total)
 	})
 }
