@@ -526,6 +526,40 @@ func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID,
 	return poems, int(totalCount), nil
 }
 
+// GetRandomPoem returns a random poem with optional filters
+// This is much more efficient than using COUNT + OFFSET approach
+// Uses SQLite's ORDER BY RANDOM() LIMIT 1 for optimal performance
+func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, error) {
+	query := r.db.Table(r.poemsTable())
+
+	// Apply filters
+	if dynastyID != nil {
+		query = query.Where("dynasty_id = ?", *dynastyID)
+	}
+	if authorID != nil {
+		query = query.Where("author_id = ?", *authorID)
+	}
+	if typeID != nil {
+		query = query.Where("type_id = ?", *typeID)
+	}
+
+	// Get a random poem using SQLite's RANDOM()
+	var poems []Poem
+	err := query.Order("RANDOM()").Limit(1).Find(&poems).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if we found a poem
+	if len(poems) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	// Load relations for the poem
+	r.loadPoemRelations(poems)
+	return &poems[0], nil
+}
+
 // ListAuthorPoems returns a paginated list of poems by a specific author
 func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem, int, error) {
 	var totalCount int64

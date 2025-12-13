@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"math/rand"
 	"net/http"
 	"strconv"
 
@@ -136,21 +135,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		dynastyID = &dynasty.ID
 	}
 
-	// Get count of poems matching filters
-	_, count, err := repo.ListPoemsWithFilter(1, 0, dynastyID, authorID, typeID)
-	if err != nil || count == 0 {
+	// Get a random poem using efficient ORDER BY RANDOM() LIMIT 1
+	poem, err := repo.GetRandomPoem(dynastyID, authorID, typeID)
+	if err != nil {
 		respondError(c, http.StatusNotFound, "no poems found matching the criteria")
 		return
 	}
 
-	// Get a random poem from the filtered set
-	offset := rand.Intn(count)
-	poems, _, err := repo.ListPoemsWithFilter(1, offset, dynastyID, authorID, typeID)
-
-	if err != nil || len(poems) == 0 {
-		respondError(c, http.StatusInternalServerError, "failed to get random poem")
-		return
-	}
-
-	c.JSON(http.StatusOK, formatPoem(&poems[0]))
+	c.JSON(http.StatusOK, formatPoem(poem))
 }
