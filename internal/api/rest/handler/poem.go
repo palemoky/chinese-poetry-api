@@ -78,14 +78,15 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 
 // RandomPoem returns a random poem with optional filters
 // Supports ?lang=zh-Hans (default) or ?lang=zh-Hant
-// Supports filters: ?author=李白&type=五言绝句&dynasty=唐
-// Or by ID: ?author_id=123&type_id=456&dynasty_id=789
+// Supports filters: ?author=李白&type=五言绝句&type=七言绝句&dynasty=唐
+// Or by ID: ?author_id=123&type_id=456&type_id=789&dynasty_id=789
 func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	lang := parseLang(c)
 	repo := h.repo.WithLang(lang)
 
 	// Parse filter parameters
-	var authorID, typeID, dynastyID *int64
+	var authorID, dynastyID *int64
+	var typeIDs []int64
 
 	// Parse author filter (by ID or name)
 	if authorIDStr := c.Query("author_id"); authorIDStr != "" {
@@ -102,19 +103,27 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		authorID = &author.ID
 	}
 
-	// Parse type filter (by ID or name)
-	if typeIDStr := c.Query("type_id"); typeIDStr != "" {
-		if id, err := strconv.ParseInt(typeIDStr, 10, 64); err == nil {
-			typeID = &id
+	// Parse type filter (by ID or name) - supports multiple values
+	typeIDStrs := c.QueryArray("type_id")
+	typeNames := c.QueryArray("type")
+
+	if len(typeIDStrs) > 0 {
+		// Parse type IDs
+		for _, idStr := range typeIDStrs {
+			if id, err := strconv.ParseInt(idStr, 10, 64); err == nil {
+				typeIDs = append(typeIDs, id)
+			}
 		}
-	} else if typeName := c.Query("type"); typeName != "" {
-		// Look up type by name
-		id, err := repo.GetPoetryTypeID(typeName)
-		if err != nil {
-			respondError(c, http.StatusNotFound, "poetry type not found")
-			return
+	} else if len(typeNames) > 0 {
+		// Look up types by name
+		for _, typeName := range typeNames {
+			id, err := repo.GetPoetryTypeID(typeName)
+			if err != nil {
+				respondError(c, http.StatusNotFound, "poetry type not found: "+typeName)
+				return
+			}
+			typeIDs = append(typeIDs, id)
 		}
-		typeID = &id
 	}
 
 	// Parse dynasty filter (by ID or name)
@@ -132,8 +141,8 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		dynastyID = &dynasty.ID
 	}
 
-	// Get a random poem using efficient ORDER BY RANDOM() LIMIT 1
-	poem, err := repo.GetRandomPoem(dynastyID, authorID, typeID)
+	// Get a random poem with filters
+	poem, err := repo.GetRandomPoem(dynastyID, authorID, typeIDs)
 	if err != nil {
 		respondError(c, http.StatusNotFound, "no poems found matching the criteria")
 		return

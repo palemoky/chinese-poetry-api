@@ -202,9 +202,8 @@ func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID,
 }
 
 // GetRandomPoem returns a random poem with optional filters
-// This uses an optimized algorithm based on MAX(id) for O(log n) performance
-// instead of ORDER BY RANDOM() which requires O(n) full table scan
-func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, error) {
+// Supports filtering by multiple poetry types (OR logic)
+func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) (*Poem, error) {
 	query := r.db.Table(r.poemsTable())
 
 	// Apply filters
@@ -214,8 +213,8 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, e
 	if authorID != nil {
 		query = query.Where("author_id = ?", *authorID)
 	}
-	if typeID != nil {
-		query = query.Where("type_id = ?", *typeID)
+	if len(typeIDs) > 0 {
+		query = query.Where("type_id IN ?", typeIDs)
 	}
 
 	// Count total poems matching the filters

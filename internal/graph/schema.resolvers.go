@@ -155,7 +155,9 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *dat
 // RandomPoem is the resolver for the randomPoem field.
 func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error) {
 	// Parse filter IDs
-	var dynastyIDInt, typeIDInt *int64
+	var dynastyIDInt *int64
+	var typeIDs []int64
+
 	if dynastyID != nil {
 		id, err := strconv.ParseInt(*dynastyID, 10, 64)
 		if err == nil {
@@ -165,14 +167,14 @@ func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dyn
 	if typeID != nil {
 		id, err := strconv.ParseInt(*typeID, 10, 64)
 		if err == nil {
-			typeIDInt = &id
+			typeIDs = []int64{id}
 		}
 	}
 
 	// Use repository's GetRandomPoem with language context (same as REST)
 	langVal := parseLang(lang)
 	repo := r.Repo.WithLang(langVal)
-	return repo.GetRandomPoem(dynastyIDInt, nil, typeIDInt)
+	return repo.GetRandomPoem(dynastyIDInt, nil, typeIDs)
 }
 
 // Author is the resolver for the author field.

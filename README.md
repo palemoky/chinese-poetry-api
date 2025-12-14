@@ -93,6 +93,7 @@ curl "http://localhost:1279/api/v1/poems/random?author=李白"
 curl "http://localhost:1279/api/v1/poems/random?type=五言绝句"
 curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句"
 curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句&dynasty=唐"
+curl "http://localhost:1279/api/v1/poems/random?author=李白&dynasty=唐&type=五言绝句&type=七言绝句&type=五言律诗"
 
 # 作者列表
 curl "http://localhost:1279/api/v1/authors?page=1&page_size=20"
