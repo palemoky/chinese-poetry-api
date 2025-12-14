@@ -5,8 +5,8 @@ import { check } from 'k6';
 export const options = {
     stages: [
         { duration: '10s', target: 100 },   // Normal load
-        { duration: '10s', target: 1000 },  // Sudden spike!
-        { duration: '30s', target: 1000 },  // Stay at spike
+        { duration: '10s', target: 3000 },  // Sudden spike!
+        { duration: '30s', target: 3000 },  // Stay at spike
         { duration: '10s', target: 100 },   // Back to normal
         { duration: '10s', target: 0 },     // Ramp down
     ],
