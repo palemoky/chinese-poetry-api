@@ -1,7 +1,8 @@
 package database
 
 import (
-	"math/rand"
+	"crypto/rand"
+	"math/big"
 	"strconv"
 
 	"gorm.io/gorm"
@@ -217,30 +218,29 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID, typeID *int64) (*Poem, e
 		query = query.Where("type_id = ?", *typeID)
 	}
 
-	// Get max ID with filters (fast - uses primary key index)
-	var maxID int64
-	err := query.Select("MAX(id)").Scan(&maxID).Error
-	if err != nil || maxID == 0 {
+	// Count total poems matching the filters
+	var count int64
+	err := query.Count(&count).Error
+	if err != nil || count == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Generate random ID between 1 and maxID
-	randomID := rand.Int63n(maxID) + 1
+	// Generate cryptographically secure random offset
+	randomBig, err := rand.Int(rand.Reader, big.NewInt(count))
+	if err != nil {
+		return nil, err
+	}
+	randomOffset := randomBig.Int64()
 
-	// Try to find poem with id >= randomID (handles ID gaps)
-	var id int64
-	err = query.Select("id").Where("id >= ?", randomID).Order("id ASC").Limit(1).Scan(&id).Error
-	if err != nil || id == 0 {
-		// Fallback: find poem with id <= randomID
-		// This ensures we always find a poem even with ID gaps
-		err = query.Select("id").Where("id <= ?", randomID).Order("id DESC").Limit(1).Scan(&id).Error
-		if err != nil || id == 0 {
-			return nil, gorm.ErrRecordNotFound
-		}
+	// Get the poem at the random offset
+	var poem Poem
+	err = query.Offset(int(randomOffset)).Limit(1).First(&poem).Error
+	if err != nil {
+		return nil, err
 	}
 
 	// Load the full poem by ID with all relations
-	return r.GetPoemByID(strconv.FormatInt(id, 10))
+	return r.GetPoemByID(strconv.FormatInt(poem.ID, 10))
 }
 
 // ListAuthorPoems returns a paginated list of poems by a specific author
