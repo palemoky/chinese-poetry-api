@@ -1,9 +1,9 @@
-name: Process and Release Poetry Data
+name: Release Data
 
 on:
   push:
     tags:
-      - 'v[0-9]+.[0-9]+.0'  # Only trigger on v*.*.0 tags (e.g., v0.1.0, v0.2.0, v1.0.0)
+      - "v[0-9]+.[0-9]+.0" # Only trigger on v*.*.0 tags (e.g., v0.1.0, v0.2.0, v1.0.0)
   workflow_dispatch:
 
 concurrency:
@@ -27,7 +27,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
-          go-version: '1.25'
+          go-version: "1.25"
 
       - name: Install dependencies
         run: go mod download

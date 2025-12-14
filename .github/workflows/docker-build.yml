@@ -1,9 +1,9 @@
-name: Build and Push Docker Image
+name: Release Image
 
 on:
   push:
     tags:
-      - 'v*'  # Trigger on all version tags
+      - "v*" # Trigger on all version tags
   workflow_dispatch:
 
 concurrency:
@@ -24,7 +24,7 @@ jobs:
         uses: lewagon/wait-on-check-action@v1.4.1
         with:
           ref: ${{ github.sha }}
-          check-name: 'test'
+          check-name: "test"
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           wait-interval: 10
           allowed-conclusions: success
