@@ -290,9 +290,21 @@ release:
 		exit 1; \
 	fi
 	@VERSION="$(filter-out release,$(MAKECMDGOALS))"; \
-	echo "$(BLUE)创建标签 $$VERSION...$(NC)"; \
-	git tag -a $$VERSION -m "Release $$VERSION"; \
-	echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
+	if git config user.signingkey >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then \
+		echo "$(BLUE)创建 GPG 签名标签 $$VERSION...$(NC)"; \
+		if git tag -s $$VERSION -m "Release $$VERSION" 2>/dev/null; then \
+			echo "$(GREEN)✓ 签名标签 $$VERSION 创建成功 (Verified ✓)$(NC)"; \
+		else \
+			echo "$(YELLOW)⚠ GPG 签名失败，使用普通标签...$(NC)"; \
+			git tag -a $$VERSION -m "Release $$VERSION"; \
+			echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
+		fi \
+	else \
+		echo "$(BLUE)创建标签 $$VERSION...$(NC)"; \
+		git tag -a $$VERSION -m "Release $$VERSION"; \
+		echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
+		echo "$(YELLOW)💡 提示: 配置 GPG 密钥可在 GitHub 上显示 Verified 标记$(NC)"; \
+	fi; \
 	echo "$(BLUE)推送标签到远程仓库...$(NC)"; \
 	git push origin $$VERSION; \
 	echo "$(GREEN)✓ 发布 $$VERSION 完成$(NC)"
