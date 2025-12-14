@@ -72,7 +72,7 @@ jobs:
         run: echo "timestamp=$(date +%s)" >> $GITHUB_OUTPUT
 
       - name: Build and push
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           platforms: ${{ steps.platforms.outputs.platforms }}
@@ -80,9 +80,9 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
-          cache-to: type=gha,mode=max
-          build-args: |
-            BUILDKIT_INLINE_CACHE=1
+          cache-to: type=gha,mode=max,compression=zstd
+          provenance: true
+          sbom: true
 
       - name: Build time report
         if: always()
