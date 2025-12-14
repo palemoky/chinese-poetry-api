@@ -12,4 +12,7 @@ services:
       # - DB_MAX_OPEN_CONNS=20
       # - DB_MAX_IDLE_CONNS=10
     volumes:
-      - ./data:/app/data
+      - poetry-data:/app/data
+
+volumes:
+  poetry-data:
