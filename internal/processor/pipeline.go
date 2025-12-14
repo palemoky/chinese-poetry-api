@@ -363,7 +363,7 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 // - Others (诗/曲/诗经/楚辞/蒙学): use title
 func resolveTitleByCategory(poem loader.PoemData, category string) string {
 	switch category {
-	case "词": // 宋词 - use rhythmic (词牌名) as title
+	case "词", "宋词": // 宋词/五代词 - use rhythmic (词牌名) as title
 		if poem.Rhythmic != "" {
 			// Rhythmic is the main title (词牌名)
 			// If there's also a title, merge them as "词牌名·副标题"
