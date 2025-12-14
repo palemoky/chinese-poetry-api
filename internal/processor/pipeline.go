@@ -93,6 +93,77 @@ func (p *Processor) SetBatchSize(size int) {
 	}
 }
 
+// prewarmCache pre-populates the cache with unique dynasties, authors, and poetry types
+// This prevents all workers from hitting the database simultaneously with a cold cache
+// which can cause lock contention and apparent deadlock with SQLite's single-writer model
+func (p *Processor) prewarmCache(poems []loader.PoemWithMeta) error {
+	// Extract unique dynasties first (there are very few, ~20)
+	dynastySet := make(map[string]struct{})
+	for _, poem := range poems {
+		if poem.Dynasty != "" {
+			dynasty := poem.Dynasty
+			// Convert if needed
+			converted, err := p.convertText(dynasty, p.convertToTraditional)
+			if err != nil {
+				continue // Skip on error, will be handled during processing
+			}
+			dynastySet[converted] = struct{}{}
+		}
+	}
+
+	// Pre-warm dynasty cache (sequential, safe)
+	for dynasty := range dynastySet {
+		if _, err := p.repo.GetOrCreateDynasty(dynasty); err != nil {
+			return fmt.Errorf("failed to pre-warm dynasty cache for %q: %w", dynasty, err)
+		}
+	}
+
+	// Extract unique authors (more, but still manageable ~10k)
+	// We need dynasty IDs first, so dynasties must be cached before this
+	authorSet := make(map[string]string) // author name -> dynasty name
+	for _, poem := range poems {
+		author := classifier.NormalizeText(poem.Author)
+		if author == "" {
+			author = "佚名"
+		}
+		// Convert author name
+		converted, err := p.convertText(author, p.convertToTraditional)
+		if err != nil {
+			continue
+		}
+		if _, exists := authorSet[converted]; !exists {
+			dynasty := poem.Dynasty
+			if dynasty != "" {
+				dynasty, _ = p.convertText(dynasty, p.convertToTraditional)
+			}
+			authorSet[converted] = dynasty
+		}
+	}
+
+	// Pre-warm author cache
+	for author, dynasty := range authorSet {
+		var dynastyID int64 = 0
+		if dynasty != "" {
+			var err error
+			dynastyID, err = p.repo.GetOrCreateDynasty(dynasty)
+			if err != nil {
+				continue // Will be handled during processing
+			}
+		}
+		if _, err := p.repo.GetOrCreateAuthor(author, dynastyID); err != nil {
+			// Log but don't fail - will be retried during processing
+			continue
+		}
+	}
+
+	logger.Info("Cache pre-warmed",
+		zap.Int("dynasties", len(dynastySet)),
+		zap.Int("authors", len(authorSet)),
+	)
+
+	return nil
+}
+
 // Process processes all poems with concurrent workers and batch insertion
 func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	total := len(poems)
@@ -101,6 +172,12 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 		zap.Int("workers", p.workers),
 		zap.Int("batch_size", p.batchSize),
 	)
+
+	// Pre-warm the cache before starting workers
+	// This prevents all workers from hitting the DB simultaneously with a cold cache
+	if err := p.prewarmCache(poems); err != nil {
+		return fmt.Errorf("failed to pre-warm cache: %w", err)
+	}
 
 	// Create progress container
 	progress := mpb.New(
