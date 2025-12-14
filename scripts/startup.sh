@@ -19,12 +19,12 @@ download_database() {
     echo "Downloading database and checksums..."
 
     # Download both files
-    if ! curl -L -f -o "${DB_GZ}" "${GITHUB_RELEASE_URL}/${DB_FILE}.gz"; then
+    if ! curl -Lfso "${DB_GZ}" "${GITHUB_RELEASE_URL}/${DB_FILE}.gz"; then
         echo "ERROR: Failed to download database"
         exit 1
     fi
 
-    if ! curl -L -f -o "${CHECKSUM_FILE}" "${GITHUB_RELEASE_URL}/checksums.txt"; then
+    if ! curl -Lfso "${CHECKSUM_FILE}" "${GITHUB_RELEASE_URL}/checksums.txt"; then
         echo "ERROR: Failed to download checksums"
         rm -f "${DB_GZ}"
         exit 1
@@ -65,7 +65,7 @@ check_for_updates() {
 
     # Download latest checksums
     temp_checksum=$(mktemp)
-    if ! curl -L -f -s -o "$temp_checksum" "${GITHUB_RELEASE_URL}/checksums.txt"; then
+    if ! curl -Lfso "$temp_checksum" "${GITHUB_RELEASE_URL}/checksums.txt"; then
         echo "Warning: Could not fetch latest checksums, skipping update check"
         rm -f "$temp_checksum"
         return 1
