@@ -27,23 +27,14 @@ FROM alpine:latest
 
 RUN apk add --no-cache ca-certificates curl gzip
 
-# Create non-root user and app directory with correct ownership
-RUN addgroup -g 1000 appuser && \
-    adduser -D -u 1000 -G appuser appuser && \
-    mkdir -p /app/data && \
-    chown -R appuser:appuser /app
-
-# Switch to non-root user early
-USER appuser
-
 WORKDIR /app
 
-# Copy binary, config, and startup script with executable permissions
-COPY --link --chown=appuser:appuser --from=builder --chmod=755 /build/server .
-COPY --link --chown=appuser:appuser --chmod=644 config.yaml .
-COPY --link --chown=appuser:appuser --chmod=755 scripts/startup.sh .
+# Copy binary, config, and startup script
+COPY --link --from=builder --chmod=755 /build/server .
+COPY --link --chmod=644 config.yaml .
+COPY --link --chmod=755 scripts/startup.sh .
 
-# Minimal environment variables (others via .env)
+# Environment variables
 ENV PORT=1279 \
     GIN_MODE=release \
     RATE_LIMIT_ENABLED=true \
