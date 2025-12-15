@@ -203,39 +203,49 @@ func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID,
 
 // GetRandomPoem returns a random poem with optional filters
 // Supports filtering by multiple poetry types (OR logic)
+// Uses random ID selection for O(1) performance instead of slow OFFSET
 func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) (*Poem, error) {
-	query := r.db.Table(r.poemsTable())
+	// Build filter conditions (will be applied to fresh sessions)
+	poemTable := r.poemsTable()
 
-	// Apply filters
-	if dynastyID != nil {
-		query = query.Where("dynasty_id = ?", *dynastyID)
-	}
-	if authorID != nil {
-		query = query.Where("author_id = ?", *authorID)
-	}
-	if len(typeIDs) > 0 {
-		query = query.Where("type_id IN ?", typeIDs)
+	// Helper to apply filters to a query
+	applyFilters := func(q *gorm.DB) *gorm.DB {
+		if dynastyID != nil {
+			q = q.Where("dynasty_id = ?", *dynastyID)
+		}
+		if authorID != nil {
+			q = q.Where("author_id = ?", *authorID)
+		}
+		if len(typeIDs) > 0 {
+			q = q.Where("type_id IN ?", typeIDs)
+		}
+		return q
 	}
 
-	// Count total poems matching the filters
-	var count int64
-	err := query.Count(&count).Error
-	if err != nil || count == 0 {
+	// Get ID range (MIN and MAX) - this is O(1) with index
+	var minID, maxID int64
+	row := applyFilters(r.db.Table(poemTable)).Select("MIN(id), MAX(id)").Row()
+	if err := row.Scan(&minID, &maxID); err != nil || minID == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Generate cryptographically secure random offset
-	randomBig, err := rand.Int(rand.Reader, big.NewInt(count))
+	// Generate random ID in range and find nearest poem with id >= randomID
+	idRange := maxID - minID + 1
+	randomBig, err := rand.Int(rand.Reader, big.NewInt(idRange))
 	if err != nil {
 		return nil, err
 	}
-	randomOffset := randomBig.Int64()
+	randomID := minID + randomBig.Int64()
 
-	// Get the poem at the random offset
+	// Find poem with id >= randomID (fast index lookup, fresh session)
 	var poem Poem
-	err = query.Offset(int(randomOffset)).Limit(1).First(&poem).Error
+	err = applyFilters(r.db.Table(poemTable)).Where("id >= ?", randomID).Order("id ASC").Limit(1).First(&poem).Error
 	if err != nil {
-		return nil, err
+		// If no poem found with id >= randomID, wrap around to start (fresh session)
+		err = applyFilters(r.db.Table(poemTable)).Order("id ASC").Limit(1).First(&poem).Error
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Load the full poem by ID with all relations

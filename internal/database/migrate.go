@@ -187,6 +187,8 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_author ON %s(author_id)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique ON %s(title, author_id, content_hash)", poemTable, poemTable))
+	// Composite index for efficient multi-type random selection (type_id IN ... with id range lookups)
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_type_id ON %s(type_id, id)", poemTable, poemTable))
 
 	return nil
 }
