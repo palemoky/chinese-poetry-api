@@ -115,15 +115,13 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 			}
 		}
 	} else if len(typeNames) > 0 {
-		// Look up types by name
-		for _, typeName := range typeNames {
-			id, err := repo.GetPoetryTypeID(typeName)
-			if err != nil {
-				respondError(c, http.StatusNotFound, "poetry type not found: "+typeName)
-				return
-			}
-			typeIDs = append(typeIDs, id)
+		// Batch lookup types by name in a single query
+		ids, err := repo.GetPoetryTypeIDs(typeNames)
+		if err != nil {
+			respondError(c, http.StatusNotFound, "poetry type not found")
+			return
 		}
+		typeIDs = ids
 	}
 
 	// Parse dynasty filter (by ID or name)

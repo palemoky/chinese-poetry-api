@@ -77,6 +77,52 @@ func (r *CachedRepository) GetPoetryTypeID(name string) (int64, error) {
 	return id, nil
 }
 
+// GetPoetryTypeIDs gets IDs for multiple poetry types with caching
+// Checks cache first, then fetches missing types from database
+func (r *CachedRepository) GetPoetryTypeIDs(names []string) ([]int64, error) {
+	if len(names) == 0 {
+		return []int64{}, nil
+	}
+
+	ids := make([]int64, len(names))
+	missingNames := []string{}
+	missingIndices := []int{}
+
+	// Check cache for each name
+	r.typeCacheMu.RLock()
+	for i, name := range names {
+		if id, ok := r.typeCache[name]; ok {
+			ids[i] = id
+		} else {
+			missingNames = append(missingNames, name)
+			missingIndices = append(missingIndices, i)
+		}
+	}
+	r.typeCacheMu.RUnlock()
+
+	// If all found in cache, return immediately
+	if len(missingNames) == 0 {
+		return ids, nil
+	}
+
+	// Fetch missing types from database
+	missingIDs, err := r.Repository.GetPoetryTypeIDs(missingNames)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update cache and fill in missing IDs
+	r.typeCacheMu.Lock()
+	for i, name := range missingNames {
+		id := missingIDs[i]
+		r.typeCache[name] = id
+		ids[missingIndices[i]] = id
+	}
+	r.typeCacheMu.Unlock()
+
+	return ids, nil
+}
+
 // GetOrCreateAuthor gets or creates an author with caching
 func (r *CachedRepository) GetOrCreateAuthor(name string, dynastyID int64) (int64, error) {
 	// Try to get from cache first (use name as key since it's unique)

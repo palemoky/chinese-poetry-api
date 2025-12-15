@@ -148,3 +148,41 @@ func BenchmarkGetAuthorByID(b *testing.B) {
 		_, _ = repo.GetAuthorByID(authorID)
 	}
 }
+
+// BenchmarkGetRandomPoemMultipleTypes benchmarks random poem retrieval with multiple type filters
+func BenchmarkGetRandomPoemMultipleTypes(b *testing.B) {
+	_, repo := setupBenchDB(b)
+
+	// Create test data
+	dynastyID, _ := repo.GetOrCreateDynasty("唐")
+	authorID, _ := repo.GetOrCreateAuthor("李白", dynastyID)
+
+	// Create multiple poetry types
+	typeNames := []string{"五言绝句", "七言绝句", "五言律诗", "七言律诗"}
+	typeIDs := make([]int64, len(typeNames))
+	for i, typeName := range typeNames {
+		ptype := PoetryType{Name: typeName}
+		_ = repo.db.Table(repo.poetryTypesTable()).Create(&ptype).Error
+		typeIDs[i] = ptype.ID
+	}
+
+	// Create poems for each type
+	for i, typeID := range typeIDs {
+		for j := 0; j < 100; j++ {
+			poem := &Poem{
+				ID:        int64(i*100 + j + 1),
+				Title:     typeNames[i] + "测试",
+				Content:   datatypes.JSON([]byte(`["测试内容"]`)),
+				AuthorID:  &authorID,
+				DynastyID: &dynastyID,
+				TypeID:    &typeID,
+			}
+			_ = repo.InsertPoem(poem)
+		}
+	}
+
+	b.ResetTimer()
+	for b.Loop() {
+		_, _ = repo.GetRandomPoem(&dynastyID, nil, typeIDs)
+	}
+}

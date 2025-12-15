@@ -82,6 +82,46 @@ func (r *Repository) GetPoetryTypeID(name string) (int64, error) {
 	return poetryType.ID, nil
 }
 
+// GetPoetryTypeIDs gets IDs for multiple poetry types by name in a single query
+// Returns IDs in the same order as the input names
+// Returns error if any of the requested types are not found
+func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
+	if len(names) == 0 {
+		return []int64{}, nil
+	}
+
+	var poetryTypes []PoetryType
+	err := r.db.Table(r.poetryTypesTable()).
+		Where("name IN ?", names).
+		Find(&poetryTypes).Error
+	if err != nil {
+		return nil, err
+	}
+
+	// Check if we found all requested types
+	if len(poetryTypes) != len(names) {
+		return nil, gorm.ErrRecordNotFound
+	}
+
+	// Create a map for O(1) lookup
+	typeMap := make(map[string]int64, len(poetryTypes))
+	for _, pt := range poetryTypes {
+		typeMap[pt.Name] = pt.ID
+	}
+
+	// Return IDs in the same order as input names
+	ids := make([]int64, len(names))
+	for i, name := range names {
+		id, ok := typeMap[name]
+		if !ok {
+			return nil, gorm.ErrRecordNotFound
+		}
+		ids[i] = id
+	}
+
+	return ids, nil
+}
+
 // InsertPoem inserts a poem into the database
 func (r *Repository) InsertPoem(poem *Poem) error {
 	return r.db.Table(r.poemsTable()).Create(poem).Error
