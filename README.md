@@ -1,10 +1,10 @@
 # Chinese Poetry API
 
-<h2 align="center">
-  <img src="https://avatars3.githubusercontent.com/u/30764933?s=200&v=4" alt="chinese-poetry" height="100px">
-  <br>
-  中国古诗词 API 服务
-</h2>
+<div align="center">
+
+<img src="https://avatars3.githubusercontent.com/u/30764933?s=200&v=4" alt="chinese-poetry" height="100px">
+
+<h2>中国古诗词 API 服务</h2>
 
 [![Docker Image](https://img.shields.io/docker/v/palemoky/chinese-poetry-api?sort=semver&label=docker)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
 [![Docker Image Size](https://img.shields.io/docker/image-size/palemoky/chinese-poetry-api/latest)](https://hub.docker.com/r/palemoky/chinese-poetry-api)
@@ -14,6 +14,8 @@
 [![License](https://img.shields.io/github/license/palemoky/chinese-poetry-api)](https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE)
 
 基于 Go 语言的高性能中国古诗词 API 服务，支持 REST 和 GraphQL 接口，提供简体/繁体中文、爬虫练习场等功能。
+
+</div>
 
 ## ✨ 特性
 
@@ -178,7 +180,7 @@ query {
 - 所有设备响应时间：<100ms ⚡
 - 推荐作为主要使用方式
 
-> 💡 **提示**: 如果您需要高性能搜索功能，欢迎提交 Issue。我们可以实施 FTS5 全文搜索优化，将搜索时间降低到 <100ms。
+> 💡 **提示**: 如需高性能搜索，可通过 FTS5 全文搜索优化，将搜索时间降低到 <100ms，欢迎提交 PR 😉
 
 ## 📖 数据集
 
