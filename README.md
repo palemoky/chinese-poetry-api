@@ -1,5 +1,3 @@
-# Chinese Poetry API
-
 <div align="center">
 
 <img src="https://avatars3.githubusercontent.com/u/30764933?s=200&v=4" alt="chinese-poetry" height="100px">
