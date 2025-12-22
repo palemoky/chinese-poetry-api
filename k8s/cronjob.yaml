@@ -1,0 +1,119 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: poetry-data-backup
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+    job-type: backup
+spec:
+  # Cron 表达式：每天凌晨 2 点执行
+  schedule: "0 2 * * *"
+
+  # 时区（需要 K8s 1.25+）
+  timeZone: "Asia/Shanghai"
+
+  # 并发策略
+  concurrencyPolicy: Forbid # 禁止并发执行
+
+  # 成功历史记录保留数量
+  successfulJobsHistoryLimit: 3
+
+  # 失败历史记录保留数量
+  failedJobsHistoryLimit: 1
+
+  # 启动截止时间（秒）
+  startingDeadlineSeconds: 300
+
+  # Job 模板
+  jobTemplate:
+    metadata:
+      labels:
+        app: chinese-poetry-api
+        job-type: backup
+    spec:
+      # TTL - Job 完成后保留时间
+      ttlSecondsAfterFinished: 86400 # 24 小时
+
+      template:
+        metadata:
+          labels:
+            app: chinese-poetry-api
+            job-type: backup
+        spec:
+          restartPolicy: OnFailure
+
+          containers:
+            - name: backup
+              image: palemoky/chinese-poetry-api:latest
+              imagePullPolicy: IfNotPresent
+
+              command: ["sh", "-c"]
+              args:
+                - |
+                  echo "=== Poetry Data Backup Job ==="
+                  echo "Starting at: $(date)"
+                  echo ""
+
+                  # 备份目录
+                  BACKUP_DIR="/app/data/backups"
+                  mkdir -p "$BACKUP_DIR"
+
+                  # 备份文件名（带时间戳）
+                  BACKUP_FILE="$BACKUP_DIR/poetry-$(date +%Y%m%d-%H%M%S).db"
+
+                  # 检查数据库文件
+                  if [ -f /app/data/poetry.db ]; then
+                    echo "✓ Database file found"
+                    echo "  Size: $(du -h /app/data/poetry.db | cut -f1)"
+                    echo ""
+
+                    # 创建备份
+                    echo "Creating backup: $BACKUP_FILE"
+                    cp /app/data/poetry.db "$BACKUP_FILE"
+
+                    # 压缩备份
+                    echo "Compressing backup..."
+                    gzip "$BACKUP_FILE"
+
+                    echo "✓ Backup created: ${BACKUP_FILE}.gz"
+                    echo "  Size: $(du -h ${BACKUP_FILE}.gz | cut -f1)"
+                    echo ""
+
+                    # 清理旧备份（保留最近 7 天）
+                    echo "Cleaning old backups (keeping last 7 days)..."
+                    find "$BACKUP_DIR" -name "poetry-*.db.gz" -mtime +7 -delete
+
+                    # 列出所有备份
+                    echo ""
+                    echo "Current backups:"
+                    ls -lh "$BACKUP_DIR"
+                  else
+                    echo "✗ Database file not found, skipping backup"
+                    exit 1
+                  fi
+
+                  echo ""
+                  echo "=== Backup Completed Successfully ==="
+                  echo "Finished at: $(date)"
+
+              env:
+                - name: TZ
+                  value: "Asia/Shanghai"
+
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 128Mi
+                limits:
+                  cpu: 500m
+                  memory: 512Mi
+
+              volumeMounts:
+                - name: poetry-data
+                  mountPath: /app/data
+
+          volumes:
+            - name: poetry-data
+              persistentVolumeClaim:
+                claimName: poetry-data-pvc

@@ -1,0 +1,45 @@
+---
+# PersistentVolume - 使用 NFS 支持多节点
+# 注意：这需要先配置 NFS 服务器
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: poetry-data-pv-nfs
+  labels:
+    app: chinese-poetry-api
+    type: nfs
+spec:
+  storageClassName: nfs
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteMany # 支持多节点读写
+  persistentVolumeReclaimPolicy: Retain
+  nfs:
+    # NFS 服务器配置（需要先搭建 NFS）
+    server: 192.168.64.2 # Master 节点 IP
+    path: "/mnt/data/poetry-api"
+  mountOptions:
+    - hard
+    - nfsvers=4.1
+
+---
+# PersistentVolumeClaim - 多节点共享
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: poetry-data-pvc-nfs
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+spec:
+  storageClassName: nfs
+  accessModes:
+    - ReadWriteMany # 多节点读写
+  resources:
+    requests:
+      storage: 5Gi
+  selector:
+    matchLabels:
+      app: chinese-poetry-api
+      type: nfs

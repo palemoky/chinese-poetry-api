@@ -1,0 +1,50 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: poetry-api-ingress
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+  annotations:
+    # Nginx Ingress Controller 注解
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    # 限流配置
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    # 超时配置
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+spec:
+  # Ingress 类名（根据您的 Ingress Controller 调整）
+  ingressClassName: nginx
+
+  # 路由规则
+  rules:
+    # 主机名（可以修改为您的域名）
+    - host: poetry-api.local
+      http:
+        paths:
+          # API 路径
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: poetry-api
+                port:
+                  number: 80
+
+          # GraphQL 路径
+          - path: /graphql
+            pathType: Prefix
+            backend:
+              service:
+                name: poetry-api
+                port:
+                  number: 80
+
+  # TLS 配置（可选）
+  # tls:
+  #   - hosts:
+  #       - poetry-api.local
+  #     secretName: poetry-api-tls

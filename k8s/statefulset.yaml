@@ -1,0 +1,130 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: poetry-api-stateful
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+    deployment-type: statefulset
+spec:
+  # Service 名称 - 用于网络标识
+  serviceName: poetry-api-headless
+
+  # 副本数量
+  replicas: 3
+
+  # 选择器
+  selector:
+    matchLabels:
+      app: chinese-poetry-api
+      deployment-type: statefulset
+
+  # Pod 模板
+  template:
+    metadata:
+      labels:
+        app: chinese-poetry-api
+        deployment-type: statefulset
+    spec:
+      containers:
+        - name: poetry-api
+          image: palemoky/chinese-poetry-api:latest
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 1279
+              protocol: TCP
+
+          env:
+            - name: PORT
+              value: "1279"
+            - name: GIN_MODE
+              value: "release"
+            - name: TZ
+              value: "Asia/Shanghai"
+            # StatefulSet 特有：Pod 名称（用于识别）
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+
+          # 挂载持久化卷
+          volumeMounts:
+            - name: poetry-data
+              mountPath: /app/data
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+
+      volumes:
+        - name: config
+          configMap:
+            name: poetry-api-config
+
+  # VolumeClaimTemplates - 为每个 Pod 创建独立的 PVC
+  volumeClaimTemplates:
+    - metadata:
+        name: poetry-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: manual
+        resources:
+          requests:
+            storage: 2Gi
+
+  # Pod 管理策略
+  podManagementPolicy: OrderedReady # 按顺序创建和删除
+
+  # 更新策略
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0 # 从第 0 个 Pod 开始更新
+
+---
+# Headless Service - 用于 StatefulSet 的网络标识
+apiVersion: v1
+kind: Service
+metadata:
+  name: poetry-api-headless
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+spec:
+  clusterIP: None # Headless Service
+  selector:
+    app: chinese-poetry-api
+    deployment-type: statefulset
+  ports:
+    - name: http
+      port: 1279
+      targetPort: 1279
+      protocol: TCP

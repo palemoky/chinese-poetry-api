@@ -1,0 +1,155 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poetry-api
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+    version: v1
+spec:
+  # 副本数量 - 可以通过 HPA 自动调整
+  replicas: 2
+
+  # 选择器 - 匹配 Pod 标签
+  selector:
+    matchLabels:
+      app: chinese-poetry-api
+
+  # 滚动更新策略
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1 # 更新时最多可以多出 1 个 Pod
+      maxUnavailable: 0 # 更新时最多可以有 0 个 Pod 不可用
+
+  # Pod 模板
+  template:
+    metadata:
+      labels:
+        app: chinese-poetry-api
+        version: v1
+      annotations:
+        # 配置变更时自动重启 Pod
+        checksum/config: "{{ .Values.configChecksum }}"
+    spec:
+      # 初始化容器 - 准备数据
+      initContainers:
+        - name: init-data
+          image: palemoky/chinese-poetry-api:latest
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Checking data directory..."
+              if [ ! -f /app/data/poetry.db ]; then
+                echo "Database not found, will be created on first run"
+              else
+                echo "Database found, size: $(du -h /app/data/poetry.db | cut -f1)"
+              fi
+          volumeMounts:
+            - name: poetry-data
+              mountPath: /app/data
+
+      # 应用容器
+      containers:
+        - name: poetry-api
+          image: palemoky/chinese-poetry-api:latest
+          imagePullPolicy: IfNotPresent
+
+          # 端口配置
+          ports:
+            - name: http
+              containerPort: 1279
+              protocol: TCP
+
+          # 环境变量
+          env:
+            - name: PORT
+              value: "1279"
+            - name: GIN_MODE
+              value: "release"
+            - name: TZ
+              value: "Asia/Shanghai"
+            # 从 Secret 读取敏感信息
+            - name: API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: poetry-api-secret
+                  key: API_SECRET
+                  optional: true
+
+          # 资源限制
+          resources:
+            requests:
+              cpu: 100m # 最少需要 0.1 核
+              memory: 128Mi # 最少需要 128MB 内存
+            limits:
+              cpu: 500m # 最多使用 0.5 核
+              memory: 512Mi # 最多使用 512MB 内存
+
+          # 存活探针 - 检测容器是否存活
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 30 # 启动后 30 秒开始检测
+            periodSeconds: 10 # 每 10 秒检测一次
+            timeoutSeconds: 3 # 超时时间 3 秒
+            failureThreshold: 3 # 失败 3 次后重启
+
+          # 就绪探针 - 检测容器是否准备好接收流量
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+          # 启动探针 - 检测容器是否启动成功
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12 # 最多等待 60 秒（12 * 5）
+
+          # 挂载卷
+          volumeMounts:
+            - name: poetry-data
+              mountPath: /app/data
+            - name: config
+              mountPath: /app/config.yaml
+              subPath: config.yaml
+              readOnly: true
+
+      # 卷定义
+      volumes:
+        - name: poetry-data
+          persistentVolumeClaim:
+            claimName: poetry-data-pvc
+        - name: config
+          configMap:
+            name: poetry-api-config
+
+      # Pod 反亲和性 - 尽量将 Pod 分散到不同节点
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - chinese-poetry-api
+                topologyKey: kubernetes.io/hostname
+
+      # 重启策略
+      restartPolicy: Always
+
+      # DNS 策略
+      dnsPolicy: ClusterFirst

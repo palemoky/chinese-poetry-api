@@ -1,0 +1,42 @@
+---
+# PersistentVolume - 定义存储资源
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: poetry-data-pv
+  labels:
+    app: chinese-poetry-api
+    type: local
+spec:
+  storageClassName: manual
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce # 单节点读写
+  persistentVolumeReclaimPolicy: Retain # 保留数据
+  hostPath:
+    # 本地路径，用于学习环境
+    # 生产环境建议使用 NFS、Ceph 等分布式存储
+    path: "/mnt/data/poetry-api"
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim - 声明存储需求
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: poetry-data-pvc
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+spec:
+  storageClassName: manual
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  selector:
+    matchLabels:
+      app: chinese-poetry-api
+      type: local

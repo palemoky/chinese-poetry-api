@@ -1,0 +1,58 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: poetry-api-hpa
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+spec:
+  # 目标 Deployment
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: poetry-api
+
+  # 副本数量范围
+  minReplicas: 2 # 最少 2 个副本
+  maxReplicas: 10 # 最多 10 个副本
+
+  # 扩缩容指标
+  metrics:
+    # CPU 使用率
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70 # CPU 使用率超过 70% 时扩容
+
+    # 内存使用率
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80 # 内存使用率超过 80% 时扩容
+
+  # 扩缩容行为
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300 # 缩容前等待 5 分钟
+      policies:
+        - type: Percent
+          value: 50 # 每次最多缩容 50%
+          periodSeconds: 60
+        - type: Pods
+          value: 1 # 每次最多缩容 1 个 Pod
+          periodSeconds: 60
+      selectPolicy: Min # 选择最保守的策略
+    scaleUp:
+      stabilizationWindowSeconds: 0 # 立即扩容
+      policies:
+        - type: Percent
+          value: 100 # 每次最多扩容 100%
+          periodSeconds: 30
+        - type: Pods
+          value: 2 # 每次最多扩容 2 个 Pod
+          periodSeconds: 30
+      selectPolicy: Max # 选择最激进的策略

@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: poetry-api
+  labels:
+    app: chinese-poetry-api
+    environment: learning

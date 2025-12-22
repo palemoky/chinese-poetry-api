@@ -1,0 +1,88 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: poetry-data-init
+  namespace: poetry-api
+  labels:
+    app: chinese-poetry-api
+    job-type: data-init
+spec:
+  # 完成次数
+  completions: 1
+
+  # 并行度
+  parallelism: 1
+
+  # 重试次数
+  backoffLimit: 3
+
+  # TTL - Job 完成后保留时间（秒）
+  ttlSecondsAfterFinished: 3600 # 1 小时后自动删除
+
+  template:
+    metadata:
+      labels:
+        app: chinese-poetry-api
+        job-type: data-init
+    spec:
+      # 重启策略 - Job 必须是 Never 或 OnFailure
+      restartPolicy: OnFailure
+
+      containers:
+        - name: init-data
+          image: palemoky/chinese-poetry-api:latest
+          imagePullPolicy: IfNotPresent
+
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "=== Poetry Data Initialization Job ==="
+              echo "Starting at: $(date)"
+              echo ""
+
+              # 检查数据目录
+              echo "Checking data directory..."
+              ls -lh /app/data/ || echo "Data directory is empty"
+              echo ""
+
+              # 检查数据库文件
+              if [ -f /app/data/poetry.db ]; then
+                echo "✓ Database file exists"
+                echo "  Size: $(du -h /app/data/poetry.db | cut -f1)"
+                echo "  Modified: $(stat -c '%y' /app/data/poetry.db 2>/dev/null || stat -f '%Sm' /app/data/poetry.db)"
+              else
+                echo "✗ Database file not found"
+                echo "  Database will be created on first API server startup"
+              fi
+              echo ""
+
+              # 运行数据处理脚本（如果存在）
+              if [ -f /app/scripts/process-data.sh ]; then
+                echo "Running data processing script..."
+                /app/scripts/process-data.sh
+              fi
+
+              echo ""
+              echo "=== Job Completed Successfully ==="
+              echo "Finished at: $(date)"
+
+          env:
+            - name: TZ
+              value: "Asia/Shanghai"
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          volumeMounts:
+            - name: poetry-data
+              mountPath: /app/data
+
+      volumes:
+        - name: poetry-data
+          persistentVolumeClaim:
+            claimName: poetry-data-pvc
