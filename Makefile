@@ -19,6 +19,8 @@ WORKERS := $(NPROCS)
 BLUE := \033[0;34m
 GREEN := \033[0;32m
 YELLOW := \033[0;33m
+RED := \033[0;31m
+CYAN := \033[0;36m
 NC := \033[0m # No Color
 
 ## help: 显示帮助信息
@@ -283,32 +285,57 @@ db-stats:
 		echo "请先运行: make process-data"; \
 	fi
 
-## release: 创建并推送版本标签 (用法: make release v1.0.0)
-release:
-	@if [ -z "$(filter-out release,$(MAKECMDGOALS))" ]; then \
-		echo "$(YELLOW)用法: make release v1.0.0$(NC)"; \
+## release: 创建并推送版本标签
+release:  ## Create and push version tag
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
+		echo "$(YELLOW)Please commit or stash your changes before releasing$(NC)"; \
 		exit 1; \
-	fi
-	@VERSION="$(filter-out release,$(MAKECMDGOALS))"; \
+	fi; \
+	LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "none"); \
+	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
+	echo "$(BLUE)         Release New Version$(NC)"; \
+	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
+	echo "$(CYAN)Current latest tag: $(GREEN)$$LATEST_TAG$(NC)"; \
+	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
+	printf "$(YELLOW)Enter new version: $(NC)"; \
+	read -r VERSION; \
+	if [ -z "$$VERSION" ]; then \
+		echo "$(RED)Error: Version cannot be empty$(NC)"; \
+		exit 1; \
+	fi; \
+	if ! echo "$$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		echo "$(RED)Error: Invalid version format '$$VERSION'$(NC)"; \
+		echo "$(YELLOW)Expected format: v1.0.0$(NC)"; \
+		exit 1; \
+	fi; \
+	if git tag | grep -q "^$$VERSION$$"; then \
+		echo "$(RED)Error: Tag $$VERSION already exists$(NC)"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "$(YELLOW)About to create and push tag: $(GREEN)$$VERSION$(NC)"; \
+	printf "$(YELLOW)Continue? [y/N] $(NC)"; \
+	read -r CONFIRM; \
+	if [ "$$CONFIRM" != "y" ] && [ "$$CONFIRM" != "Y" ]; then \
+		echo "$(YELLOW)Aborted$(NC)"; \
+		exit 1; \
+	fi; \
 	if git config user.signingkey >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then \
-		echo "$(BLUE)创建 GPG 签名标签 $$VERSION...$(NC)"; \
+		echo "$(BLUE)Creating GPG signed tag $$VERSION...$(NC)"; \
 		if git tag -s $$VERSION -m "Release $$VERSION" 2>/dev/null; then \
-			echo "$(GREEN)✓ 签名标签 $$VERSION 创建成功 (Verified ✓)$(NC)"; \
+			echo "$(GREEN)✓ Signed tag $$VERSION created (Verified ✓)$(NC)"; \
 		else \
-			echo "$(YELLOW)⚠ GPG 签名失败，使用普通标签...$(NC)"; \
+			echo "$(YELLOW)⚠ GPG signing failed, using regular tag...$(NC)"; \
 			git tag -a $$VERSION -m "Release $$VERSION"; \
-			echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
+			echo "$(GREEN)✓ Tag $$VERSION created$(NC)"; \
 		fi \
 	else \
-		echo "$(BLUE)创建标签 $$VERSION...$(NC)"; \
+		echo "$(BLUE)Creating tag $$VERSION...$(NC)"; \
 		git tag -a $$VERSION -m "Release $$VERSION"; \
-		echo "$(GREEN)✓ 标签 $$VERSION 创建成功$(NC)"; \
-		echo "$(YELLOW)💡 提示: 配置 GPG 密钥可在 GitHub 上显示 Verified 标记$(NC)"; \
+		echo "$(GREEN)✓ Tag $$VERSION created$(NC)"; \
+		echo "$(YELLOW)💡 Tip: Configure GPG key to show Verified badge$(NC)"; \
 	fi; \
-	echo "$(BLUE)推送标签到远程仓库...$(NC)"; \
+	echo "$(BLUE)Pushing tag to remote...$(NC)"; \
 	git push origin $$VERSION; \
-	echo "$(GREEN)✓ 发布 $$VERSION 完成$(NC)"
-
-# 允许版本号作为目标
-v%:
-	@:
+	echo "$(GREEN)✓ Release $$VERSION completed$(NC)"
