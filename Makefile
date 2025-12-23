@@ -285,9 +285,7 @@ db-stats:
 		echo "请先运行: make process-data"; \
 	fi
 
-## release: 创建并推送版本标签 # ============================================
-# Release
-# ============================================
+## release: 创建并推送版本标签
 release:  ## Create and push version tag
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
@@ -300,7 +298,7 @@ release:  ## Create and push version tag
 	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
 	echo "$(CYAN)Current latest tag: $(GREEN)$$LATEST_TAG$(NC)"; \
 	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
-	printf "$(YELLOW)Enter new version (e.g., v1.0.0): $(NC)"; \
+	printf "$(YELLOW)Enter new version: $(NC)"; \
 	read -r VERSION; \
 	if [ -z "$$VERSION" ]; then \
 		echo "$(RED)Error: Version cannot be empty$(NC)"; \
