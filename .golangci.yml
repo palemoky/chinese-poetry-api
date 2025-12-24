@@ -11,17 +11,17 @@ run:
 
 linters:
   enable:
-    - govet        # 官方静态分析
-    - errcheck     # 错误检查
-    - staticcheck  # 综合静态分析 (包含 gosimple, unused)
-    - ineffassign  # 无效赋值检测
-    - misspell     # 拼写检查
-    - gocyclo      # 圈复杂度检查
-    - gocritic     # 代码质量建议
+    - govet # 官方静态分析
+    - errcheck # 错误检查
+    - staticcheck # 综合静态分析 (包含 gosimple, unused)
+    - ineffassign # 无效赋值检测
+    - misspell # 拼写检查
+    - gocyclo # 圈复杂度检查
+    - gocritic # 代码质量建议
   settings:
     gocritic:
       disabled-checks:
-        - unlambda  # 不强制将 lambda 替换为函数引用
+        - unlambda # 不强制将 lambda 替换为函数引用
   exclusions:
     rules:
       - path: _test\.go
@@ -36,3 +36,6 @@ formatters:
   enable:
     - gofumpt
     - goimports
+  settings:
+    goimports:
+      local-prefixes: github.com/palemoky/chinese-poetry-api
