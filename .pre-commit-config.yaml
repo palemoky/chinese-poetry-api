@@ -11,10 +11,11 @@ repos:
         name: Run golangci-lint
         stages: [pre-commit]
         args:
+          - --fix
           - --timeout=5m
           - --config=.golangci.yml
 
-  # Go formatting and tools
+  # Go tools
   - repo: local
     hooks:
       # Format Go code with gofumpt (stricter than gofmt)
@@ -66,7 +67,7 @@ repos:
       - id: check-yaml
         name: Check YAML syntax
         stages: [pre-commit]
-        args: ['--unsafe']  # Allow custom tags
+        args: ["--unsafe"] # Allow custom tags
 
       # Check for merge conflicts
       - id: check-merge-conflict
@@ -77,7 +78,7 @@ repos:
       - id: check-added-large-files
         name: Check for large files
         stages: [pre-commit]
-        args: ['--maxkb=1000']
+        args: ["--maxkb=1000"]
 
   # Go unit tests (run on push)
   - repo: local
