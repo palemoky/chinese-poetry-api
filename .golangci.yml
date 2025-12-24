@@ -38,4 +38,5 @@ formatters:
     - goimports
   settings:
     goimports:
-      local-prefixes: github.com/palemoky/chinese-poetry-api
+      local-prefixes:
+        - github.com/palemoky/chinese-poetry-api
