@@ -9,7 +9,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
-	github.com/vbauerster/mpb/v8 v8.11.2
+	github.com/vbauerster/mpb/v8 v8.11.3
 	github.com/vektah/gqlparser/v2 v2.5.31
 	go.uber.org/zap v1.27.1
 	golang.org/x/time v0.14.0

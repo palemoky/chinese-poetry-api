@@ -162,8 +162,8 @@ github.com/ugorji/go/codec v1.3.0 h1:Qd2W2sQawAfG8XSvzwhBeoGq71zXOC/Q1E9y/wUcsUA
 github.com/ugorji/go/codec v1.3.0/go.mod h1:pRBVtBSKl77K30Bv8R2P+cLSGaTtex6fsA2Wjqmfxj4=
 github.com/urfave/cli/v3 v3.6.1 h1:j8Qq8NyUawj/7rTYdBGrxcH7A/j7/G8Q5LhWEW4G3Mo=
 github.com/urfave/cli/v3 v3.6.1/go.mod h1:ysVLtOEmg2tOy6PknnYVhDoouyC/6N42TMeoMzskhso=
-github.com/vbauerster/mpb/v8 v8.11.2 h1:OqLoHznUVU7SKS/WV+1dB5/hm20YLheYupiHhL5+M1Y=
-github.com/vbauerster/mpb/v8 v8.11.2/go.mod h1:mEB/M353al1a7wMUNtiymmPsEkGlJgeJmtlbY5adCJ8=
+github.com/vbauerster/mpb/v8 v8.11.3 h1:iniBmO4ySXCl4gVdmJpgrtormH5uvjpxcx/dMyVU9Jw=
+github.com/vbauerster/mpb/v8 v8.11.3/go.mod h1:n9M7WbP0NFjpgKS5XdEC3tMRgZTNM/xtC8zWGkiMuy0=
 github.com/vektah/gqlparser/v2 v2.5.31 h1:YhWGA1mfTjID7qJhd1+Vxhpk5HTgydrGU9IgkWBTJ7k=
 github.com/vektah/gqlparser/v2 v2.5.31/go.mod h1:c1I28gSOVNzlfc4WuDlqU7voQnsqI6OG2amkBAFmgts=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
