@@ -31,4 +31,3 @@ updates:
       prefix: "ci(deps)"
     labels:
       - "dependencies"
-      - "github-actions"
