@@ -203,9 +203,8 @@ func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID,
 
 // GetRandomPoem returns a random poem with optional filters
 // Supports filtering by multiple poetry types (OR logic)
-// Uses random ID selection for O(1) performance instead of slow OFFSET
+// Uses COUNT + random OFFSET for uniform distribution across filtered results
 func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) (*Poem, error) {
-	// Build filter conditions (will be applied to fresh sessions)
 	poemTable := r.poemsTable()
 
 	// Helper to apply filters to a query
@@ -222,30 +221,24 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 		return q
 	}
 
-	// Get ID range (MIN and MAX) - this is O(1) with index
-	var minID, maxID int64
-	row := applyFilters(r.db.Table(poemTable)).Select("MIN(id), MAX(id)").Row()
-	if err := row.Scan(&minID, &maxID); err != nil || minID == 0 {
+	// Count matching poems
+	var count int64
+	if err := applyFilters(r.db.Table(poemTable)).Count(&count).Error; err != nil || count == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// Generate random ID in range and find nearest poem with id >= randomID
-	idRange := maxID - minID + 1
-	randomBig, err := rand.Int(rand.Reader, big.NewInt(idRange))
+	// Generate a random offset in [0, count)
+	randomBig, err := rand.Int(rand.Reader, big.NewInt(count))
 	if err != nil {
 		return nil, err
 	}
-	randomID := minID + randomBig.Int64()
+	offset := int(randomBig.Int64())
 
-	// Find poem with id >= randomID (fast index lookup, fresh session)
+	// Fetch the poem at the random offset
 	var poem Poem
-	err = applyFilters(r.db.Table(poemTable)).Where("id >= ?", randomID).Order("id ASC").Limit(1).First(&poem).Error
+	err = applyFilters(r.db.Table(poemTable)).Order("id ASC").Offset(offset).Limit(1).First(&poem).Error
 	if err != nil {
-		// If no poem found with id >= randomID, wrap around to start (fresh session)
-		err = applyFilters(r.db.Table(poemTable)).Order("id ASC").Limit(1).First(&poem).Error
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	// Load the full poem by ID with all relations
