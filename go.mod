@@ -12,7 +12,7 @@ require (
 	github.com/vbauerster/mpb/v8 v8.11.2
 	github.com/vektah/gqlparser/v2 v2.5.31
 	go.uber.org/zap v1.27.1
-	golang.org/x/time v0.14.0
+	golang.org/x/time v0.15.0
 	gorm.io/datatypes v1.2.7
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1
