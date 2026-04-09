@@ -10,7 +10,7 @@ updates:
       interval: "monthly"
       day: "monday"
       time: "09:00"
-      timezone: "Asia/Shanghai"
+      timezone: "UTC"
     open-pull-requests-limit: 10
     commit-message:
       prefix: "chore(deps)"
@@ -31,3 +31,8 @@ updates:
       prefix: "ci(deps)"
     labels:
       - "dependencies"
+      - "github-actions"
+    ignore:
+      - dependency-name: "*"
+        update-types:
+          - "version-update:semver-patch"
