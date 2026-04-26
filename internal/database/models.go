@@ -59,8 +59,8 @@ type Poem struct {
 	Type        *PoetryType    `gorm:"foreignKey:TypeID"                                         json:"type,omitempty"`
 	Title       string         `gorm:"not null;index;uniqueIndex:idx_unique_poem,composite:title" json:"title"`
 	Content     datatypes.JSON `gorm:"type:json;not null"                                        json:"content"` // JSON array of paragraphs
-	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`      // SHA256 hash for deduplication
-	AuthorID    *int64         `gorm:"index;uniqueIndex:idx_unique_poem,composite:author_id"     json:"author_id,omitempty"`
+	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`      // SHA256 hash of joined text for deduplication
+	AuthorID    *int64         `gorm:"index"                                                     json:"author_id,omitempty"`
 	Author      *Author        `gorm:"foreignKey:AuthorID"                                       json:"author,omitempty"`
 	DynastyID   *int64         `gorm:"index"                                                     json:"dynasty_id,omitempty"`
 	Dynasty     *Dynasty       `gorm:"foreignKey:DynastyID"                                      json:"dynasty,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -391,12 +392,19 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	poem := work.PoemData
 
 	// Normalize all text fields (trim whitespace)
+	// NormalizeAndSplitParagraphs also fixes sentences that were merged into a
+	// single string (e.g. "A。B。" → ["A。","B。"]).
 	author := classifier.NormalizeText(poem.Author)
-	paragraphs := classifier.NormalizeTextArray(poem.Paragraphs)
+	paragraphs := classifier.NormalizeAndSplitParagraphs(poem.Paragraphs)
 	rhythmic := classifier.NormalizeText(poem.Rhythmic)
 
 	// Skip poems with empty content after normalization (return nil to skip silently)
 	if len(paragraphs) == 0 {
+		return nil, nil
+	}
+
+	// Skip placeholder content (无正文。/ 無正文。/ 空。)
+	if classifier.IsPlaceholderContent(paragraphs) {
 		return nil, nil
 	}
 
@@ -478,8 +486,12 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to marshal paragraphs: %w", err)
 	}
 
-	// Calculate content hash for deduplication
-	hash := sha256.Sum256(contentJSON)
+	// Calculate content hash for deduplication.
+	// Hash the plain joined text (not the JSON bytes) so that poems whose
+	// sentences were originally merged ("A。B。") hash identically to the
+	// correctly-split version (["A。","B。"]) after normalization.
+	joinedText := strings.Join(paragraphs, "")
+	hash := sha256.Sum256([]byte(joinedText))
 	contentHash := hex.EncodeToString(hash[:])
 
 	// Create poem record

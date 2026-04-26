@@ -139,9 +139,9 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 	}
 
 	// Use GORM's CreateInBatches with OnConflict to handle duplicates
-	// Skip duplicates based on composite unique index (title, author_id, content_hash)
+	// Skip duplicates based on composite unique index (title, content_hash)
 	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "title"}, {Name: "author_id"}, {Name: "content_hash"}},
+		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}},
 		DoNothing: true, // Skip duplicates
 	}).CreateInBatches(poems, batchSize).Error
 }
@@ -201,7 +201,7 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 
 				// Insert this batch with deduplication
 				err := tx.Table(r.poemsTable()).Clauses(clause.OnConflict{
-					Columns:   []clause.Column{{Name: "title"}, {Name: "author_id"}, {Name: "content_hash"}},
+					Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}},
 					DoNothing: true,
 				}).Create(&batch).Error
 				if err != nil {

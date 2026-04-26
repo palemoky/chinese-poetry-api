@@ -51,6 +51,30 @@ func TrimAllWhitespace(text string) string {
 	}, text)
 }
 
+// placeholderPhrases are sentinel strings used in source data to indicate that
+// a poem has no actual content and should be skipped during import.
+var placeholderPhrases = []string{
+	"无正文。",
+	"無正文。",
+	"空。",
+}
+
+// IsPlaceholderContent reports whether all content in paragraphs is a
+// placeholder indicating the poem has no real text (e.g. "无正文。", "空。").
+func IsPlaceholderContent(paragraphs []string) bool {
+	if len(paragraphs) == 0 {
+		return false
+	}
+	// Join all paragraphs and compare against each placeholder
+	joined := strings.Join(paragraphs, "")
+	for _, p := range placeholderPhrases {
+		if joined == p {
+			return true
+		}
+	}
+	return false
+}
+
 // NormalizePointer normalizes a pointer to string
 func NormalizePointer(text *string) *string {
 	if text == nil {
@@ -61,4 +85,73 @@ func NormalizePointer(text *string) *string {
 		return nil
 	}
 	return &normalized
+}
+
+// isClosingQuote reports whether r is a Chinese closing quotation mark.
+func isClosingQuote(r rune) bool {
+	return r == '\u201D' || // "
+		r == '\u300B' || // 》
+		r == '\u3011' || // 】
+		r == '\u300D' || // 」
+		r == '\u300F' // 』
+}
+
+// SplitSentences splits a Chinese text string into individual sentences by
+// breaking on sentence-ending punctuation (。！？), optionally followed by a
+// closing quotation mark. If the text contains no sentence-ending punctuation
+// the original text is returned as a single-element slice.
+func SplitSentences(text string) []string {
+	runes := []rune(text)
+	n := len(runes)
+	if n == 0 {
+		return nil
+	}
+
+	var sentences []string
+	start := 0
+	for i := 0; i < n; i++ {
+		r := runes[i]
+		if r == '。' || r == '！' || r == '？' {
+			end := i + 1
+			// Include optional trailing closing quote
+			if end < n && isClosingQuote(runes[end]) {
+				end++
+				i++ // skip closing quote in the next iteration
+			}
+			s := strings.TrimSpace(string(runes[start:end]))
+			if s != "" && hasValidContent(s) {
+				sentences = append(sentences, s)
+			}
+			start = end
+		}
+	}
+
+	// Remaining content that does not end with terminal punctuation
+	if start < n {
+		s := strings.TrimSpace(string(runes[start:]))
+		if s != "" && hasValidContent(s) {
+			sentences = append(sentences, s)
+		}
+	}
+
+	if len(sentences) == 0 {
+		return []string{text}
+	}
+	return sentences
+}
+
+// NormalizeAndSplitParagraphs normalizes each paragraph and splits merged
+// sentences into individual elements. Use this instead of NormalizeTextArray
+// when the source data may contain multiple sentences concatenated into a
+// single string (e.g. "A。B。" instead of ["A。","B。"]).
+func NormalizeAndSplitParagraphs(paragraphs []string) []string {
+	var result []string
+	for _, p := range paragraphs {
+		normalized := NormalizeText(p)
+		if normalized == "" || !hasValidContent(normalized) {
+			continue
+		}
+		result = append(result, SplitSentences(normalized)...)
+	}
+	return result
 }
