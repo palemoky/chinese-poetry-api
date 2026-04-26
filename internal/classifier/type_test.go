@@ -232,6 +232,28 @@ func TestNormalizeText(t *testing.T) {
 	}
 }
 
+func TestIsPlaceholderContent(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []string
+		want  bool
+	}{
+		{"simplified no-text", []string{"无正文。"}, true},
+		{"traditional no-text", []string{"無正文。"}, true},
+		{"empty", []string{"空。"}, true},
+		{"real content", []string{"春眠不觉晓，处处闻啼鸟。"}, false},
+		{"nil slice", nil, false},
+		{"empty slice", []string{}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsPlaceholderContent(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestNormalizeTextArray(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -278,6 +300,103 @@ func TestNormalizeTextArray(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := NormalizeTextArray(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSplitSentences(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  []string
+	}{
+		{
+			name:  "already single sentence",
+			input: "春眠不觉晓，处处闻啼鸟。",
+			want:  []string{"春眠不觉晓，处处闻啼鸟。"},
+		},
+		{
+			name:  "two merged sentences",
+			input: "为底胡姬酒，长来白鼻驹。摘莲抛水上，郎意在浮花。",
+			want:  []string{"为底胡姬酒，长来白鼻驹。", "摘莲抛水上，郎意在浮花。"},
+		},
+		{
+			name:  "exclamation mark split",
+			input: "举头望明月！低头思故乡！",
+			want:  []string{"举头望明月！", "低头思故乡！"},
+		},
+		{
+			name:  "question mark split",
+			input: "明月几时有？把酒问青天。",
+			want:  []string{"明月几时有？", "把酒问青天。"},
+		},
+		{
+			name:  "trailing closing quote included in sentence",
+			input: "他说“春眠不觉晓。”处处闻啼鸟。",
+			want:  []string{"他说“春眠不觉晓。”", "处处闻啼鸟。"},
+		},
+		{
+			name:  "sentence without terminal punctuation",
+			input: "无标点内容",
+			want:  []string{"无标点内容"},
+		},
+		{
+			name:  "empty string",
+			input: "",
+			want:  nil,
+		},
+		{
+			name:  "four merged sentences",
+			input: "银鞍白鼻驹，绿地障泥锦。细雨春风花落时，挥鞭直就胡姬饮。",
+			want:  []string{"银鞍白鼻驹，绿地障泥锦。", "细雨春风花落时，挥鞭直就胡姬饮。"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := SplitSentences(tt.input)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestNormalizeAndSplitParagraphs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{
+			name:  "already split correctly",
+			input: []string{"为底胡姬酒，长来白鼻驹。", "摘莲抛水上，郎意在浮花。"},
+			want:  []string{"为底胡姬酒，长来白鼻驹。", "摘莲抛水上，郎意在浮花。"},
+		},
+		{
+			name:  "merged into one element",
+			input: []string{"为底胡姬酒，长来白鼻驹。摘莲抛水上，郎意在浮花。"},
+			want:  []string{"为底胡姬酒，长来白鼻驹。", "摘莲抛水上，郎意在浮花。"},
+		},
+		{
+			name:  "mixed: one merged and one normal",
+			input: []string{"银鞍白鼻驹，绿地障泥锦。细雨春风花落时，挥鞭直就胡姬饮。", "已是独醒客。"},
+			want:  []string{"银鞍白鼻驹，绿地障泥锦。", "细雨春风花落时，挥鞭直就胡姬饮。", "已是独醒客。"},
+		},
+		{
+			name:  "filter empty and punctuation-only",
+			input: []string{"春眠不觉晓。", "   ", "。"},
+			want:  []string{"春眠不觉晓。"},
+		},
+		{
+			name:  "empty input",
+			input: []string{},
+			want:  nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := NormalizeAndSplitParagraphs(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
