@@ -12,11 +12,23 @@ type Query {
   "Get a single poem by ID"
   poem(id: ID!, lang: Lang = ZH_HANS): Poem
 
-  "Get a list of poems with pagination and filters"
+  """
+  Get a list of poems with pagination and filters.
+
+  Pagination is either page-based (page) or cursor-based (after); the two are
+  mutually exclusive. Page-based pagination cannot go deeper than page * pageSize
+  = 10000, because its cost grows with the offset. Cursor-based pagination follows
+  pageInfo.endCursor and has no depth limit.
+
+  Note that page deliberately carries no schema default (it defaults to 1 in the
+  resolver): a schema default is indistinguishable from a value the client passed,
+  which would make every `after` query look like it also asked for a page.
+  """
   poems(
     lang: Lang = ZH_HANS
-    page: Int = 1
+    page: Int
     pageSize: Int = 20
+    after: String
     dynastyId: ID
     authorId: ID
     typeId: ID

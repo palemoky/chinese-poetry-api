@@ -104,6 +104,37 @@ func TestListPoems(t *testing.T) {
 		assert.Len(t, poems, 5)
 		assert.Equal(t, 5, total)
 	})
+
+	t.Run("cursor pagination continues after the given id", func(t *testing.T) {
+		poems, total, err := repo.ListPoemsAfter(3, nil, nil, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []int64{10, 11, 12}, poemIDs(poems), "a nil cursor must start from the first page")
+		assert.Equal(t, 5, total, "totalCount is the size of the whole result set")
+
+		after := int64(12)
+		poems, total, err = repo.ListPoemsAfter(3, &after, nil, nil, nil)
+		require.NoError(t, err)
+		assert.Equal(t, []int64{13, 14}, poemIDs(poems), "the cursor row itself must not be repeated")
+		assert.Equal(t, 5, total, "totalCount must not shrink to the number of remaining rows")
+	})
+
+	t.Run("cursor and offset pagination agree", func(t *testing.T) {
+		byOffset, _, err := repo.ListPoemsWithFilter(2, 2, nil, nil, nil)
+		require.NoError(t, err)
+
+		after := int64(11) // 前两条是 id 10、11
+		byCursor, _, err := repo.ListPoemsAfter(2, &after, nil, nil, nil)
+		require.NoError(t, err)
+
+		assert.Equal(t, poemIDs(byOffset), poemIDs(byCursor))
+	})
+
+	t.Run("cursor pagination applies filters", func(t *testing.T) {
+		otherDynastyID, _ := repo.GetOrCreateDynasty("宋")
+		poems, _, err := repo.ListPoemsAfter(10, nil, &otherDynastyID, nil, nil)
+		require.NoError(t, err)
+		assert.Empty(t, poems, "filters must still apply on the cursor path")
+	})
 }
 
 func poemIDs(poems []Poem) []int64 {

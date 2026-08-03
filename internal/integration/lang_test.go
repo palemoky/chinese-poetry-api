@@ -171,15 +171,114 @@ func TestSearchPoemsCursors(t *testing.T) {
 	first, start1, end1 := page(1)
 	second, start2, _ := page(2)
 
-	assert.Equal(t, []string{"0", "1"}, first)
-	assert.Equal(t, []string{"2", "3"}, second, "page 2 cursors must continue from page 1, not restart at 0")
+	// 游标对外不透明，但必须能解回它所标识的那一条诗词：
+	// 诗词按 id 升序排列，第 1 页是 id 1、2，第 2 页是 id 3、4。
+	assert.Equal(t, []string{
+		database.EncodePoemCursor(1),
+		database.EncodePoemCursor(2),
+	}, first)
+	assert.Equal(t, []string{
+		database.EncodePoemCursor(3),
+		database.EncodePoemCursor(4),
+	}, second, "page 2 cursors must continue from page 1, not restart at the first poem")
 
 	require.NotNil(t, start1)
 	require.NotNil(t, end1)
 	require.NotNil(t, start2)
-	assert.Equal(t, "0", *start1)
-	assert.Equal(t, "1", *end1)
-	assert.Equal(t, "2", *start2)
+	assert.Equal(t, database.EncodePoemCursor(1), *start1)
+	assert.Equal(t, database.EncodePoemCursor(2), *end1)
+	assert.Equal(t, database.EncodePoemCursor(3), *start2)
+}
+
+// TestPoemsCursorPagination 覆盖 poems 的游标翻页：
+// 它不受 page 分页的深度上限约束，因此必须能只靠 endCursor 一路走到底。
+func TestPoemsCursorPagination(t *testing.T) {
+	c, repo := setupLangTestEnv(t)
+
+	dynastyID, err := repo.GetOrCreateDynasty("唐")
+	require.NoError(t, err)
+	authorID, err := repo.GetOrCreateAuthor("李白", dynastyID)
+	require.NoError(t, err)
+
+	const total = 5
+	for i := range total {
+		require.NoError(t, repo.InsertPoem(&database.Poem{
+			ID:        int64(i + 1),
+			Title:     "诗" + strconv.Itoa(i),
+			Content:   datatypes.JSON([]byte(`["内容"]`)),
+			AuthorID:  &authorID,
+			DynastyID: &dynastyID,
+		}))
+	}
+
+	type poemsResponse struct {
+		Poems struct {
+			Edges []struct {
+				Node struct{ Title string }
+			}
+			PageInfo struct {
+				HasNextPage bool
+				EndCursor   *string
+			}
+			TotalCount int
+		}
+	}
+
+	// 不带 after 的首次查询也要给出 endCursor，否则没有入口切换到游标翻页
+	var resp poemsResponse
+	require.NoError(t, c.Post(`query { poems(pageSize: 2) {
+		edges { node { title } }
+		pageInfo { hasNextPage endCursor }
+		totalCount
+	} }`, &resp))
+	require.True(t, resp.Poems.PageInfo.HasNextPage)
+	require.NotNil(t, resp.Poems.PageInfo.EndCursor)
+
+	var visited []string
+	for {
+		for _, e := range resp.Poems.Edges {
+			visited = append(visited, e.Node.Title)
+		}
+		assert.Equal(t, total, resp.Poems.TotalCount,
+			"totalCount is the size of the whole result set, not the rows left after the cursor")
+
+		if !resp.Poems.PageInfo.HasNextPage {
+			break
+		}
+		require.NotNil(t, resp.Poems.PageInfo.EndCursor)
+
+		q := `query { poems(pageSize: 2, after: "` + *resp.Poems.PageInfo.EndCursor + `") {
+			edges { node { title } }
+			pageInfo { hasNextPage endCursor }
+			totalCount
+		} }`
+		resp = poemsResponse{}
+		require.NoError(t, c.Post(q, &resp))
+	}
+
+	assert.Equal(t, []string{"诗0", "诗1", "诗2", "诗3", "诗4"}, visited,
+		"cursor pagination must visit every poem exactly once, in id order")
+}
+
+// TestPoemsCursorRejectsBadInput 覆盖游标参数的错误输入。
+func TestPoemsCursorRejectsBadInput(t *testing.T) {
+	c, _ := setupLangTestEnv(t)
+
+	t.Run("a cursor this API did not issue is rejected", func(t *testing.T) {
+		var resp struct{}
+		// 客户端最容易犯的错：把游标当成可以自己构造的行号
+		err := c.Post(`query { poems(after: "3") { totalCount } }`, &resp)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "cursor")
+	})
+
+	t.Run("page and after cannot be combined", func(t *testing.T) {
+		var resp struct{}
+		q := `query { poems(page: 2, after: "` + database.EncodePoemCursor(1) + `") { totalCount } }`
+		err := c.Post(q, &resp)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "mutually exclusive")
+	})
 }
 
 // TestAuthorListingTieBreak 覆盖 poem_count 相同的作者的分页场景。

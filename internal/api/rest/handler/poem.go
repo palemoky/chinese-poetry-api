@@ -28,8 +28,9 @@ func NewPoemHandler(repo *database.Repository) *PoemHandler {
 // 语言：?lang=zh-Hans（默认）或 ?lang=zh-Hant
 // 过滤条件与 RandomPoem 一致，可按名称：?author=李白&type=五言绝句&dynasty=唐
 // 也可按 ID：?author_id=123&type_id=456&type_id=789&dynasty_id=6
+// 翻页：?page=2 或 ?after=<上一页响应里的 next_cursor>，后者不受深度限制。
 func (h *PoemHandler) ListPoems(c *gin.Context) {
-	if !checkQueryParams(c, append([]string{queryLang, queryPage, queryPageSize}, filterQueryKeys...)...) {
+	if !checkQueryParams(c, append([]string{queryLang, queryPage, queryPageSize, queryAfter}, filterQueryKeys...)...) {
 		return
 	}
 
@@ -49,15 +50,36 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		return
 	}
 
-	// 与 GraphQL 的 poems resolver 共用 ListPoemsWithFilter，
+	// 多取一条用来判断还有没有下一页，返回前再截掉。
+	// 这样无需依赖 total：游标翻页时 total 可能已被缓存的旧值覆盖，
+	// 而「还有没有下一条」必须如实反映当前查询的结果。
+	limit := pagination.PageSize + 1
+
+	// 与 GraphQL 的 poems resolver 共用同一套仓储方法，
 	// 保证相同过滤条件下两套 API 返回的内容与顺序完全一致。
-	poems, total, err := repo.ListPoemsWithFilter(
-		pagination.PageSize, pagination.Offset(),
-		filters.dynastyID, filters.authorID, filters.typeIDs,
-	)
+	var poems []database.Poem
+	var total int
+	var err error
+	if pagination.IsCursor() {
+		poems, total, err = repo.ListPoemsAfter(
+			limit, pagination.After,
+			filters.dynastyID, filters.authorID, filters.typeIDs,
+		)
+	} else {
+		poems, total, err = repo.ListPoemsWithFilter(
+			limit, pagination.Offset(),
+			filters.dynastyID, filters.authorID, filters.typeIDs,
+		)
+	}
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to retrieve poems")
 		return
+	}
+
+	nextCursor := ""
+	if len(poems) > pagination.PageSize {
+		poems = poems[:pagination.PageSize]
+		nextCursor = database.EncodePoemCursor(poems[len(poems)-1].ID)
 	}
 
 	data := make([]map[string]any, len(poems))
@@ -65,7 +87,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		data[i] = formatPoem(&poem)
 	}
 
-	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
+	c.JSON(http.StatusOK, WithNextCursor(NewPaginationResponse(data, pagination, int64(total)), nextCursor))
 }
 
 // searchTypes 列出搜索接口 type 参数的合法取值。

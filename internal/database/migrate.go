@@ -15,6 +15,11 @@ import (
 // DB 是对 gorm.DB 连接的封装。
 type DB struct {
 	*gorm.DB
+
+	// counts 缓存分页查询的 COUNT 结果。放在 DB 而不是 Repository 上，
+	// 是因为 Repository.WithLang 每次都会返回一个新实例（每个请求至少一次），
+	// 挂在 Repository 上的缓存永远不会被命中。
+	counts countCache
 }
 
 // Open 打开 SQLite 数据库连接。
@@ -65,12 +70,12 @@ func Open(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &DB{db}, nil
+	return &DB{DB: db}, nil
 }
 
 // NewDBFromGorm 包装一个已有的 gorm.DB 连接，便于测试时注入自定义配置。
 func NewDBFromGorm(db *gorm.DB) *DB {
-	return &DB{db}
+	return &DB{DB: db}
 }
 
 // Migrate 为简体、繁体两套表创建全部表结构、索引与初始数据。
@@ -94,6 +99,7 @@ func (db *DB) Migrate() error {
 		if err := db.insertInitialDataForLang(lang); err != nil {
 			return fmt.Errorf("failed to insert initial data for %s: %w", lang, err)
 		}
+
 	}
 
 	// 更新 schema 版本号
@@ -129,12 +135,19 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 		return fmt.Errorf("failed to create %s: %w", dynastyTable, err)
 	}
 
-	// 作者表
+	// 作者表。
+	//
+	// poem_count 是物化出来的作品数：作者列表按作品数倒序分页，若在查询时用
+	// LEFT JOIN poems + GROUP BY 现算，代价是一次全表聚合（30 万首语料上约 15~100ms），
+	// 且与页码无关——每页都要重来一遍，也无法借助索引排序。
+	// 存成列后配合 idx_..._poem_count 索引，排序与分页都能走索引。
+	// 该列由 RefreshAuthorPoemCounts 在导入结束后重算，见其文档说明。
 	authorSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,
 		dynasty_id INTEGER,
 		description TEXT,
+		poem_count INTEGER NOT NULL DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (dynasty_id) REFERENCES %s(id)
 	)`, authorTable, dynastyTable)
@@ -143,6 +156,20 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	}
 	// dynasty_id 索引
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", authorTable, authorTable))
+
+	// 早于 poem_count 的库里没有这一列，补上。CREATE TABLE IF NOT EXISTS 对已存在的表
+	// 是空操作，不会带来新列，因此必须显式 ALTER。
+	if err := db.addAuthorPoemCountColumn(authorTable); err != nil {
+		return err
+	}
+
+	// 作者列表的排序键。SQLite 支持带 DESC 的索引列，排序方向与查询一致才能免去 B 树倒序扫描；
+	// 带上 id 是为了在作品数相同时有稳定的 tiebreaker，否则分页会重复和遗漏。
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_poem_count ON %s(poem_count DESC, id ASC)",
+		authorTable, authorTable))
+	// 按朝代过滤的作者列表走这条
+	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty_poem_count ON %s(dynasty_id, poem_count DESC, id ASC)",
+		authorTable, authorTable))
 
 	// 诗词体裁表
 	poetryTypeSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
@@ -189,6 +216,164 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 		return err
 	}
 
+	// 以下两项都依赖 poems 表，必须放在建表之后
+	if err := db.migrateAuthorPoemCountTriggers(lang); err != nil {
+		return err
+	}
+
+	if err := db.migratePoemCounter(lang); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// countersTable 保存物化的行数计数器，每行一个计数。
+const countersTable = "counters"
+
+// poemCounterName 返回某个语言变体下诗词总数计数器的名字。
+func poemCounterName(lang Lang) string {
+	return poemsTable(lang)
+}
+
+// migratePoemCounter 创建诗词总数的计数器及其同步触发器，并回填当前值。
+//
+// SQLite 没有 O(1) 的行数：COUNT(*) 必须扫完一整棵索引，代价随表大小增长，
+// 而每个分页请求都要靠它算出 total/total_pages——第 1 页也照收。
+// 30 万首的语料上实测：索引在 page cache 中时约 1ms，冷缓存时约 79ms，
+// 而读计数器恒为 0.08ms 量级。
+//
+// 与之相对，带过滤的计数（按朝代/作者/体裁）走的是索引区间扫描，
+// 代价随命中数而非表大小增长（实测 0.2~7ms），不值得为它们各自再维护一个计数器。
+//
+// 同步同样交给触发器而非由调用方在写完后重算：计数器与 poems 表在同一个数据库里，
+// 导入进程与 API 进程各跑各的，只有把维护放进数据库本身，两边看到的才始终一致。
+func (db *DB) migratePoemCounter(lang Lang) error {
+	poemTable := poemsTable(lang)
+	counter := poemCounterName(lang)
+
+	createSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
+		name TEXT PRIMARY KEY,
+		value INTEGER NOT NULL DEFAULT 0
+	)`, countersTable)
+	if err := db.Exec(createSQL).Error; err != nil {
+		return fmt.Errorf("failed to create %s: %w", countersTable, err)
+	}
+
+	triggers := []string{
+		fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %[1]s_counter_ai AFTER INSERT ON %[1]s BEGIN
+			UPDATE %[2]s SET value = value + 1 WHERE name = %[3]q;
+		END`, poemTable, countersTable, counter),
+
+		fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %[1]s_counter_ad AFTER DELETE ON %[1]s BEGIN
+			UPDATE %[2]s SET value = value - 1 WHERE name = %[3]q;
+		END`, poemTable, countersTable, counter),
+	}
+
+	for _, trigger := range triggers {
+		if err := db.Exec(trigger).Error; err != nil {
+			return fmt.Errorf("failed to create counter trigger on %s: %w", poemTable, err)
+		}
+	}
+
+	return db.RefreshPoemCounter(lang)
+}
+
+// RefreshPoemCounter 依据 poems 表重算诗词总数计数器。
+//
+// 日常同步由 migratePoemCounter 建立的触发器负责，这里是全量重算：
+// 供迁移时回填使用——此前的写入没有触发器可依。
+func (db *DB) RefreshPoemCounter(lang Lang) error {
+	err := db.Exec(fmt.Sprintf(
+		`INSERT OR REPLACE INTO %s (name, value) VALUES (?, (SELECT COUNT(*) FROM %s))`,
+		countersTable, poemsTable(lang),
+	), poemCounterName(lang)).Error
+	if err != nil {
+		return fmt.Errorf("failed to refresh poem counter for %s: %w", lang, err)
+	}
+
+	db.counts.invalidate()
+	return nil
+}
+
+// addAuthorPoemCountColumn 为早于该字段的数据库补上 authors.poem_count 列。
+//
+// 列补上时取值全为默认的 0，需要由 RefreshAuthorPoemCounts 回填；
+// Migrate 会在建表完成后统一调用一次，因此这里只管加列。
+func (db *DB) addAuthorPoemCountColumn(authorTable string) error {
+	var columnCount int64
+	if err := db.Raw(fmt.Sprintf(
+		`SELECT count(*) FROM pragma_table_info(%q) WHERE name = 'poem_count'`, authorTable,
+	)).Scan(&columnCount).Error; err != nil {
+		return fmt.Errorf("failed to inspect columns of %s: %w", authorTable, err)
+	}
+	if columnCount > 0 {
+		return nil
+	}
+
+	if err := db.Exec(fmt.Sprintf(
+		"ALTER TABLE %s ADD COLUMN poem_count INTEGER NOT NULL DEFAULT 0", authorTable,
+	)).Error; err != nil {
+		return fmt.Errorf("failed to add poem_count to %s: %w", authorTable, err)
+	}
+	return nil
+}
+
+// migrateAuthorPoemCountTriggers 创建让 authors.poem_count 与 poems 保持同步的触发器，
+// 并回填一次已有数据。
+//
+// 与 FTS 索引一样，同步交给触发器而不是由调用方记得在写完后重算：物化值一旦可能过期，
+// 每个写入路径（含测试与将来新增的导入方式）都得背上这个负担，漏一处就是静默错误的数据。
+// 增量维护的代价是每次 poems 写入多一条走主键的 UPDATE，相比同一批触发器里
+// FTS trigram 索引的写入可以忽略。
+func (db *DB) migrateAuthorPoemCountTriggers(lang Lang) error {
+	authorTable := authorsTable(lang)
+	poemTable := poemsTable(lang)
+
+	// author_id 可为 NULL（佚名等），此时 WHERE id = NULL 匹配不到任何行，
+	// 正是想要的行为：无归属的诗词不计入任何作者。
+	triggers := []string{
+		fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %[2]s_author_count_ai AFTER INSERT ON %[2]s BEGIN
+			UPDATE %[1]s SET poem_count = poem_count + 1 WHERE id = new.author_id;
+		END`, authorTable, poemTable),
+
+		fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %[2]s_author_count_ad AFTER DELETE ON %[2]s BEGIN
+			UPDATE %[1]s SET poem_count = poem_count - 1 WHERE id = old.author_id;
+		END`, authorTable, poemTable),
+
+		// 仅在归属发生变化时才动计数，避免每次改标题都白白更新两行
+		fmt.Sprintf(`CREATE TRIGGER IF NOT EXISTS %[2]s_author_count_au AFTER UPDATE ON %[2]s
+		WHEN old.author_id IS NOT new.author_id BEGIN
+			UPDATE %[1]s SET poem_count = poem_count - 1 WHERE id = old.author_id;
+			UPDATE %[1]s SET poem_count = poem_count + 1 WHERE id = new.author_id;
+		END`, authorTable, poemTable),
+	}
+
+	for _, trigger := range triggers {
+		if err := db.Exec(trigger).Error; err != nil {
+			return fmt.Errorf("failed to create poem_count trigger on %s: %w", poemTable, err)
+		}
+	}
+
+	return db.RefreshAuthorPoemCounts(lang)
+}
+
+// RefreshAuthorPoemCounts 依据 poems 表重算 authors.poem_count。
+//
+// 日常同步由 migrateAuthorPoemCountTriggers 建立的触发器负责，这里是全量重算：
+// 供迁移时回填使用——刚补上该列的旧库取值全为 0，且此前的写入没有触发器可依。
+func (db *DB) RefreshAuthorPoemCounts(lang Lang) error {
+	authorTable := authorsTable(lang)
+	poemTable := poemsTable(lang)
+
+	err := db.Exec(fmt.Sprintf(`UPDATE %[1]s SET poem_count = (
+		SELECT COUNT(*) FROM %[2]s WHERE %[2]s.author_id = %[1]s.id
+	)`, authorTable, poemTable)).Error
+	if err != nil {
+		return fmt.Errorf("failed to refresh poem_count on %s: %w", authorTable, err)
+	}
+
+	db.counts.invalidate()
 	return nil
 }
 
