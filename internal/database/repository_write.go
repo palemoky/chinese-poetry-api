@@ -119,7 +119,12 @@ func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 
 // InsertPoem 插入单首诗词。
 func (r *Repository) InsertPoem(poem *Poem) error {
-	return r.db.Table(r.poemsTable()).Create(poem).Error
+	if err := r.db.Table(r.poemsTable()).Create(poem).Error; err != nil {
+		return err
+	}
+	// 诗词数量变了，缓存的 COUNT 结果随之失效
+	r.db.counts.invalidate()
+	return nil
 }
 
 // BatchInsertPoems 分批插入诗词以提升性能，重复记录会被跳过。
@@ -134,10 +139,16 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 
 	// 用 CreateInBatches 配合 OnConflict 处理重复，
 	// 依据 (title, content_hash) 复合唯一索引跳过重复记录
-	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}},
 		DoNothing: true, // 跳过重复记录
 	}).CreateInBatches(poems, batchSize).Error
+	if err != nil {
+		return err
+	}
+
+	r.db.counts.invalidate()
+	return nil
 }
 
 // BatchInsertPoemsWithTransaction 用大事务批量写入诗词以获得最佳性能，
@@ -220,8 +231,14 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 
 // UpsertPoem 插入诗词，若已存在则更新（用于处理重复数据）。
 func (r *Repository) UpsertPoem(poem *Poem) error {
-	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"title", "content", "author_id", "dynasty_id", "type_id"}),
 	}).Create(poem).Error
+	if err != nil {
+		return err
+	}
+
+	r.db.counts.invalidate()
+	return nil
 }

@@ -91,9 +91,8 @@ curl "http://localhost:1279/api/v1/poems?dynasty=唐"
 curl "http://localhost:1279/api/v1/poems?author=李白&page=2&page_size=50"
 curl "http://localhost:1279/api/v1/poems?dynasty_id=1&type_id=11&type_id=12" # 多个 type_id 为「或」关系
 
-# 参数校验：未知或非法的查询参数返回 400，而不是被忽略
-curl "http://localhost:1279/api/v1/poems?dynastyId=1"   # 400，未知参数
-curl "http://localhost:1279/api/v1/poems?page_size=500" # 400，超出上限 100
+# 游标翻页：把上一页 pagination.next_cursor 的值回传给 after。
+curl "http://localhost:1279/api/v1/poems?page_size=50&after=cG9lbTo0MjA"
 
 # 搜索诗词
 curl "http://localhost:1279/api/v1/poems/search?q=静夜思"

@@ -5,20 +5,17 @@ package database
 // GetAuthorsWithStats 返回作者列表及各自的作品数量。
 func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, error) {
 	authorTable := r.authorsTable()
-	poemTable := r.poemsTable()
 	dynastyTable := r.dynastiesTable()
 
 	var authors []AuthorWithStats
 
-	// 先按 author_id 聚合作品数，再联表分页。
+	// 作品数取自物化列 authors.poem_count，理由见 ListAuthorsWithFilter。
 	//
 	// 排序里加上 id 是为了在 poem_count 相同时打破并列：
 	// 否则大量作品数相同的作者之间顺序不确定，执行计划一变，
 	// LIMIT/OFFSET 分页就会出现重复和遗漏。
 	err := r.db.Table(authorTable).
-		Select(authorTable + ".*, COUNT(" + poemTable + ".id) AS poem_count").
-		Joins("LEFT JOIN " + poemTable + " ON " + authorTable + ".id = " + poemTable + ".author_id").
-		Group(authorTable + ".id").
+		Select(authorTable + ".*").
 		Order("poem_count DESC, " + authorTable + ".id ASC").
 		Limit(limit).
 		Offset(offset).
@@ -99,11 +96,15 @@ func (r *Repository) GetAuthorByName(name string) (*Author, error) {
 }
 
 // GetPoemsByAuthor 查询指定作者的诗词。
+//
+// 排序用 id ASC 而非 created_at：created_at 取的是批量导入时的 CURRENT_TIMESTAMP，
+// 同一批诗词的取值完全相同，作为唯一排序键没有 tiebreaker，翻页时会重复和遗漏。
+// id 唯一且单调，同时与 ListPoemsWithFilter 的排序保持一致。
 func (r *Repository) GetPoemsByAuthor(authorID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
 	err := r.db.Table(r.poemsTable()).
 		Where("author_id = ?", authorID).
-		Order("created_at DESC").
+		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
 		Find(&poems).Error
@@ -148,12 +149,12 @@ func (r *Repository) GetDynastyByName(name string) (*Dynasty, error) {
 	return &dynasty, err
 }
 
-// GetPoemsByDynasty 查询指定朝代的诗词。
+// GetPoemsByDynasty 查询指定朝代的诗词。排序理由同 GetPoemsByAuthor。
 func (r *Repository) GetPoemsByDynasty(dynastyID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
 	err := r.db.Table(r.poemsTable()).
 		Where("dynasty_id = ?", dynastyID).
-		Order("created_at DESC").
+		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
 		Find(&poems).Error
@@ -188,12 +189,12 @@ func (r *Repository) GetPoetryTypeByID(id int64) (*PoetryType, error) {
 	return &poetryType, err
 }
 
-// GetPoemsByType 查询指定体裁的诗词。
+// GetPoemsByType 查询指定体裁的诗词。排序理由同 GetPoemsByAuthor。
 func (r *Repository) GetPoemsByType(typeID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
 	err := r.db.Table(r.poemsTable()).
 		Where("type_id = ?", typeID).
-		Order("created_at DESC").
+		Order("id ASC").
 		Limit(limit).
 		Offset(offset).
 		Find(&poems).Error
