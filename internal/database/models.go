@@ -59,12 +59,16 @@ type Poem struct {
 	Type        *PoetryType    `gorm:"foreignKey:TypeID"                                         json:"type,omitempty"`
 	Title       string         `gorm:"not null;index;uniqueIndex:idx_unique_poem,composite:title" json:"title"`
 	Content     datatypes.JSON `gorm:"type:json;not null"                                        json:"content"` // 以 JSON 数组存放的正文段落
-	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`      // 正文拼接后的 SHA256，用于去重
+	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`      // 正文规整（去标点、空白）后的 SHA256，用于去重
 	AuthorID    *int64         `gorm:"index"                                                     json:"author_id,omitempty"`
 	Author      *Author        `gorm:"foreignKey:AuthorID"                                       json:"author,omitempty"`
 	DynastyID   *int64         `gorm:"index"                                                     json:"dynasty_id,omitempty"`
 	Dynasty     *Dynasty       `gorm:"foreignKey:DynastyID"                                      json:"dynasty,omitempty"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime"                                            json:"created_at"`
+
+	// FirstLine 仅在导入阶段使用、不入库：无副标题的词记下首句，
+	// 供同一作者同一词牌有多首时拼成「词牌·首句」区分标题。
+	FirstLine string `gorm:"-" json:"-"`
 }
 
 // TableName 返回 Poem 的默认表名。
