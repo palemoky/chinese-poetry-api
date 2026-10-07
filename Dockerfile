@@ -1,27 +1,41 @@
+# syntax=docker/dockerfile:1
+
+# Cross-compilation helpers (xx-go, xx-apk, xx-verify)
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0 AS xx
+
 # Build stage
-FROM golang:1.27-alpine AS builder
+# Runs on the build host's own architecture and cross-compiles for the target.
+# Building arm64 under QEMU emulation instead took ~16 of the release's ~19 minutes,
+# almost all of it compiling the bundled SQLite C source.
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
+
+COPY --from=xx / /
 
 WORKDIR /build
 
-# Install build dependencies
-RUN apk add --no-cache git gcc musl-dev sqlite-dev
+# clang/lld cross-compile the cgo parts; the target's C library comes from xx-apk.
+# SQLite itself is bundled with mattn/go-sqlite3, so sqlite-dev is not needed.
+RUN apk add --no-cache clang lld
+ARG TARGETPLATFORM
+RUN xx-apk add --no-cache gcc musl-dev
 
 # Copy go mod files first for better caching
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy only necessary source files
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-# Build the server binary with optimizations and cache
+# No -a: it forces every package to rebuild and defeats the build cache mount
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
-    CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo \
+    CGO_ENABLED=1 xx-go build \
     -tags sqlite_fts5 \
     -ldflags "-extldflags '-static' -s -w" \
     -trimpath \
-    -o server ./cmd/server
+    -o server ./cmd/server \
+    && xx-verify --static server
 
 # Runtime stage
 FROM alpine:3.24
