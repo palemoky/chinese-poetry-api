@@ -9,6 +9,17 @@ DB_GZ="${DB_PATH}.gz"
 CHECKSUM_FILE="${DATA_DIR}/checksums.txt"
 GITHUB_RELEASE_URL="https://github.com/palemoky/chinese-poetry-api/releases/latest/download"
 
+# Drop root privileges. In the Docker image the container starts as root so the
+# data volume can be handed over to the unprivileged user first: volumes created
+# by older images are root-owned, and the server needs write access there even
+# with a read-only database (SQLite creates the -shm file next to a WAL database).
+RUN_AS="poetry"
+if [ "$(id -u)" = "0" ] && id "$RUN_AS" >/dev/null 2>&1 && command -v su-exec >/dev/null 2>&1; then
+    mkdir -p "${DATA_DIR}"
+    chown -R "$RUN_AS:$RUN_AS" "${DATA_DIR}"
+    exec su-exec "$RUN_AS" "$0" "$@"
+fi
+
 echo "=== Chinese Poetry API Startup ==="
 
 # Create data directory if it doesn't exist
