@@ -46,7 +46,7 @@ func StatsHandler(repo *database.Repository) gin.HandlerFunc {
 			return
 		}
 
-		stats, err := repo.GetStatistics()
+		stats, err := repo.WithContext(c.Request.Context()).GetStatistics()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": "failed to get statistics",

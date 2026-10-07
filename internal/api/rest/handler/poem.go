@@ -40,7 +40,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	pagination, ok := ParsePagination(c)
 	if !ok {
@@ -105,7 +105,7 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	query := c.Query(queryQuery)
 	if query == "" {
@@ -238,7 +238,7 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	if char := c.Query(queryChar); char != "" {
 		for _, key := range filterQueryKeys {

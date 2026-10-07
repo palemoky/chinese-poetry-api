@@ -20,7 +20,7 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 	dynasty := Dynasty{Name: name}
 
 	// 以 ON CONFLICT DO NOTHING 的方式尝试插入
-	err := r.db.Table(r.dynastiesTable()).Clauses(clause.OnConflict{
+	err := r.conn().Table(r.dynastiesTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},
 		DoNothing: true, // 已存在则忽略
 	}).Create(&dynasty).Error
@@ -30,7 +30,7 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 
 	// ID 为 0 说明插入被跳过（记录已存在），需要回查已有记录
 	if dynasty.ID == 0 {
-		err = r.db.Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
+		err = r.conn().Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
 		if err != nil {
 			return 0, err
 		}
@@ -50,14 +50,14 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 	}
 
 	// 以 ON CONFLICT DO NOTHING 的方式尝试插入；作者以名字 + 朝代区分
-	err := r.db.Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error
+	err := r.conn().Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error
 	if err != nil {
 		return 0, err
 	}
 
 	// ID 为 0 说明插入被跳过（记录已存在），需要回查已有记录
 	if author.ID == 0 {
-		err = r.db.Table(r.authorsTable()).Where("name = ? AND dynasty_id = ?", name, dynastyID).First(&author).Error
+		err = r.conn().Table(r.authorsTable()).Where("name = ? AND dynasty_id = ?", name, dynastyID).First(&author).Error
 		if err != nil {
 			return 0, err
 		}
@@ -73,12 +73,12 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 // 若同一朝代下该名字已存在（例如两个繁体名转成简体后相同），沿用已有记录的 ID。
 func (r *Repository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
 	author := Author{ID: id, Name: name, DynastyID: &dynastyID}
-	if err := r.db.Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error; err != nil {
+	if err := r.conn().Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error; err != nil {
 		return 0, err
 	}
 
 	var existing Author
-	err := r.db.Table(r.authorsTable()).Select("id").
+	err := r.conn().Table(r.authorsTable()).Select("id").
 		Where("name = ? AND dynasty_id = ?", name, dynastyID).
 		First(&existing).Error
 	if err != nil {
@@ -94,7 +94,7 @@ func (r *Repository) CreateAuthorWithID(id int64, name string, dynastyID int64) 
 // 留下的空记录会出现在作者列表里。两个语言变体的去重结果相同，删掉的作者也相同，
 // 作者 ID 仍然一致。
 func (r *Repository) PruneAuthorsWithoutPoems() (int64, error) {
-	res := r.db.Exec(fmt.Sprintf(
+	res := r.conn().Exec(fmt.Sprintf(
 		"DELETE FROM %s WHERE id NOT IN (SELECT author_id FROM %s WHERE author_id IS NOT NULL)",
 		r.authorsTable(), r.poemsTable(),
 	))
@@ -116,7 +116,7 @@ func (r *Repository) SetAuthorDescriptions(descriptions map[int64]string) error 
 	if len(descriptions) == 0 {
 		return nil
 	}
-	return r.db.Transaction(func(tx *gorm.DB) error {
+	return r.conn().Transaction(func(tx *gorm.DB) error {
 		for id, desc := range descriptions {
 			if err := tx.Table(r.authorsTable()).Where("id = ?", id).Update("description", desc).Error; err != nil {
 				return fmt.Errorf("failed to set description of author %d: %w", id, err)
@@ -129,7 +129,7 @@ func (r *Repository) SetAuthorDescriptions(descriptions map[int64]string) error 
 // GetPoetryTypeID 按名称查询体裁 ID。
 func (r *Repository) GetPoetryTypeID(name string) (int64, error) {
 	var poetryType PoetryType
-	err := r.db.Table(r.poetryTypesTable()).Where("name = ?", name).First(&poetryType).Error
+	err := r.conn().Table(r.poetryTypesTable()).Where("name = ?", name).First(&poetryType).Error
 	if err != nil {
 		return 0, err
 	}
@@ -144,7 +144,7 @@ func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 	}
 
 	var poetryTypes []PoetryType
-	err := r.db.Table(r.poetryTypesTable()).
+	err := r.conn().Table(r.poetryTypesTable()).
 		Where("name IN ?", names).
 		Find(&poetryTypes).Error
 	if err != nil {
@@ -176,7 +176,7 @@ func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 
 // InsertPoem 插入单首诗词。
 func (r *Repository) InsertPoem(poem *Poem) error {
-	if err := r.db.Table(r.poemsTable()).Create(poem).Error; err != nil {
+	if err := r.conn().Table(r.poemsTable()).Create(poem).Error; err != nil {
 		return err
 	}
 	// 诗词数量变了，缓存的 COUNT 结果随之失效
@@ -196,7 +196,7 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 
 	// 用 CreateInBatches 配合 OnConflict 处理重复，
 	// 依据 (title, content_hash, author_id) 复合唯一索引跳过重复记录
-	err := r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.conn().Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}, {Name: "author_id"}},
 		DoNothing: true, // 跳过重复记录
 	}).CreateInBatches(poems, batchSize).Error
@@ -255,7 +255,7 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 		transactionChunk := poems[i:end]
 
 		// 单个大事务内手动分批，以便刷新进度条
-		err := r.db.Transaction(func(tx *gorm.DB) error {
+		err := r.conn().Transaction(func(tx *gorm.DB) error {
 			for j := 0; j < len(transactionChunk); j += batchSize {
 				batchEnd := min(j+batchSize, len(transactionChunk))
 				batch := transactionChunk[j:batchEnd]
@@ -288,7 +288,7 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 
 // UpsertPoem 插入诗词，若已存在则更新（用于处理重复数据）。
 func (r *Repository) UpsertPoem(poem *Poem) error {
-	err := r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.conn().Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"title", "content", "author_id", "dynasty_id", "type_id"}),
 	}).Create(poem).Error
