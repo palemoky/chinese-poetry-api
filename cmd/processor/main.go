@@ -65,9 +65,15 @@ func run(cmd *cobra.Command, args []string) error {
 
 	logger.Info("Loaded poems from JSON files", zap.Int("count", len(poems)))
 
+	bios, err := jsonLoader.LoadAuthorBios()
+	if err != nil {
+		return fmt.Errorf("failed to load author bios: %w", err)
+	}
+	logger.Info("Loaded author bios", zap.Int("count", len(bios)))
+
 	// 生成同时包含简繁两套表的统一数据库
 	logger.Info("Processing unified database")
-	if err := processUnifiedDatabase(outputDB, poems, workers); err != nil {
+	if err := processUnifiedDatabase(outputDB, poems, bios, workers); err != nil {
 		return fmt.Errorf("failed to process database: %w", err)
 	}
 
@@ -82,7 +88,7 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 // processUnifiedDatabase 重建数据库，并依次导入简体与繁体两套数据。
-func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers int) error {
+func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []loader.AuthorBio, workers int) error {
 	// 删除已存在的数据库文件
 	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove existing database: %w", err)
@@ -105,6 +111,7 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 	logger.Info("Processing language variant", zap.String("lang", "zh-Hans"))
 	repoSimp := database.NewRepositoryWithLang(db, database.LangHans)
 	procSimp := processor.NewProcessor(repoSimp, workers, false)
+	procSimp.SetAuthorBios(bios)
 	if err := procSimp.Process(poems); err != nil {
 		return fmt.Errorf("failed to process simplified poems: %w", err)
 	}
@@ -113,8 +120,17 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 	logger.Info("Processing language variant", zap.String("lang", "zh-Hant"))
 	repoTrad := database.NewRepositoryWithLang(db, database.LangHant)
 	procTrad := processor.NewProcessor(repoTrad, workers, true)
+	procTrad.SetAuthorBios(bios)
 	if err := procTrad.Process(poems); err != nil {
 		return fmt.Errorf("failed to process traditional poems: %w", err)
+	}
+
+	for _, repo := range []*database.Repository{repoSimp, repoTrad} {
+		pruned, err := repo.PruneAuthorsWithoutPoems()
+		if err != nil {
+			return err
+		}
+		logger.Info("Pruned authors without poems", zap.Int64("count", pruned))
 	}
 
 	// 导入期间每次写入都会让倒排索引失效，全部写完后统一重建

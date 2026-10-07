@@ -49,18 +49,15 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 		DynastyID: &dynastyID,
 	}
 
-	// 以 ON CONFLICT DO NOTHING 的方式尝试插入
-	err := r.db.Table(r.authorsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoNothing: true, // 已存在则忽略
-	}).Create(&author).Error
+	// 以 ON CONFLICT DO NOTHING 的方式尝试插入；作者以名字 + 朝代区分
+	err := r.db.Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error
 	if err != nil {
 		return 0, err
 	}
 
 	// ID 为 0 说明插入被跳过（记录已存在），需要回查已有记录
 	if author.ID == 0 {
-		err = r.db.Table(r.authorsTable()).Where("name = ?", name).First(&author).Error
+		err = r.db.Table(r.authorsTable()).Where("name = ? AND dynasty_id = ?", name, dynastyID).First(&author).Error
 		if err != nil {
 			return 0, err
 		}
@@ -69,26 +66,64 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 	return author.ID, nil
 }
 
-// CreateAuthorWithID 以指定 ID 创建作者，返回该名字实际对应的作者 ID。
+// CreateAuthorWithID 以指定 ID 创建作者，返回该作者（名字 + 朝代）实际对应的 ID。
 //
 // 导入时简繁两套表各建一次作者，用显式 ID 才能让同一位诗人在两套表里 ID 相同
 // （自增 ID 取决于插入顺序，两边只要有一处顺序不同，之后的 ID 就全部错开）。
-// 若该名字已存在（例如两个繁体名转成简体后相同），沿用已有记录的 ID。
+// 若同一朝代下该名字已存在（例如两个繁体名转成简体后相同），沿用已有记录的 ID。
 func (r *Repository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
 	author := Author{ID: id, Name: name, DynastyID: &dynastyID}
-	err := r.db.Table(r.authorsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoNothing: true,
-	}).Create(&author).Error
-	if err != nil {
+	if err := r.db.Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error; err != nil {
 		return 0, err
 	}
 
 	var existing Author
-	if err := r.db.Table(r.authorsTable()).Select("id").Where("name = ?", name).First(&existing).Error; err != nil {
+	err := r.db.Table(r.authorsTable()).Select("id").
+		Where("name = ? AND dynasty_id = ?", name, dynastyID).
+		First(&existing).Error
+	if err != nil {
 		return 0, err
 	}
 	return existing.ID, nil
+}
+
+// PruneAuthorsWithoutPoems 删除没有任何作品的作者，返回删除的条数。
+//
+// 导入时作者按语料规划，个别作者的作品可能全部在去重中被并入另一条记录
+// （同一首诗同时收在唐、宋两部分，作者按朝代分成两条，只保留先出现的那份），
+// 留下的空记录会出现在作者列表里。两个语言变体的去重结果相同，删掉的作者也相同，
+// 作者 ID 仍然一致。
+func (r *Repository) PruneAuthorsWithoutPoems() (int64, error) {
+	res := r.db.Exec(fmt.Sprintf(
+		"DELETE FROM %s WHERE id NOT IN (SELECT author_id FROM %s WHERE author_id IS NOT NULL)",
+		r.authorsTable(), r.poemsTable(),
+	))
+	if res.Error != nil {
+		return 0, fmt.Errorf("failed to prune authors: %w", res.Error)
+	}
+	r.db.invalidateCaches()
+	return res.RowsAffected, nil
+}
+
+// authorConflict 是写入作者时的冲突处理：同一朝代的同名作者视为同一人，已存在则跳过。
+var authorConflict = clause.OnConflict{
+	Columns:   []clause.Column{{Name: "name"}, {Name: "dynasty_id"}},
+	DoNothing: true,
+}
+
+// SetAuthorDescriptions 批量写入作者小传，键为作者 ID。
+func (r *Repository) SetAuthorDescriptions(descriptions map[int64]string) error {
+	if len(descriptions) == 0 {
+		return nil
+	}
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		for id, desc := range descriptions {
+			if err := tx.Table(r.authorsTable()).Where("id = ?", id).Update("description", desc).Error; err != nil {
+				return fmt.Errorf("failed to set description of author %d: %w", id, err)
+			}
+		}
+		return nil
+	})
 }
 
 // GetPoetryTypeID 按名称查询体裁 ID。

@@ -40,6 +40,16 @@ func formatAuthor(a *database.Author) map[string]any {
 	return result
 }
 
+// formatAuthorDetail 在作者基础上附加小传，只用于作者详情接口：
+// 小传动辄数百字，放进列表和每首诗内嵌的作者信息里会让响应体积成倍增长。
+func formatAuthorDetail(a *database.Author) map[string]any {
+	result := formatAuthor(a)
+	if a.Description != nil && *a.Description != "" {
+		result["description"] = *a.Description
+	}
+	return result
+}
+
 // formatAuthorWithStats 在作者基础上附加统计数据。
 func formatAuthorWithStats(a *database.AuthorWithStats) map[string]any {
 	result := formatAuthor(&a.Author)

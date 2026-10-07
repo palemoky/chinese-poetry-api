@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"sort"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -41,13 +42,21 @@ func firstClause(paragraphs []string) string {
 }
 
 type dedupKey struct {
-	authorID int64
-	hash     string
+	author string
+	hash   string
 }
 
 type titleKey struct {
 	authorID int64
 	title    string
+}
+
+// dedupAuthor 返回去重时用于判断「同一作者」的键：有作者名时用名字，否则退回作者 ID。
+func dedupAuthor(p *database.Poem) string {
+	if p.AuthorName != "" {
+		return p.AuthorName
+	}
+	return "#" + strconv.FormatInt(authorOf(p), 10)
 }
 
 func authorOf(p *database.Poem) int64 {
@@ -61,6 +70,7 @@ func authorOf(p *database.Poem) int64 {
 //
 //  1. 去重：同一作者、正文规整后相同的只保留 ID 最小的一条（即数据集顺序中最先出现的）。
 //     作者不同的同文作品（如《全唐诗》中的重出诗）属于归属异说，予以保留。
+//     「同一作者」按作者名而非作者 ID 判断，见 database.Poem.AuthorName。
 //  2. 词题去歧：同一作者同一词牌、且都没有副标题的多首词，标题改为「词牌·首句」，
 //     如 4 首「水调歌头」→「水调歌头·明月几时有」等；只有一首时保持原样。
 //
@@ -71,7 +81,7 @@ func finalizePoems(poems []*database.Poem) (kept []*database.Poem, removed int) 
 	seen := make(map[dedupKey]struct{}, len(poems))
 	kept = poems[:0]
 	for _, p := range poems {
-		k := dedupKey{authorOf(p), p.ContentHash}
+		k := dedupKey{dedupAuthor(p), p.ContentHash}
 		if _, dup := seen[k]; dup {
 			removed++
 			continue

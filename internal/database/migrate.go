@@ -210,7 +210,7 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	// 该列由 RefreshAuthorPoemCounts 在导入结束后重算，见其文档说明。
 	authorSQL := fmt.Sprintf(`CREATE TABLE IF NOT EXISTS %s (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		name TEXT NOT NULL UNIQUE,
+		name TEXT NOT NULL,
 		dynasty_id INTEGER,
 		description TEXT,
 		poem_count INTEGER NOT NULL DEFAULT 0,
@@ -222,6 +222,15 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	}
 	// dynasty_id 索引
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", authorTable, authorTable))
+
+	// 作者以「名字 + 朝代」区分：同名异人很常见（唐代张潮与清代《幽梦影》作者张潮，
+	// 各朝代的「佚名」），源数据也是每个朝代各有一份作者表与小传。
+	// 唯一性用独立的索引而不是列约束表达：老库的 name 列上仍带着 UNIQUE，
+	// 在老库上补建这个索引同样成立，写入时的 ON CONFLICT (name, dynasty_id) 两边都能匹配。
+	if err := db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_name_dynasty ON %s(name, dynasty_id)",
+		authorTable, authorTable)).Error; err != nil {
+		return fmt.Errorf("failed to create author name index on %s: %w", authorTable, err)
+	}
 
 	// 早于 poem_count 的库里没有这一列，补上。CREATE TABLE IF NOT EXISTS 对已存在的表
 	// 是空操作，不会带来新列，因此必须显式 ALTER。

@@ -61,6 +61,14 @@ type Processor struct {
 	// processPoem 按身份而非转换后的名字取 ID：同一位诗人在不同来源中写法不同，
 	// 转换后的名字可能对不上（见 planAuthors）。
 	authorIDs map[string]int64
+
+	// bios 是作者文件中的小传，导入时挂到对应作者上，见 SetAuthorBios。
+	bios []loader.AuthorBio
+}
+
+// SetAuthorBios 设置要随作者一起导入的诗人小传。
+func (p *Processor) SetAuthorBios(bios []loader.AuthorBio) {
+	p.bios = bios
 }
 
 // NewProcessor 创建带缓存能力的处理器，workers <= 0 时按 CPU 核数取值。
@@ -114,11 +122,12 @@ func (p *Processor) prewarmCache(poems []loader.PoemWithMeta, sourceTrad []bool)
 	}
 
 	// 作者按 planAuthors 给出的显式 ID 创建，简繁两套表因此共用一套作者 ID。
-	authors, err := p.planAuthors(poems, sourceTrad)
+	authors, err := p.planAuthors(poems, sourceTrad, p.bios)
 	if err != nil {
 		return err
 	}
 	p.authorIDs = make(map[string]int64, len(authors))
+	descriptions := make(map[int64]string)
 	for _, a := range authors {
 		dynastyName, err := p.convertText(a.dynasty, p.convertToTraditional)
 		if err != nil {
@@ -133,6 +142,12 @@ func (p *Processor) prewarmCache(poems []loader.PoemWithMeta, sourceTrad []bool)
 			return fmt.Errorf("failed to create author %q: %w", a.name, err)
 		}
 		p.authorIDs[a.identity] = id
+		if a.description != "" && id == a.id {
+			descriptions[id] = a.description
+		}
+	}
+	if err := p.repo.SetAuthorDescriptions(descriptions); err != nil {
+		return err
 	}
 
 	logger.Info("Cache pre-warmed",
@@ -145,35 +160,35 @@ func (p *Processor) prewarmCache(poems []loader.PoemWithMeta, sourceTrad []bool)
 
 // plannedAuthor 是导入前规划好的一位作者。
 type plannedAuthor struct {
-	id       int64
-	identity string // 见 authorIdentity
-	name     string // 已转为本语言变体的作者名
-	dynasty  string // 原始（未转换的）朝代名
+	id          int64
+	identity    string // 见 authorIdentity
+	name        string // 已转为本语言变体的作者名
+	dynasty     string // 原始（未转换的）朝代名
+	description string // 已转为本语言变体的小传，没有则为空
 }
 
-// planAuthors 为语料中的作者分配 ID 并确定其朝代，结果与语言变体无关。
+// planAuthors 为语料中的作者分配 ID，结果与语言变体无关。
 //
 // 此前作者在遍历 map 时逐个创建，ID 由自增列按插入顺序给出，而 map 的遍历顺序
-// 每次都不同：简繁两套表里同一位诗人的 ID 几乎完全对不上（13577 位中 13576 位
-// 指向不同的人），依赖 ID 的跨表关联（如 GraphQL 嵌套字段）全都会查到别人。
+// 每次都不同：简繁两套表里同一位诗人的 ID 几乎完全对不上，依赖 ID 的跨表关联
+// （如 GraphQL 嵌套字段）全都会查到别人。现在作者按其首次出现的诗词顺序编号，
+// 同一份语料在两个变体、每次导入中都得到相同的 ID。
 //
-// 现在作者按其首次出现的诗词顺序编号，同一份语料在两个变体、每次导入中都得到
-// 相同的 ID。作者的身份以转为简体后的名字（authorIdentity）为准：源数据中宋词为
-// 简体、全唐诗为繁体，同一位诗人（苏轼／蘇軾）要归为一人。不能以繁体名为准：
-// 简转繁有歧义，宋词里的「陆游」会被转成「陸遊」，与全唐诗的「陸游」成了两个人
-// （岳飞→嶽飛、杨万里→楊萬裏 同理）。繁体表里该诗人取首次出现时的写法。
+// 作者的身份是「简体名 + 朝代」（authorIdentity）：
+//   - 以简体名为准：源数据中宋词为简体、全唐诗为繁体，同一位诗人（苏轼／蘇軾）
+//     要归为一人；而简转繁有歧义，宋词里的「陆游」会被转成「陸遊」，以繁体名为准
+//     就成了两个人（岳飞→嶽飛、杨万里→楊萬裏 同理）。繁体表里取首次出现时的写法。
+//   - 带上朝代：同名异人很常见（唐代张潮与清代《幽梦影》作者张潮，各朝代的
+//     「佚名」），只按名字区分会把他们并成一人、朝代也只能取其一。源数据本身也是
+//     每个朝代各有一份作者表与小传；五代入宋、两部分都收了的诗人（徐铉）因此
+//     对应唐、宋各一条记录，各配各的小传，与源数据一致。
 //
-// 作者的朝代取其作品最多的朝代，并列时取先出现的：按首次出现取时，同时收在
-// 唐宋两部分的诗人（数据集中排在前面的是宋诗文件）会被整体判为宋。
-func (p *Processor) planAuthors(poems []loader.PoemWithMeta, sourceTrad []bool) ([]plannedAuthor, error) {
-	type stats struct {
-		plannedAuthor
-		identity string
-		counts   map[string]int
-		order    []string // 朝代的首次出现顺序，用于并列时取先出现者
-	}
-	var authors []*stats
-	byIdentity := make(map[string]*stats)
+// bios 是作者文件中的小传，按同样的身份挂到作者上；同一身份有多段不同的小传时
+// （全唐诗作者表里正文小传与「《全唐詩小傳》云」补遗各一条，宋词与全宋诗各一份）
+// 按出现顺序合并。
+func (p *Processor) planAuthors(poems []loader.PoemWithMeta, sourceTrad []bool, bios []loader.AuthorBio) ([]plannedAuthor, error) {
+	var authors []*plannedAuthor
+	byIdentity := make(map[string]*plannedAuthor)
 
 	for i, poem := range poems {
 		// 与 processPoem 的跳过规则保持一致，免得为只有被跳过作品的作者建出空记录
@@ -186,52 +201,88 @@ func (p *Processor) planAuthors(poems []loader.PoemWithMeta, sourceTrad []bool) 
 		if author == "" {
 			author = "佚名"
 		}
-		identity, err := authorIdentity(author)
+		identity, err := authorIdentity(author, poem.Dynasty)
 		if err != nil {
 			return nil, err
 		}
+		if byIdentity[identity] != nil {
+			continue
+		}
 
-		a := byIdentity[identity]
-		if a == nil {
-			name, err := p.toVariant(author, sourceTrad[i])
-			if err != nil {
-				return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
-			}
-			a = &stats{
-				plannedAuthor: plannedAuthor{id: int64(len(authors) + 1), name: name},
-				identity:      identity,
-				counts:        make(map[string]int),
-			}
-			authors = append(authors, a)
-			byIdentity[identity] = a
+		name, err := p.toVariant(author, sourceTrad[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
 		}
-		if a.counts[poem.Dynasty] == 0 {
-			a.order = append(a.order, poem.Dynasty)
-		}
-		a.counts[poem.Dynasty]++
+		a := &plannedAuthor{id: int64(len(authors) + 1), identity: identity, name: name, dynasty: poem.Dynasty}
+		authors = append(authors, a)
+		byIdentity[identity] = a
+	}
+
+	if err := p.attachBios(byIdentity, bios); err != nil {
+		return nil, err
 	}
 
 	planned := make([]plannedAuthor, len(authors))
 	for i, a := range authors {
-		for _, d := range a.order {
-			if a.counts[d] > a.counts[a.dynasty] {
-				a.dynasty = d
-			}
-		}
-		a.plannedAuthor.identity = a.identity
-		planned[i] = a.plannedAuthor
+		planned[i] = *a
 	}
 	return planned, nil
 }
 
-// authorIdentity 返回判定「是否同一位作者」所用的键：归一化并转为简体后的名字。
-// author 须已经过 NormalizeText，空名已替换为「佚名」。
-func authorIdentity(author string) (string, error) {
-	identity, err := classifier.ToSimplified(author)
+// attachBios 把小传按作者身份挂到规划好的作者上，转为本语言变体，并合并重复。
+// 没有作品的作者不会因为有小传而被建出来。
+func (p *Processor) attachBios(byIdentity map[string]*plannedAuthor, bios []loader.AuthorBio) error {
+	seen := make(map[string]map[string]bool) // 身份 -> 已收录小传的简体规整文本
+	for _, bio := range bios {
+		name := classifier.NormalizeText(bio.Name)
+		identity, err := authorIdentity(name, bio.Dynasty)
+		if err != nil {
+			return err
+		}
+		a := byIdentity[identity]
+		if a == nil {
+			continue
+		}
+
+		desc := strings.TrimSpace(bio.Description)
+		simplified, err := classifier.ToSimplified(desc)
+		if err != nil {
+			return fmt.Errorf("failed to convert bio of %q: %w", name, err)
+		}
+		// 同一段小传可能以简繁两种字形各出现一次，按简体文本判重
+		if seen[identity] == nil {
+			seen[identity] = make(map[string]bool)
+		}
+		if seen[identity][simplified] {
+			continue
+		}
+		seen[identity][simplified] = true
+
+		trad, err := classifier.IsTraditional(desc)
+		if err != nil {
+			return fmt.Errorf("failed to detect script of bio of %q: %w", name, err)
+		}
+		converted, err := p.toVariant(desc, trad)
+		if err != nil {
+			return fmt.Errorf("failed to convert bio of %q: %w", name, err)
+		}
+		if a.description == "" {
+			a.description = converted
+		} else {
+			a.description += "\n\n" + converted
+		}
+	}
+	return nil
+}
+
+// authorIdentity 返回判定「是否同一位作者」所用的键：归一化并转为简体后的名字，
+// 加上原始朝代名。author 须已经过 NormalizeText，空名已替换为「佚名」。
+func authorIdentity(author, dynasty string) (string, error) {
+	name, err := classifier.ToSimplified(author)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert author %q: %w", author, err)
 	}
-	return identity, nil
+	return name + "\x00" + dynasty, nil
 }
 
 // Process 以多 worker 并发处理全部诗词，并批量写入数据库。
@@ -477,9 +528,13 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	// 只要有正文即可入库，允许没有正式标题
 
 	// 作者身份须在转换前、按源数据的写法求得，见 planAuthors
-	identity, err := authorIdentity(author)
+	identity, err := authorIdentity(author, work.Dynasty)
 	if err != nil {
 		return nil, err
+	}
+	authorName, err := classifier.ToSimplified(author)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
 	}
 
 	// 正文哈希：规整（去标点、空白）后计算，供唯一索引与 finalizePoems 去重使用。
@@ -577,6 +632,7 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		Content:     datatypes.JSON(contentJSON),
 		ContentHash: hash,
 		FirstLine:   firstLine,
+		AuthorName:  authorName,
 	}
 
 	return dbPoem, nil

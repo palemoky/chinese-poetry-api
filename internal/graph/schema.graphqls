@@ -88,6 +88,8 @@ type Author {
   id: ID!
   name: String!
   dynasty: Dynasty
+  "Biography from the source corpus, in the requested language variant"
+  description: String
   poems(page: Int = 1, pageSize: Int = 20): PoemConnection!
   poemCount: Int!
 }
