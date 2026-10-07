@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
@@ -28,8 +30,9 @@ func NewPoemHandler(repo *database.Repository) *PoemHandler {
 // 语言：?lang=zh-Hans（默认）或 ?lang=zh-Hant
 // 过滤条件与 RandomPoem 一致，可按名称：?author=李白&type=五言绝句&dynasty=唐
 // 也可按 ID：?author_id=123&type_id=456&type_id=789&dynasty_id=6
+// 翻页：?page=2 或 ?after=<上一页响应里的 next_cursor>，后者不受深度限制。
 func (h *PoemHandler) ListPoems(c *gin.Context) {
-	if !checkQueryParams(c, append([]string{queryLang, queryPage, queryPageSize}, filterQueryKeys...)...) {
+	if !checkQueryParams(c, append([]string{queryLang, queryPage, queryPageSize, queryAfter}, filterQueryKeys...)...) {
 		return
 	}
 
@@ -37,7 +40,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	pagination, ok := ParsePagination(c)
 	if !ok {
@@ -49,15 +52,36 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		return
 	}
 
-	// 与 GraphQL 的 poems resolver 共用 ListPoemsWithFilter，
+	// 多取一条用来判断还有没有下一页，返回前再截掉。
+	// 这样无需依赖 total：游标翻页时 total 可能已被缓存的旧值覆盖，
+	// 而「还有没有下一条」必须如实反映当前查询的结果。
+	limit := pagination.PageSize + 1
+
+	// 与 GraphQL 的 poems resolver 共用同一套仓储方法，
 	// 保证相同过滤条件下两套 API 返回的内容与顺序完全一致。
-	poems, total, err := repo.ListPoemsWithFilter(
-		pagination.PageSize, pagination.Offset(),
-		filters.dynastyID, filters.authorID, filters.typeIDs,
-	)
+	var poems []database.Poem
+	var total int
+	var err error
+	if pagination.IsCursor() {
+		poems, total, err = repo.ListPoemsAfter(
+			limit, pagination.After,
+			filters.dynastyID, filters.authorID, filters.typeIDs,
+		)
+	} else {
+		poems, total, err = repo.ListPoemsWithFilter(
+			limit, pagination.Offset(),
+			filters.dynastyID, filters.authorID, filters.typeIDs,
+		)
+	}
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "failed to retrieve poems")
 		return
+	}
+
+	nextCursor := ""
+	if len(poems) > pagination.PageSize {
+		poems = poems[:pagination.PageSize]
+		nextCursor = database.EncodePoemCursor(poems[len(poems)-1].ID)
 	}
 
 	data := make([]map[string]any, len(poems))
@@ -65,7 +89,7 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 		data[i] = formatPoem(&poem)
 	}
 
-	c.JSON(http.StatusOK, NewPaginationResponse(data, pagination, int64(total)))
+	c.JSON(http.StatusOK, WithNextCursor(NewPaginationResponse(data, pagination, int64(total)), nextCursor))
 }
 
 // searchTypes 列出搜索接口 type 参数的合法取值。
@@ -81,7 +105,7 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	query := c.Query(queryQuery)
 	if query == "" {
@@ -135,7 +159,26 @@ type poemFilters struct {
 func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, bool) {
 	var filters poemFilters
 
-	// 作者过滤：按 ID 或名称
+	// 朝代过滤：按 ID 或名称
+	dynastyID, ok := parseInt64Query(c, queryDynastyID)
+	if !ok {
+		return poemFilters{}, false
+	}
+	switch {
+	case dynastyID != nil:
+		filters.dynastyID = dynastyID
+	case c.Query(queryDynasty) != "":
+		dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
+		if err != nil {
+			respondError(c, http.StatusNotFound, "dynasty not found")
+			return poemFilters{}, false
+		}
+		filters.dynastyID = &dynasty.ID
+	}
+
+	// 作者过滤：按 ID 或名称。
+	// 同名作者不止一位时（唐代张潮与清代张潮），按名称查找会参考已解析的朝代，
+	// 因此 ?author=张潮&dynasty=清 能取到清代那位；未给朝代则取作品最多者。
 	authorID, ok := parseInt64Query(c, queryAuthorID)
 	if !ok {
 		return poemFilters{}, false
@@ -144,7 +187,7 @@ func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, b
 	case authorID != nil:
 		filters.authorID = authorID
 	case c.Query(queryAuthor) != "":
-		author, err := repo.GetAuthorByName(c.Query(queryAuthor))
+		author, err := repo.GetAuthorByName(c.Query(queryAuthor), filters.dynastyID)
 		if err != nil {
 			respondError(c, http.StatusNotFound, "author not found")
 			return poemFilters{}, false
@@ -175,23 +218,6 @@ func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, b
 		filters.typeIDs = ids
 	}
 
-	// 朝代过滤：按 ID 或名称
-	dynastyID, ok := parseInt64Query(c, queryDynastyID)
-	if !ok {
-		return poemFilters{}, false
-	}
-	switch {
-	case dynastyID != nil:
-		filters.dynastyID = dynastyID
-	case c.Query(queryDynasty) != "":
-		dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
-		if err != nil {
-			respondError(c, http.StatusNotFound, "dynasty not found")
-			return poemFilters{}, false
-		}
-		filters.dynastyID = &dynasty.ID
-	}
-
 	return filters, true
 }
 
@@ -212,7 +238,7 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	if char := c.Query(queryChar); char != "" {
 		for _, key := range filterQueryKeys {
@@ -227,8 +253,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		}
 
 		poem, err := repo.GetRandomPoemByChar(char)
-		if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			respondError(c, http.StatusNotFound, "no poems found containing the given character")
+			return
+		}
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to retrieve random poem")
 			return
 		}
 
@@ -242,8 +272,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	}
 
 	poem, err := repo.GetRandomPoem(filters.dynastyID, filters.authorID, filters.typeIDs)
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		respondError(c, http.StatusNotFound, "no poems found matching the criteria")
+		return
+	}
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to retrieve random poem")
 		return
 	}
 

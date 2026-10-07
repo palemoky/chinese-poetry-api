@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/99designs/gqlgen/client"
-	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
@@ -14,7 +13,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
-	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
 )
 
 // setupTestResolver 基于内存数据库创建测试用的 resolver。
@@ -38,10 +36,7 @@ func setupTestResolver(t *testing.T) (*Resolver, *database.Repository) {
 // createTestClient 创建 GraphQL 测试客户端。
 func createTestClient(t *testing.T, resolver *Resolver) *client.Client {
 	t.Helper()
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{
-		Resolvers: resolver,
-	}))
-	return client.New(srv)
+	return client.New(NewServer(resolver, ServerOptions{ComplexityLimit: 5000, Introspection: true}))
 }
 
 // createTestData 向数据库写入测试数据。
@@ -562,4 +557,27 @@ func TestAuthorsWithFilters(t *testing.T) {
 		// 测试数据中宋朝没有作者
 		assert.Equal(t, 0, resp.Authors.TotalCount)
 	})
+}
+
+func TestAuthorDescriptionField(t *testing.T) {
+	resolver, repo := setupTestResolver(t)
+	c := createTestClient(t, resolver)
+
+	dynastyID, err := repo.GetOrCreateDynasty("宋")
+	require.NoError(t, err)
+	withBio, err := repo.GetOrCreateAuthor("苏轼", dynastyID)
+	require.NoError(t, err)
+	withoutBio, err := repo.GetOrCreateAuthor("佚名", dynastyID)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetAuthorDescriptions(map[int64]string{withBio: "苏轼，字子瞻。"}))
+
+	var resp struct {
+		Author struct{ Description *string }
+	}
+	require.NoError(t, c.Post(fmt.Sprintf(`{ author(id: "%d") { description } }`, withBio), &resp))
+	require.NotNil(t, resp.Author.Description)
+	assert.Equal(t, "苏轼，字子瞻。", *resp.Author.Description)
+
+	require.NoError(t, c.Post(fmt.Sprintf(`{ author(id: "%d") { description } }`, withoutBio), &resp))
+	assert.Nil(t, resp.Author.Description)
 }

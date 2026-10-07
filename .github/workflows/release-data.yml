@@ -27,7 +27,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.25"
+          go-version: "1.27"
 
       - name: Install dependencies
         run: go mod download
@@ -66,6 +66,29 @@ jobs:
           # 清理临时文件
           rm poetry.db
 
+      # CHANGELOG.md 是唯一来源（含人工润色），这里截取本版本至上一个 x.y.0 之间的内容；
+      # 只有 x.y.0 会发布 Release，中间的补丁版本一并列出
+      - name: Extract changelog
+        id: changelog
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          CUR="${GITHUB_REF_NAME#v}"
+          PREV=$(git tag -l 'v*.*.0' --sort=-v:refname | awk -v t="$GITHUB_REF_NAME" 'f { print; exit } $0 == t { f = 1 }')
+          PREV="${PREV#v}"
+          awk -v cur="## [$CUR]" -v prev="## [$PREV]" '
+            index($0, cur) == 1 { on = 1 }
+            prev != "## []" && index($0, prev) == 1 { exit }
+            on { print }
+          ' CHANGELOG.md > RELEASE_NOTES.md
+          if [ ! -s RELEASE_NOTES.md ]; then
+            echo "::warning::CHANGELOG.md 中没有 $GITHUB_REF_NAME 的条目，请使用 make release 发版"
+          fi
+          {
+            echo "content<<EOF_CHANGELOG"
+            cat RELEASE_NOTES.md
+            echo "EOF_CHANGELOG"
+          } >> $GITHUB_OUTPUT
+
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v3
@@ -75,6 +98,10 @@ jobs:
             poetry.db.gz
             checksums.txt
           body: |
+            ${{ steps.changelog.outputs.content }}
+
+            ---
+
             ## 诗词数据库 ${{ github.ref_name }}
 
             ### 📊 数据统计

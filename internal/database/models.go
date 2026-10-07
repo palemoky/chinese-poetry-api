@@ -23,8 +23,8 @@ func (Dynasty) TableName() string {
 
 // Author 表示一位诗人或作者。
 type Author struct {
-	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"` // 自增主键
-	Name        string    `gorm:"not null;uniqueIndex" json:"name"`   // 唯一索引，防止重复
+	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"`  // 自增主键
+	Name        string    `gorm:"not null"                json:"name"` // 与 DynastyID 一起唯一，见 migrateTablesForLang
 	DynastyID   *int64    `gorm:"index"                json:"dynasty_id,omitempty"`
 	Dynasty     *Dynasty  `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
 	Description *string   `                            json:"description,omitempty"`
@@ -58,13 +58,22 @@ type Poem struct {
 	TypeID      *int64         `gorm:"index"                                                     json:"type_id,omitempty"`
 	Type        *PoetryType    `gorm:"foreignKey:TypeID"                                         json:"type,omitempty"`
 	Title       string         `gorm:"not null;index;uniqueIndex:idx_unique_poem,composite:title" json:"title"`
-	Content     datatypes.JSON `gorm:"type:json;not null"                                        json:"content"` // 以 JSON 数组存放的正文段落
-	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`      // 正文拼接后的 SHA256，用于去重
-	AuthorID    *int64         `gorm:"index"                                                     json:"author_id,omitempty"`
+	Content     datatypes.JSON `gorm:"type:json;not null"                                        json:"content"`              // 以 JSON 数组存放的正文段落
+	ContentHash string         `gorm:"size:64;uniqueIndex:idx_unique_poem,composite:content_hash" json:"-"`                   // 正文规整（去标点、空白）后的 SHA256，用于去重
+	AuthorID    *int64         `gorm:"index;uniqueIndex:idx_unique_poem,composite:author_id"      json:"author_id,omitempty"` // 与标题、正文哈希组成唯一索引：同文不同作者（重出诗）各自保留
 	Author      *Author        `gorm:"foreignKey:AuthorID"                                       json:"author,omitempty"`
 	DynastyID   *int64         `gorm:"index"                                                     json:"dynasty_id,omitempty"`
 	Dynasty     *Dynasty       `gorm:"foreignKey:DynastyID"                                      json:"dynasty,omitempty"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime"                                            json:"created_at"`
+
+	// FirstLine 仅在导入阶段使用、不入库：无副标题的词记下首句，
+	// 供同一作者同一词牌有多首时拼成「词牌·首句」区分标题。
+	FirstLine string `gorm:"-" json:"-"`
+
+	// AuthorName 仅在导入阶段使用、不入库：作者的简体名，供去重按「作者名 + 正文」判断。
+	// 作者记录以名字 + 朝代区分，同一首诗若同时收在唐、宋两部分，两份的作者 ID 不同，
+	// 只按作者 ID 去重会让它重复出现。
+	AuthorName string `gorm:"-" json:"-"`
 }
 
 // TableName 返回 Poem 的默认表名。

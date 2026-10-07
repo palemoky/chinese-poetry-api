@@ -1,8 +1,6 @@
 package processor
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"runtime"
@@ -58,6 +56,19 @@ type Processor struct {
 	workers              int
 	convertToTraditional bool
 	batchSize            int // 写入数据库时的批量大小
+
+	// authorIDs 是 prewarmCache 规划好的作者 ID，键为 authorIdentity。
+	// processPoem 按身份而非转换后的名字取 ID：同一位诗人在不同来源中写法不同，
+	// 转换后的名字可能对不上（见 planAuthors）。
+	authorIDs map[string]int64
+
+	// bios 是作者文件中的小传，导入时挂到对应作者上，见 SetAuthorBios。
+	bios []loader.AuthorBio
+}
+
+// SetAuthorBios 设置要随作者一起导入的诗人小传。
+func (p *Processor) SetAuthorBios(bios []loader.AuthorBio) {
+	p.bios = bios
 }
 
 // NewProcessor 创建带缓存能力的处理器，workers <= 0 时按 CPU 核数取值。
@@ -89,7 +100,7 @@ func (p *Processor) SetBatchSize(size int) {
 // prewarmCache 预先把朝代、作者写入缓存。
 // 若不预热，所有 worker 会在冷缓存下同时读写数据库，
 // 在 SQLite 单写者模型下会造成锁竞争，表现为疑似死锁。
-func (p *Processor) prewarmCache(poems []loader.PoemWithMeta) error {
+func (p *Processor) prewarmCache(poems []loader.PoemWithMeta, sourceTrad []bool) error {
 	// 先收集去重后的朝代（数量很少，约 20 个）
 	dynastySet := make(map[string]struct{})
 	for _, poem := range poems {
@@ -110,48 +121,168 @@ func (p *Processor) prewarmCache(poems []loader.PoemWithMeta) error {
 		}
 	}
 
-	// 收集去重后的作者（约一万条，仍可接受）。
-	// 作者依赖朝代 ID，所以必须在朝代缓存预热之后执行。
-	authorSet := make(map[string]string) // 作者名 -> 朝代名
-	for _, poem := range poems {
-		author := classifier.NormalizeText(poem.Author)
-		if author == "" {
-			author = "佚名"
-		}
-		converted, err := p.convertText(author, p.convertToTraditional)
+	// 作者按 planAuthors 给出的显式 ID 创建，简繁两套表因此共用一套作者 ID。
+	authors, err := p.planAuthors(poems, sourceTrad, p.bios)
+	if err != nil {
+		return err
+	}
+	p.authorIDs = make(map[string]int64, len(authors))
+	descriptions := make(map[int64]string)
+	for _, a := range authors {
+		dynastyName, err := p.convertText(a.dynasty, p.convertToTraditional)
 		if err != nil {
-			continue
+			return fmt.Errorf("failed to convert dynasty %q: %w", a.dynasty, err)
 		}
-		if _, exists := authorSet[converted]; !exists {
-			dynasty := poem.Dynasty
-			if dynasty != "" {
-				dynasty, _ = p.convertText(dynasty, p.convertToTraditional)
-			}
-			authorSet[converted] = dynasty
+		dynastyID, err := p.repo.GetOrCreateDynasty(dynastyName)
+		if err != nil {
+			return fmt.Errorf("failed to create dynasty %q: %w", dynastyName, err)
+		}
+		id, err := p.repo.CreateAuthorWithID(a.id, a.name, dynastyID)
+		if err != nil {
+			return fmt.Errorf("failed to create author %q: %w", a.name, err)
+		}
+		p.authorIDs[a.identity] = id
+		if a.description != "" && id == a.id {
+			descriptions[id] = a.description
 		}
 	}
-
-	// 预热作者缓存
-	for author, dynasty := range authorSet {
-		var dynastyID int64 = 0
-		if dynasty != "" {
-			var err error
-			dynastyID, err = p.repo.GetOrCreateDynasty(dynasty)
-			if err != nil {
-				continue // 留到正式处理阶段再报
-			}
-		}
-		if _, err := p.repo.GetOrCreateAuthor(author, dynastyID); err != nil {
-			continue // 预热失败不影响流程，正式处理时会重试
-		}
+	if err := p.repo.SetAuthorDescriptions(descriptions); err != nil {
+		return err
 	}
 
 	logger.Info("Cache pre-warmed",
 		zap.Int("dynasties", len(dynastySet)),
-		zap.Int("authors", len(authorSet)),
+		zap.Int("authors", len(authors)),
 	)
 
 	return nil
+}
+
+// plannedAuthor 是导入前规划好的一位作者。
+type plannedAuthor struct {
+	id          int64
+	identity    string // 见 authorIdentity
+	name        string // 已转为本语言变体的作者名
+	dynasty     string // 原始（未转换的）朝代名
+	description string // 已转为本语言变体的小传，没有则为空
+}
+
+// planAuthors 为语料中的作者分配 ID，结果与语言变体无关。
+//
+// 此前作者在遍历 map 时逐个创建，ID 由自增列按插入顺序给出，而 map 的遍历顺序
+// 每次都不同：简繁两套表里同一位诗人的 ID 几乎完全对不上，依赖 ID 的跨表关联
+// （如 GraphQL 嵌套字段）全都会查到别人。现在作者按其首次出现的诗词顺序编号，
+// 同一份语料在两个变体、每次导入中都得到相同的 ID。
+//
+// 作者的身份是「简体名 + 朝代」（authorIdentity）：
+//   - 以简体名为准：源数据中宋词为简体、全唐诗为繁体，同一位诗人（苏轼／蘇軾）
+//     要归为一人；而简转繁有歧义，宋词里的「陆游」会被转成「陸遊」，以繁体名为准
+//     就成了两个人（岳飞→嶽飛、杨万里→楊萬裏 同理）。繁体表里取首次出现时的写法。
+//   - 带上朝代：同名异人很常见（唐代张潮与清代《幽梦影》作者张潮，各朝代的
+//     「佚名」），只按名字区分会把他们并成一人、朝代也只能取其一。源数据本身也是
+//     每个朝代各有一份作者表与小传；五代入宋、两部分都收了的诗人（徐铉）因此
+//     对应唐、宋各一条记录，各配各的小传，与源数据一致。
+//
+// bios 是作者文件中的小传，按同样的身份挂到作者上；同一身份有多段不同的小传时
+// （全唐诗作者表里正文小传与「《全唐詩小傳》云」补遗各一条，宋词与全宋诗各一份）
+// 按出现顺序合并。
+func (p *Processor) planAuthors(poems []loader.PoemWithMeta, sourceTrad []bool, bios []loader.AuthorBio) ([]plannedAuthor, error) {
+	var authors []*plannedAuthor
+	byIdentity := make(map[string]*plannedAuthor)
+
+	for i, poem := range poems {
+		// 与 processPoem 的跳过规则保持一致，免得为只有被跳过作品的作者建出空记录
+		paragraphs := classifier.NormalizeAndSplitParagraphs(poem.Paragraphs)
+		if len(paragraphs) == 0 || classifier.IsPlaceholderContent(paragraphs) {
+			continue
+		}
+
+		author := classifier.NormalizeText(poem.Author)
+		if author == "" {
+			author = "佚名"
+		}
+		identity, err := authorIdentity(author, poem.Dynasty)
+		if err != nil {
+			return nil, err
+		}
+		if byIdentity[identity] != nil {
+			continue
+		}
+
+		name, err := p.toVariant(author, sourceTrad[i])
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
+		}
+		a := &plannedAuthor{id: int64(len(authors) + 1), identity: identity, name: name, dynasty: poem.Dynasty}
+		authors = append(authors, a)
+		byIdentity[identity] = a
+	}
+
+	if err := p.attachBios(byIdentity, bios); err != nil {
+		return nil, err
+	}
+
+	planned := make([]plannedAuthor, len(authors))
+	for i, a := range authors {
+		planned[i] = *a
+	}
+	return planned, nil
+}
+
+// attachBios 把小传按作者身份挂到规划好的作者上，转为本语言变体，并合并重复。
+// 没有作品的作者不会因为有小传而被建出来。
+func (p *Processor) attachBios(byIdentity map[string]*plannedAuthor, bios []loader.AuthorBio) error {
+	seen := make(map[string]map[string]bool) // 身份 -> 已收录小传的简体规整文本
+	for _, bio := range bios {
+		name := classifier.NormalizeText(bio.Name)
+		identity, err := authorIdentity(name, bio.Dynasty)
+		if err != nil {
+			return err
+		}
+		a := byIdentity[identity]
+		if a == nil {
+			continue
+		}
+
+		desc := strings.TrimSpace(bio.Description)
+		simplified, err := classifier.ToSimplified(desc)
+		if err != nil {
+			return fmt.Errorf("failed to convert bio of %q: %w", name, err)
+		}
+		// 同一段小传可能以简繁两种字形各出现一次，按简体文本判重
+		if seen[identity] == nil {
+			seen[identity] = make(map[string]bool)
+		}
+		if seen[identity][simplified] {
+			continue
+		}
+		seen[identity][simplified] = true
+
+		trad, err := classifier.IsTraditional(desc)
+		if err != nil {
+			return fmt.Errorf("failed to detect script of bio of %q: %w", name, err)
+		}
+		converted, err := p.toVariant(desc, trad)
+		if err != nil {
+			return fmt.Errorf("failed to convert bio of %q: %w", name, err)
+		}
+		if a.description == "" {
+			a.description = converted
+		} else {
+			a.description += "\n\n" + converted
+		}
+	}
+	return nil
+}
+
+// authorIdentity 返回判定「是否同一位作者」所用的键：归一化并转为简体后的名字，
+// 加上原始朝代名。author 须已经过 NormalizeText，空名已替换为「佚名」。
+func authorIdentity(author, dynasty string) (string, error) {
+	name, err := classifier.ToSimplified(author)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert author %q: %w", author, err)
+	}
+	return name + "\x00" + dynasty, nil
 }
 
 // Process 以多 worker 并发处理全部诗词，并批量写入数据库。
@@ -164,7 +295,12 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	)
 
 	// 启动 worker 前先预热缓存，避免冷缓存下集中冲击数据库
-	if err := p.prewarmCache(poems); err != nil {
+	sourceTrad, err := detectSourceScripts(poems)
+	if err != nil {
+		return err
+	}
+
+	if err := p.prewarmCache(poems, sourceTrad); err != nil {
 		return fmt.Errorf("failed to pre-warm cache: %w", err)
 	}
 
@@ -242,8 +378,9 @@ func (p *Processor) Process(poems []loader.PoemWithMeta) error {
 	go func() {
 		for i, poem := range poems {
 			workCh <- PoemWork{
-				PoemWithMeta: poem,
-				ID:           int64(i + 1), // 从 1 开始的顺序 ID
+				PoemWithMeta:      poem,
+				ID:                int64(i + 1), // 从 1 开始的顺序 ID
+				SourceTraditional: sourceTrad[i],
 			}
 		}
 		close(workCh)
@@ -310,7 +447,9 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 		return nil
 	}
 
-	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)))
+	// 整体去重、词题去歧（需要看到全部诗词才能判断）
+	allPoems, removed := finalizePoems(allPoems)
+	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)), zap.Int("duplicates_removed", removed))
 
 	// 写入阶段单独用一个进度条容器
 	progress := mpb.New(
@@ -388,19 +527,41 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	}
 	// 只要有正文即可入库，允许没有正式标题
 
+	// 作者身份须在转换前、按源数据的写法求得，见 planAuthors
+	identity, err := authorIdentity(author, work.Dynasty)
+	if err != nil {
+		return nil, err
+	}
+	authorName, err := classifier.ToSimplified(author)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
+	}
+
+	// 正文哈希：规整（去标点、空白）后计算，供唯一索引与 finalizePoems 去重使用。
+	// 一律按简体正文计算，与语言变体无关：同一首诗常同时收在繁体书写的全唐诗与
+	// 简体书写的选本（唐诗三百首等）里，繁体库保留前者原文、后者由简转繁得来，
+	// 两者用字未必完全相同（游／遊）。按各自变体的正文去重，两张表会保留不同的诗。
+	hashSource := paragraphs
+	if work.SourceTraditional {
+		if hashSource, err = classifier.ToSimplifiedArray(paragraphs); err != nil {
+			return nil, fmt.Errorf("failed to convert paragraphs for hashing: %w", err)
+		}
+	}
+	hash := contentHash(hashSource)
+
 	// 统一简繁：繁体库转繁体，简体库转简体
-	author, err := p.convertText(author, p.convertToTraditional)
+	author, err = p.toVariant(author, work.SourceTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert author: %w", err)
 	}
 
-	paragraphs, err = p.convertTextArray(paragraphs, p.convertToTraditional)
+	paragraphs, err = p.toVariantArray(paragraphs, work.SourceTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert paragraphs: %w", err)
 	}
 
 	if rhythmic != "" {
-		rhythmic, err = p.convertText(rhythmic, p.convertToTraditional)
+		rhythmic, err = p.toVariant(rhythmic, work.SourceTraditional)
 		if err != nil {
 			return nil, fmt.Errorf("failed to convert rhythmic: %w", err)
 		}
@@ -416,9 +577,13 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to get/create dynasty: %w", err)
 	}
 
-	authorID, err := p.repo.GetOrCreateAuthor(author, dynastyID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get/create author: %w", err)
+	// 预热时已规划的作者直接取其 ID；只有预热未覆盖到的（理论上不会出现）才按名字建
+	authorID, ok := p.authorIDs[identity]
+	if !ok {
+		authorID, err = p.repo.GetOrCreateAuthor(author, dynastyID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get/create author: %w", err)
+		}
 	}
 
 	// 结合数据集来源与标题判定诗词体裁
@@ -437,7 +602,7 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	// 按类别在 title / rhythmic / chapter 之间挑选最终标题
 	finalTitle := resolveTitleByCategory(poem, typeInfo.Category)
 
-	finalTitle, err = p.convertText(finalTitle, p.convertToTraditional)
+	finalTitle, err = p.toVariant(finalTitle, work.SourceTraditional)
 	if err != nil {
 		return nil, fmt.Errorf("failed to convert final title: %w", err)
 	}
@@ -451,13 +616,12 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to marshal paragraphs: %w", err)
 	}
 
-	// 计算正文哈希用于去重。
-	// 这里对拼接后的纯文本取哈希（而非 JSON 字节），
-	// 这样原本被合并成一句的正文（"A。B。"）在归一化后
-	// 与正确拆分的版本（["A。","B。"]）能得到相同的哈希值。
-	joinedText := strings.Join(paragraphs, "")
-	hash := sha256.Sum256([]byte(joinedText))
-	contentHash := hex.EncodeToString(hash[:])
+	// 无副标题的词记下首句，同一作者同一词牌有多首时用于区分标题
+	firstLine := ""
+	if (typeInfo.Category == "词" || typeInfo.Category == "宋词") && rhythmic != "" &&
+		(poem.Title == "" || poem.Title == poem.Rhythmic) {
+		firstLine = firstClause(paragraphs)
+	}
 
 	dbPoem := &database.Poem{
 		ID:          poemID,
@@ -466,10 +630,55 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		DynastyID:   &dynastyID,
 		TypeID:      &typeID,
 		Content:     datatypes.JSON(contentJSON),
-		ContentHash: contentHash,
+		ContentHash: hash,
+		FirstLine:   firstLine,
+		AuthorName:  authorName,
 	}
 
 	return dbPoem, nil
+}
+
+// toVariant 把源文本转成本语言变体，源文本本就是目标字形时原样返回。
+//
+// 不能无条件转换：简转繁对已是繁体的文本并非恒等，简繁同形的字会被改掉
+// （十里→十裏、咸→鹹、陸游→陸遊）。此前繁体库把繁体书写的全唐诗整体再做一遍
+// 简转繁，抽样中约 35% 的诗正文被改坏。反方向（繁转简作用于简体文本）同理。
+// 朝代名、体裁名等代码里写死的简体常量不是源文本，仍用 convertText。
+func (p *Processor) toVariant(text string, sourceTraditional bool) (string, error) {
+	if sourceTraditional == p.convertToTraditional {
+		return text, nil
+	}
+	return p.convertText(text, p.convertToTraditional)
+}
+
+// toVariantArray 是 toVariant 的批量版本。
+func (p *Processor) toVariantArray(texts []string, sourceTraditional bool) ([]string, error) {
+	if sourceTraditional == p.convertToTraditional {
+		return texts, nil
+	}
+	return p.convertTextArray(texts, p.convertToTraditional)
+}
+
+// detectSourceScripts 逐首判断源文本是否以繁体书写。
+// 按首而不按数据集判断：全唐诗整体为繁体，但其中也混有少量简体记录。
+func detectSourceScripts(poems []loader.PoemWithMeta) ([]bool, error) {
+	out := make([]bool, len(poems))
+	var sb strings.Builder
+	for i, poem := range poems {
+		sb.Reset()
+		sb.WriteString(poem.Title)
+		sb.WriteString(poem.Rhythmic)
+		sb.WriteString(poem.Author)
+		for _, para := range poem.Paragraphs {
+			sb.WriteString(para)
+		}
+		trad, err := classifier.IsTraditional(sb.String())
+		if err != nil {
+			return nil, fmt.Errorf("failed to detect script of %q: %w", poem.Title, err)
+		}
+		out[i] = trad
+	}
+	return out, nil
 }
 
 // convertText 按 toTraditional 标志把文本转为繁体或简体。

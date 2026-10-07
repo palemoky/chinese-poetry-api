@@ -20,7 +20,7 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 	dynasty := Dynasty{Name: name}
 
 	// 以 ON CONFLICT DO NOTHING 的方式尝试插入
-	err := r.db.Table(r.dynastiesTable()).Clauses(clause.OnConflict{
+	err := r.conn().Table(r.dynastiesTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "name"}},
 		DoNothing: true, // 已存在则忽略
 	}).Create(&dynasty).Error
@@ -30,7 +30,7 @@ func (r *Repository) GetOrCreateDynasty(name string) (int64, error) {
 
 	// ID 为 0 说明插入被跳过（记录已存在），需要回查已有记录
 	if dynasty.ID == 0 {
-		err = r.db.Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
+		err = r.conn().Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
 		if err != nil {
 			return 0, err
 		}
@@ -49,18 +49,15 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 		DynastyID: &dynastyID,
 	}
 
-	// 以 ON CONFLICT DO NOTHING 的方式尝试插入
-	err := r.db.Table(r.authorsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "name"}},
-		DoNothing: true, // 已存在则忽略
-	}).Create(&author).Error
+	// 以 ON CONFLICT DO NOTHING 的方式尝试插入；作者以名字 + 朝代区分
+	err := r.conn().Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error
 	if err != nil {
 		return 0, err
 	}
 
 	// ID 为 0 说明插入被跳过（记录已存在），需要回查已有记录
 	if author.ID == 0 {
-		err = r.db.Table(r.authorsTable()).Where("name = ?", name).First(&author).Error
+		err = r.conn().Table(r.authorsTable()).Where("name = ? AND dynasty_id = ?", name, dynastyID).First(&author).Error
 		if err != nil {
 			return 0, err
 		}
@@ -69,10 +66,70 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 	return author.ID, nil
 }
 
+// CreateAuthorWithID 以指定 ID 创建作者，返回该作者（名字 + 朝代）实际对应的 ID。
+//
+// 导入时简繁两套表各建一次作者，用显式 ID 才能让同一位诗人在两套表里 ID 相同
+// （自增 ID 取决于插入顺序，两边只要有一处顺序不同，之后的 ID 就全部错开）。
+// 若同一朝代下该名字已存在（例如两个繁体名转成简体后相同），沿用已有记录的 ID。
+func (r *Repository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
+	author := Author{ID: id, Name: name, DynastyID: &dynastyID}
+	if err := r.conn().Table(r.authorsTable()).Clauses(authorConflict).Create(&author).Error; err != nil {
+		return 0, err
+	}
+
+	var existing Author
+	err := r.conn().Table(r.authorsTable()).Select("id").
+		Where("name = ? AND dynasty_id = ?", name, dynastyID).
+		First(&existing).Error
+	if err != nil {
+		return 0, err
+	}
+	return existing.ID, nil
+}
+
+// PruneAuthorsWithoutPoems 删除没有任何作品的作者，返回删除的条数。
+//
+// 导入时作者按语料规划，个别作者的作品可能全部在去重中被并入另一条记录
+// （同一首诗同时收在唐、宋两部分，作者按朝代分成两条，只保留先出现的那份），
+// 留下的空记录会出现在作者列表里。两个语言变体的去重结果相同，删掉的作者也相同，
+// 作者 ID 仍然一致。
+func (r *Repository) PruneAuthorsWithoutPoems() (int64, error) {
+	res := r.conn().Exec(fmt.Sprintf(
+		"DELETE FROM %s WHERE id NOT IN (SELECT author_id FROM %s WHERE author_id IS NOT NULL)",
+		r.authorsTable(), r.poemsTable(),
+	))
+	if res.Error != nil {
+		return 0, fmt.Errorf("failed to prune authors: %w", res.Error)
+	}
+	r.db.invalidateCaches()
+	return res.RowsAffected, nil
+}
+
+// authorConflict 是写入作者时的冲突处理：同一朝代的同名作者视为同一人，已存在则跳过。
+var authorConflict = clause.OnConflict{
+	Columns:   []clause.Column{{Name: "name"}, {Name: "dynasty_id"}},
+	DoNothing: true,
+}
+
+// SetAuthorDescriptions 批量写入作者小传，键为作者 ID。
+func (r *Repository) SetAuthorDescriptions(descriptions map[int64]string) error {
+	if len(descriptions) == 0 {
+		return nil
+	}
+	return r.conn().Transaction(func(tx *gorm.DB) error {
+		for id, desc := range descriptions {
+			if err := tx.Table(r.authorsTable()).Where("id = ?", id).Update("description", desc).Error; err != nil {
+				return fmt.Errorf("failed to set description of author %d: %w", id, err)
+			}
+		}
+		return nil
+	})
+}
+
 // GetPoetryTypeID 按名称查询体裁 ID。
 func (r *Repository) GetPoetryTypeID(name string) (int64, error) {
 	var poetryType PoetryType
-	err := r.db.Table(r.poetryTypesTable()).Where("name = ?", name).First(&poetryType).Error
+	err := r.conn().Table(r.poetryTypesTable()).Where("name = ?", name).First(&poetryType).Error
 	if err != nil {
 		return 0, err
 	}
@@ -87,7 +144,7 @@ func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 	}
 
 	var poetryTypes []PoetryType
-	err := r.db.Table(r.poetryTypesTable()).
+	err := r.conn().Table(r.poetryTypesTable()).
 		Where("name IN ?", names).
 		Find(&poetryTypes).Error
 	if err != nil {
@@ -119,7 +176,12 @@ func (r *Repository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 
 // InsertPoem 插入单首诗词。
 func (r *Repository) InsertPoem(poem *Poem) error {
-	return r.db.Table(r.poemsTable()).Create(poem).Error
+	if err := r.conn().Table(r.poemsTable()).Create(poem).Error; err != nil {
+		return err
+	}
+	// 诗词数量变了，缓存的 COUNT 结果随之失效
+	r.db.invalidateCaches()
+	return nil
 }
 
 // BatchInsertPoems 分批插入诗词以提升性能，重复记录会被跳过。
@@ -133,11 +195,17 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 	}
 
 	// 用 CreateInBatches 配合 OnConflict 处理重复，
-	// 依据 (title, content_hash) 复合唯一索引跳过重复记录
-	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}},
+	// 依据 (title, content_hash, author_id) 复合唯一索引跳过重复记录
+	err := r.conn().Table(r.poemsTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}, {Name: "author_id"}},
 		DoNothing: true, // 跳过重复记录
 	}).CreateInBatches(poems, batchSize).Error
+	if err != nil {
+		return err
+	}
+
+	r.db.invalidateCaches()
+	return nil
 }
 
 // BatchInsertPoemsWithTransaction 用大事务批量写入诗词以获得最佳性能，
@@ -187,14 +255,14 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 		transactionChunk := poems[i:end]
 
 		// 单个大事务内手动分批，以便刷新进度条
-		err := r.db.Transaction(func(tx *gorm.DB) error {
+		err := r.conn().Transaction(func(tx *gorm.DB) error {
 			for j := 0; j < len(transactionChunk); j += batchSize {
 				batchEnd := min(j+batchSize, len(transactionChunk))
 				batch := transactionChunk[j:batchEnd]
 
 				// 写入当前批次，重复记录自动跳过
 				err := tx.Table(r.poemsTable()).Clauses(clause.OnConflict{
-					Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}},
+					Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}, {Name: "author_id"}},
 					DoNothing: true,
 				}).Create(&batch).Error
 				if err != nil {
@@ -220,8 +288,14 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 
 // UpsertPoem 插入诗词，若已存在则更新（用于处理重复数据）。
 func (r *Repository) UpsertPoem(poem *Poem) error {
-	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.conn().Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"title", "content", "author_id", "dynasty_id", "type_id"}),
 	}).Create(poem).Error
+	if err != nil {
+		return err
+	}
+
+	r.db.invalidateCaches()
+	return nil
 }

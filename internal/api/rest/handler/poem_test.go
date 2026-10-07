@@ -433,3 +433,77 @@ func TestRandomPoem(t *testing.T) {
 		})
 	}
 }
+
+// 数据库故障要返回 500：此前一律回 404「没有符合条件的诗」，
+// 服务端故障在客户端看来只是筛选条件太窄。
+func TestRandomPoemDatabaseErrorIs500(t *testing.T) {
+	router, repo := setupPoemTestRouter(t)
+	createTestPoem(t, repo, 1, "静夜思", "床前明月光")
+
+	h := NewPoemHandler(repo)
+	router.GET("/poems/random", h.RandomPoem)
+
+	// 先确认正常情况下能取到
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/poems/random?char=床", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/poems/random?char=雪", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
+
+	sqlDB, err := repo.DB().DB.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+
+	for _, url := range []string{"/poems/random?author_id=1", "/poems/random?char=春"} {
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		assert.Equal(t, http.StatusInternalServerError, w.Code, url)
+	}
+}
+
+// 同名异人：?author= 未带朝代时取作品最多的那位，带上朝代即可指定。
+func TestPoemsFilterByHomonymAuthor(t *testing.T) {
+	router, repo := setupPoemTestRouter(t)
+	h := NewPoemHandler(repo)
+	router.GET("/poems", h.ListPoems)
+
+	tang, err := repo.GetOrCreateDynasty("唐")
+	require.NoError(t, err)
+	qing, err := repo.GetOrCreateDynasty("清")
+	require.NoError(t, err)
+	tangAuthor, err := repo.GetOrCreateAuthor("张潮", tang)
+	require.NoError(t, err)
+	qingAuthor, err := repo.GetOrCreateAuthor("张潮", qing)
+	require.NoError(t, err)
+
+	insert := func(id int64, title string, author, dynasty int64) {
+		require.NoError(t, repo.InsertPoem(&database.Poem{
+			ID: id, Title: title, Content: datatypes.JSON([]byte(`["` + title + `"]`)),
+			AuthorID: &author, DynastyID: &dynasty,
+		}))
+	}
+	insert(1, "唐诗一", tangAuthor, tang)
+	insert(2, "幽梦影一", qingAuthor, qing)
+	insert(3, "幽梦影二", qingAuthor, qing)
+
+	titles := func(url string) []string {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		require.Equal(t, http.StatusOK, w.Code, w.Body.String())
+		var resp struct {
+			Data []struct{ Title string } `json:"data"`
+		}
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		var out []string
+		for _, p := range resp.Data {
+			out = append(out, p.Title)
+		}
+		return out
+	}
+
+	assert.Equal(t, []string{"幽梦影一", "幽梦影二"}, titles("/poems?author=张潮"), "defaults to the author with more poems")
+	assert.Equal(t, []string{"唐诗一"}, titles("/poems?author=张潮&dynasty=唐"))
+	assert.Equal(t, []string{"幽梦影一", "幽梦影二"}, titles("/poems?author=张潮&dynasty_id="+strconv.FormatInt(qing, 10)))
+}

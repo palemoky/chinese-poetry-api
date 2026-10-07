@@ -14,6 +14,7 @@ const (
 	queryLang      = "lang"
 	queryPage      = "page"
 	queryPageSize  = "page_size"
+	queryAfter     = "after"
 	queryQuery     = "q"
 	queryChar      = "char"
 	queryAuthorID  = "author_id"
