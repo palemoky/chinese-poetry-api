@@ -1,6 +1,11 @@
 server:
   port: 1279
   mode: release  # debug, release, test
+  # Proxies allowed to set X-Forwarded-For (IPs or CIDRs). Requests from any other
+  # address are identified by their TCP peer, so clients can't spoof their IP to
+  # dodge the rate limiter. Defaults to loopback + private ranges when omitted;
+  # override with TRUSTED_PROXIES (comma-separated, or "none").
+  # trusted_proxies: ["127.0.0.1/32", "172.16.0.0/12"]
 
 database:
   # Connection pool settings (0 = auto-detect based on CPU cores)
@@ -17,10 +22,8 @@ rate_limit:
 graphql:
   playground: false  # Enable GraphQL Playground (set to true for development)
   introspection: true
-  complexity_limit: 1000
-  requests_per_second: 10
-  burst: 20
-  by_ip: true
+  # Max query complexity; paginated fields count as child cost x pageSize
+  complexity_limit: 5000
 
 search:
   max_results: 1000

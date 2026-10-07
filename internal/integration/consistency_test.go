@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/99designs/gqlgen/client"
-	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +19,6 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
-	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
 )
 
 // setupTestEnv 搭建同时包含 REST 与 GraphQL 的测试环境。
@@ -41,13 +39,12 @@ func setupTestEnv(t *testing.T) (*gin.Engine, *client.Client, *database.Reposito
 	cfg := &config.Config{
 		Server: config.ServerConfig{Mode: "test"},
 	}
-	restRouter := rest.SetupRouter(cfg, db, repo)
+	restRouter, err := rest.SetupRouter(cfg, db, repo)
+	require.NoError(t, err)
 
 	// 初始化 GraphQL 客户端
 	resolver := graph.NewResolver(db, repo)
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{
-		Resolvers: resolver,
-	}))
+	srv := graph.NewServer(resolver, graph.ServerOptions{ComplexityLimit: 5000, Introspection: true})
 	graphqlClient := client.New(srv)
 
 	return restRouter, graphqlClient, repo
