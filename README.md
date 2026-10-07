@@ -13,6 +13,8 @@
 
 在线版：https://poetry.palemoky.com
 
+<a href="https://trendshift.io/repositories/69501?utm_source=repository-badge&amp;utm_medium=badge&amp;utm_campaign=badge-repository-69501" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/repositories/69501" alt="palemoky%2Fchinese-poetry-api | Trendshift" width="250" height="55"/></a>
+
 </div>
 
 ## 特性

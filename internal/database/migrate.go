@@ -208,7 +208,8 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_title ON %s(title)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_author ON %s(author_id)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", poemTable, poemTable))
-	db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique ON %s(title, content_hash)", poemTable, poemTable))
+	// 唯一索引含作者：同文不同作者（《全唐诗》重出诗）各自保留。索引名带 _author，避免沿用旧库中不含作者的同名索引
+	db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique_author ON %s(title, content_hash, author_id)", poemTable, poemTable))
 	// 复合索引，用于多体裁随机取词（type_id IN ... 叠加 id 范围查找）
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_type_id ON %s(type_id, id)", poemTable, poemTable))
 

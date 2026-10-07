@@ -155,3 +155,27 @@ func TestGetPoetryTypeIDsWithCache(t *testing.T) {
 	stats := cachedRepo.GetCacheStats()
 	assert.Equal(t, 3, stats["types"])
 }
+
+// TestBatchInsertPoemsUniqueIncludesAuthor 唯一索引含作者：同标题同正文、作者不同的（重出诗）各自保留，同作者的只保留一条。
+func TestBatchInsertPoemsUniqueIncludesAuthor(t *testing.T) {
+	_, repo := setupGetPoetryTypeIDsTestDB(t)
+
+	dynastyID, err := repo.GetOrCreateDynasty("唐")
+	require.NoError(t, err)
+	a1, err := repo.GetOrCreateAuthor("甲", dynastyID)
+	require.NoError(t, err)
+	a2, err := repo.GetOrCreateAuthor("乙", dynastyID)
+	require.NoError(t, err)
+
+	content := []byte(`["同一首诗。"]`)
+	poems := []*Poem{
+		{ID: 1, Title: "题", Content: content, ContentHash: "h", AuthorID: &a1},
+		{ID: 2, Title: "题", Content: content, ContentHash: "h", AuthorID: &a2}, // 不同作者：保留
+		{ID: 3, Title: "题", Content: content, ContentHash: "h", AuthorID: &a1}, // 同作者重复：跳过
+	}
+	require.NoError(t, repo.BatchInsertPoems(poems, 10))
+
+	var count int64
+	require.NoError(t, repo.db.Table(repo.poemsTable()).Count(&count).Error)
+	assert.Equal(t, int64(2), count)
+}
