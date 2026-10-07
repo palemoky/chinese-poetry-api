@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 
 	"github.com/palemoky/chinese-poetry-api/internal/api/middleware"
@@ -34,6 +35,9 @@ func dataVersionETag(path string) string {
 // 正常的查询都在毫秒级，留出足够余量的同时小于 http.Server 的 WriteTimeout。
 const requestTimeout = 10 * time.Second
 
+// gzipMinLength 是开始压缩的响应体大小。
+const gzipMinLength = 1024
+
 // readMethods 是只读接口接受的方法。Gin 不会替 GET 路由自动响应 HEAD，
 // 不单独注册的话 HEAD 请求（如 curl -I、部分监控探针）会得到 404。
 // HEAD 的响应体由 net/http 丢弃，响应头与 GET 一致。
@@ -57,6 +61,11 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 
 	// 跨域中间件
 	router.Use(middleware.CORS())
+
+	// 响应压缩。诗词 JSON 压缩后通常只剩 1/4–1/2：20 首诗的列表 7.7KB → 2.1KB。
+	// 小于 1KB 的响应不压缩，gzip 头尾反而会让它变大。
+	// 前面已有 CDN 或反代压缩时，它们看到 Content-Encoding 会原样转发。
+	router.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithMinLength(gzipMinLength)))
 
 	// 限流中间件
 	if cfg.RateLimit.Enabled {
