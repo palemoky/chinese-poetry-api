@@ -92,9 +92,16 @@ func (c *countCache) invalidate() {
 	c.entries = nil
 }
 
-// InvalidateCountCache 在诗词数据发生变更后清空计数缓存。
+// InvalidateCountCache 在诗词数据发生变更后清空计数缓存与搜索结果缓存。
 func (db *DB) InvalidateCountCache() {
+	db.invalidateCaches()
+}
+
+// invalidateCaches 清空所有由诗词数据派生的内存缓存。写入路径统一调用它，
+// 免得新增一种缓存后漏掉某个失效点。
+func (db *DB) invalidateCaches() {
 	db.counts.invalidate()
+	db.idLists.invalidate()
 }
 
 // countKeyBuilder 拼装计数缓存的键。

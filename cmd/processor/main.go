@@ -117,6 +117,12 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, workers 
 		return fmt.Errorf("failed to process traditional poems: %w", err)
 	}
 
+	// 导入期间每次写入都会让倒排索引失效，全部写完后统一重建
+	logger.Info("Building char index")
+	if err := db.BuildCharIndexes(); err != nil {
+		return fmt.Errorf("failed to build char index: %w", err)
+	}
+
 	// 优化数据库文件
 	logger.Info("Optimizing database")
 	if err := db.Exec("VACUUM").Error; err != nil {
