@@ -380,3 +380,134 @@ func TestGraphQLCountFields(t *testing.T) {
 		assert.NotEmpty(t, resp.PoemTypes, "poetry types are seeded by the schema")
 	})
 }
+
+// TestGraphQLNestedFieldsInheritLang 覆盖没有自己 lang 参数的嵌套字段：
+// Author.poems 与各处 poemCount 此前固定读简体表，外层的 lang: ZH_HANT 在这里失效。
+//
+// 繁体表里先多插一位作者，让同一位诗人在两套表中的 ID 错开——真实数据并不保证
+// 两套表 ID 一一对应，拿外层（繁体）给出的 ID 去查简体表会查到别人，或者什么都查不到。
+func TestGraphQLNestedFieldsInheritLang(t *testing.T) {
+	c, repo := setupLangTestEnv(t)
+
+	hans := repo.WithLang(database.LangHans)
+	hant := repo.WithLang(database.LangHant)
+
+	hansDynasty, err := hans.GetOrCreateDynasty("唐")
+	require.NoError(t, err)
+	hansAuthor, err := hans.GetOrCreateAuthor("李白", hansDynasty)
+	require.NoError(t, err)
+
+	hantDynasty, err := hant.GetOrCreateDynasty("唐朝")
+	require.NoError(t, err)
+	_, err = hant.GetOrCreateAuthor("佔位", hantDynasty)
+	require.NoError(t, err)
+	hantAuthor, err := hant.GetOrCreateAuthor("李白傳統", hantDynasty)
+	require.NoError(t, err)
+	require.NotEqual(t, hansAuthor, hantAuthor, "the test relies on the IDs differing")
+
+	for _, p := range []struct {
+		repo            *database.Repository
+		id, author, dyn int64
+		title           string
+	}{
+		{hans, 1, hansAuthor, hansDynasty, "简体标题"},
+		{hant, 1, hantAuthor, hantDynasty, "繁體標題"},
+		{hant, 2, hantAuthor, hantDynasty, "繁體標題二"},
+	} {
+		author, dyn := p.author, p.dyn
+		require.NoError(t, p.repo.InsertPoem(&database.Poem{
+			ID: p.id, Title: p.title, Content: datatypes.JSON([]byte(`["床前明月光"]`)),
+			AuthorID: &author, DynastyID: &dyn,
+		}))
+	}
+
+	t.Run("authors -> poems and poemCount", func(t *testing.T) {
+		var resp struct {
+			Authors struct {
+				Edges []struct {
+					Node struct {
+						Name      string
+						PoemCount int
+						Poems     struct {
+							TotalCount int
+							Edges      []struct{ Node struct{ Title string } }
+						}
+					}
+				}
+			}
+		}
+		require.NoError(t, c.Post(`query { authors(lang: ZH_HANT, dynastyId: "`+strconv.FormatInt(hantDynasty, 10)+`") {
+			edges { node { name poemCount poems { totalCount edges { node { title } } } } }
+		} }`, &resp))
+
+		var found bool
+		for _, e := range resp.Authors.Edges {
+			if e.Node.Name != "李白傳統" {
+				continue
+			}
+			found = true
+			assert.Equal(t, 2, e.Node.PoemCount)
+			assert.Equal(t, 2, e.Node.Poems.TotalCount)
+			require.Len(t, e.Node.Poems.Edges, 2)
+			assert.Equal(t, "繁體標題", e.Node.Poems.Edges[0].Node.Title)
+		}
+		assert.True(t, found)
+	})
+
+	t.Run("poem -> author -> poems follows the outer lang", func(t *testing.T) {
+		for lang, want := range map[string][]string{
+			"ZH_HANS": {"简体标题"},
+			"ZH_HANT": {"繁體標題", "繁體標題二"},
+		} {
+			var resp struct {
+				Poem struct {
+					Author struct {
+						Poems struct {
+							Edges []struct{ Node struct{ Title string } }
+						}
+					}
+				}
+			}
+			require.NoError(t, c.Post(`query { poem(id: "1", lang: `+lang+`) { author { poems { edges { node { title } } } } } }`, &resp))
+			var got []string
+			for _, e := range resp.Poem.Author.Poems.Edges {
+				got = append(got, e.Node.Title)
+			}
+			assert.Equal(t, want, got, "lang: %s", lang)
+		}
+	})
+
+	t.Run("dynasty counts", func(t *testing.T) {
+		var resp struct {
+			Dynasties []struct {
+				Name        string
+				PoemCount   int
+				AuthorCount int
+			}
+		}
+		require.NoError(t, c.Post(`query { dynasties(lang: ZH_HANT) { name poemCount authorCount } }`, &resp))
+		for _, d := range resp.Dynasties {
+			if d.Name == "唐朝" {
+				assert.Equal(t, 2, d.PoemCount)
+				assert.Equal(t, 1, d.AuthorCount)
+				return
+			}
+		}
+		t.Fatal("traditional dynasty not returned")
+	})
+
+	t.Run("statistics", func(t *testing.T) {
+		var resp struct {
+			Statistics struct {
+				PoemsByDynasty []struct {
+					Dynasty struct{ Name string }
+					Count   int
+				}
+			}
+		}
+		require.NoError(t, c.Post(`query { statistics(lang: ZH_HANT) { poemsByDynasty { dynasty { name } count } } }`, &resp))
+		require.NotEmpty(t, resp.Statistics.PoemsByDynasty)
+		assert.Equal(t, "唐朝", resp.Statistics.PoemsByDynasty[0].Dynasty.Name, "statistics ignored lang")
+		assert.Equal(t, 2, resp.Statistics.PoemsByDynasty[0].Count)
+	})
+}

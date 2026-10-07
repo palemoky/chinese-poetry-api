@@ -17,16 +17,15 @@ import (
 
 // Poems is the resolver for the poems field.
 //
-// 注意：该字段没有 lang 参数，而 gqlgen 解析子字段时用的是原始请求上下文，
-// 父查询的 lang 传不到这里，因此这里返回的始终是简体。
-// 给 Author.poems 单独加一个 lang 参数可以解决，但那属于 schema 变更。
+// 该字段没有自己的 lang 参数，语言变体继承自外层查询（见 inheritedLang）。
+// 此前这里固定读简体表，authors(lang: ZH_HANT) 下展开的诗作仍是简体。
 func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *int, pageSize *int) (*database.PoemConnection, error) {
 	pag, err := parsePagination(page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	poems, totalCount, err := r.Repo.ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
+	poems, totalCount, err := r.repoFor(ctx).ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +35,10 @@ func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *
 
 // PoemCount is the resolver for the poemCount field.
 //
-// 这里以及 Dynasty、PoetryType 上的计数都走默认的简体表。
-// 与上面的 Author.poems 一样读不到查询的 lang，但此处无妨：
-// 简繁两套表是同一份语料的互转结果，计数完全一致。
+// 这里以及 Dynasty、PoetryType 上的计数同样按外层查询的语言变体查表：
+// obj.ID 来自那一套表，两套表的 ID 并不保证一一对应，拿它去查另一套表的计数并不可靠。
 func (r *authorResolver) PoemCount(ctx context.Context, obj *database.Author) (int, error) {
-	return r.Repo.CountPoemsByAuthor(obj.ID)
+	return r.repoFor(ctx).CountPoemsByAuthor(obj.ID)
 }
 
 // Node is the resolver for the node field.
@@ -50,12 +48,12 @@ func (r *authorEdgeResolver) Node(ctx context.Context, obj *database.AuthorEdge)
 
 // PoemCount is the resolver for the poemCount field.
 func (r *dynastyResolver) PoemCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	return r.Repo.CountPoemsByDynasty(obj.ID)
+	return r.repoFor(ctx).CountPoemsByDynasty(obj.ID)
 }
 
 // AuthorCount is the resolver for the authorCount field.
 func (r *dynastyResolver) AuthorCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	return r.Repo.CountAuthorsByDynasty(obj.ID)
+	return r.repoFor(ctx).CountAuthorsByDynasty(obj.ID)
 }
 
 // Content is the resolver for the content field.
@@ -69,7 +67,7 @@ func (r *poemResolver) Content(ctx context.Context, obj *database.Poem) ([]strin
 
 // PoemCount is the resolver for the poemCount field.
 func (r *poetryTypeResolver) PoemCount(ctx context.Context, obj *database.PoetryType) (int, error) {
-	return r.Repo.CountPoemsByType(obj.ID)
+	return r.repoFor(ctx).CountPoemsByType(obj.ID)
 }
 
 // Poem is the resolver for the poem field.
@@ -245,7 +243,7 @@ func (r *queryResolver) PoemTypes(ctx context.Context, lang *database.Lang) ([]*
 
 // Statistics is the resolver for the statistics field.
 func (r *queryResolver) Statistics(ctx context.Context, lang *database.Lang) (*database.Statistics, error) {
-	return r.Repo.GetStatistics()
+	return r.Repo.WithLang(parseLang(lang)).GetStatistics()
 }
 
 // PoemsByDynasty is the resolver for the poemsByDynasty field.

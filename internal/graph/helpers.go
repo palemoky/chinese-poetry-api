@@ -1,8 +1,11 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+
+	"github.com/99designs/gqlgen/graphql"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/helpers"
@@ -104,6 +107,28 @@ func parseOptionalID(id *string) (*int64, error) {
 // parseLang 把可选的 Lang 指针转换为 Lang 取值，为 nil 时返回默认语言。
 func parseLang(lang *database.Lang) database.Lang {
 	return helpers.ParseLangPointer(lang)
+}
+
+// inheritedLang 返回离当前字段最近、且带 lang 参数的祖先字段所指定的语言变体，
+// 找不到时为简体。
+//
+// lang 只声明在 Query 的顶层字段上，Author.poems、Author.poemCount 这类嵌套字段
+// 没有自己的 lang。gqlgen 会把每一层字段的已解析参数（含 schema 默认值）挂在
+// FieldContext 上，沿 Parent 往上找即可拿到外层查询的取值，例如
+// authors(lang: ZH_HANT) { edges { node { poems { … } } } } 中的 poems 会读到 ZH_HANT。
+// 这样嵌套字段自动跟随外层查询的语言，而无需改动 schema。
+func inheritedLang(ctx context.Context) database.Lang {
+	for fc := graphql.GetFieldContext(ctx); fc != nil; fc = fc.Parent {
+		if lang, ok := fc.Args["lang"].(*database.Lang); ok {
+			return parseLang(lang)
+		}
+	}
+	return database.LangHans
+}
+
+// repoFor 返回语言变体与外层查询一致的仓储，供嵌套字段的 resolver 使用。
+func (r *Resolver) repoFor(ctx context.Context) *database.Repository {
+	return r.Repo.WithLang(inheritedLang(ctx))
 }
 
 // buildPoemConnection 根据诗词切片与分页信息构造 PoemConnection。
