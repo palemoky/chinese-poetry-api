@@ -157,28 +157,70 @@ func (r *Repository) loadPoemRelations(poems []Poem) {
 // 因此升序即语料本身的顺序，与「最新」无关。本仓储的所有分页查询都用同一排序，
 // 以保证 REST 与 GraphQL 对「第 N 页」的理解一致。
 func (r *Repository) ListPoemsWithFilter(limit, offset int, dynastyID, authorID *int64, typeIDs []int64) ([]Poem, int, error) {
-	query := r.db.Table(r.poemsTable())
+	return r.listPoems(limit, offset, nil, dynastyID, authorID, typeIDs)
+}
 
-	// 应用过滤条件
-	if dynastyID != nil {
-		query = query.Where("dynasty_id = ?", *dynastyID)
-	}
-	if authorID != nil {
-		query = query.Where("author_id = ?", *authorID)
-	}
-	if len(typeIDs) > 0 {
-		query = query.Where("type_id IN ?", typeIDs)
+// ListPoemsAfter 与 ListPoemsWithFilter 返回相同的列表与排序，但用游标而非 OFFSET
+// 定位起点：after 为上一页最后一条诗词的 id，只返回 id 大于它的记录。
+// after 为 nil 时等价于取第一页。
+//
+// 相比 OFFSET，这里是一次 id 索引上的区间扫描，代价与翻到第几页无关，
+// 因此不受 handler.MaxOffset 的深度限制。代价是只能顺序前进，无法直接跳到第 N 页。
+func (r *Repository) ListPoemsAfter(limit int, after *int64, dynastyID, authorID *int64, typeIDs []int64) ([]Poem, int, error) {
+	return r.listPoems(limit, 0, after, dynastyID, authorID, typeIDs)
+}
+
+// listPoems 是 OFFSET 与游标两种分页方式的共同实现：两者只在如何定位起点上有区别，
+// 过滤条件、计数与排序必须完全一致，否则同一份数据在两种翻页方式下会呈现出不同的顺序。
+func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, authorID *int64, typeIDs []int64) ([]Poem, int, error) {
+	applyFilters := func(q *gorm.DB) *gorm.DB {
+		if dynastyID != nil {
+			q = q.Where("dynasty_id = ?", *dynastyID)
+		}
+		if authorID != nil {
+			q = q.Where("author_id = ?", *authorID)
+		}
+		if len(typeIDs) > 0 {
+			q = q.Where("type_id IN ?", typeIDs)
+		}
+		return q
 	}
 
-	// 先取满足条件的总数
+	// 先取满足条件的总数。这一步与页码无关，每页都会重算。
+	// 注意 after 不参与计数：totalCount 是整个结果集的大小，不是剩余条数。
+	//
+	// 无过滤时读物化计数器：COUNT(*) 要扫完一整棵索引，是唯一一个代价随表大小
+	// 增长的计数。带过滤时走的是索引区间扫描，代价随命中数增长，交给 TTL 缓存即可。
 	var totalCount int64
-	if err := query.Count(&totalCount).Error; err != nil {
+	var err error
+	if dynastyID == nil && authorID == nil && len(typeIDs) == 0 {
+		var n int
+		n, err = r.CountPoems()
+		totalCount = int64(n)
+	} else {
+		key := newCountKey("poems", r.lang).
+			addOptionalID(dynastyID).
+			addOptionalID(authorID).
+			addIDs(typeIDs).
+			String()
+		totalCount, err = r.db.counts.getOrLoad(key, func() (int64, error) {
+			var n int64
+			err := applyFilters(r.db.Table(r.poemsTable())).Count(&n).Error
+			return n, err
+		})
+	}
+	if err != nil {
 		return nil, 0, err
 	}
 
 	// 再取当前分页数据
+	query := applyFilters(r.db.Table(r.poemsTable()))
+	if after != nil {
+		query = query.Where("id > ?", *after)
+	}
+
 	var poems []Poem
-	err := query.
+	err = query.
 		Limit(limit).Offset(offset).
 		Order("id ASC").
 		Find(&poems).Error
@@ -278,13 +320,18 @@ func (r *Repository) GetRandomPoemByChar(char string) (*Poem, error) {
 
 // ListAuthorPoems 分页查询指定作者的诗词。
 func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem, int, error) {
-	var totalCount int64
-	if err := r.db.Table(r.poemsTable()).Where("author_id = ?", authorID).Count(&totalCount).Error; err != nil {
+	key := newCountKey("author_poems", r.lang).addID(authorID).String()
+	totalCount, err := r.db.counts.getOrLoad(key, func() (int64, error) {
+		var n int64
+		err := r.db.Table(r.poemsTable()).Where("author_id = ?", authorID).Count(&n).Error
+		return n, err
+	})
+	if err != nil {
 		return nil, 0, err
 	}
 
 	var poems []Poem
-	err := r.db.Table(r.poemsTable()).
+	err = r.db.Table(r.poemsTable()).
 		Where("author_id = ?", authorID).
 		Limit(limit).Offset(offset).
 		Order("id ASC").
@@ -317,81 +364,60 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	ftsTable := r.poemsFtsTable()
 	ftsJoin := "JOIN " + ftsTable + " ON " + ftsTable + ".rowid = " + poemTable + ".id"
 
-	var poems []Poem
-	var total int64
+	authorJoin := "JOIN " + authorTable + " ON " + poemTable + ".author_id = " + authorTable + ".id"
 
+	// 每种搜索模式只在「附加哪些 join 与 where」上有区别，把这部分抽成一个函数，
+	// 计数与取数就能共用同一份条件，不必两处各写一遍、各自漏改。
+	var applyMatch func(*gorm.DB) *gorm.DB
 	switch searchType {
 	case "title":
 		// 仅搜标题，走 FTS trigram 索引
-		r.db.Table(poemTable).
-			Joins(ftsJoin).
-			Where(ftsTable+".title LIKE ?", pattern).
-			Count(&total)
-		err := r.db.Table(poemTable).
-			Select(poemTable+".*").
-			Joins(ftsJoin).
-			Where(ftsTable+".title LIKE ?", pattern).
-			Order(poemTable + ".id").
-			Limit(pageSize).Offset(offset).
-			Find(&poems).Error
-		if err != nil {
-			return nil, 0, err
+		applyMatch = func(q *gorm.DB) *gorm.DB {
+			return q.Joins(ftsJoin).Where(ftsTable+".title LIKE ?", pattern)
 		}
 
 	case "content":
 		// 仅搜正文，走 FTS trigram 索引
-		r.db.Table(poemTable).
-			Joins(ftsJoin).
-			Where(ftsTable+".content_text LIKE ?", pattern).
-			Count(&total)
-		err := r.db.Table(poemTable).
-			Select(poemTable+".*").
-			Joins(ftsJoin).
-			Where(ftsTable+".content_text LIKE ?", pattern).
-			Order(poemTable + ".id").
-			Limit(pageSize).Offset(offset).
-			Find(&poems).Error
-		if err != nil {
-			return nil, 0, err
+		applyMatch = func(q *gorm.DB) *gorm.DB {
+			return q.Joins(ftsJoin).Where(ftsTable+".content_text LIKE ?", pattern)
 		}
 
 	case "author":
 		// 仅搜作者名。作者表很小，普通 LIKE 足够快
-		r.db.Table(poemTable).
-			Joins("JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-			Where(authorTable+".name LIKE ?", pattern).
-			Count(&total)
-		err := r.db.Table(poemTable).
-			Select(poemTable+".*").
-			Joins("JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-			Where(authorTable+".name LIKE ?", pattern).
-			Order(poemTable + ".id").
-			Limit(pageSize).Offset(offset).
-			Find(&poems).Error
-		if err != nil {
-			return nil, 0, err
+		applyMatch = func(q *gorm.DB) *gorm.DB {
+			return q.Joins(authorJoin).Where(authorTable+".name LIKE ?", pattern)
 		}
 
 	default: // "all"
 		// 标题、正文（走 FTS）与作者名一并搜索
-		r.db.Table(poemTable).
-			Joins(ftsJoin).
-			Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-			Where(ftsTable+".title LIKE ? OR "+ftsTable+".content_text LIKE ? OR "+authorTable+".name LIKE ?",
-				pattern, pattern, pattern).
-			Count(&total)
-		err := r.db.Table(poemTable).
-			Select(poemTable+".*").
-			Joins(ftsJoin).
-			Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-			Where(ftsTable+".title LIKE ? OR "+ftsTable+".content_text LIKE ? OR "+authorTable+".name LIKE ?",
-				pattern, pattern, pattern).
-			Order(poemTable + ".id").
-			Limit(pageSize).Offset(offset).
-			Find(&poems).Error
-		if err != nil {
-			return nil, 0, err
+		applyMatch = func(q *gorm.DB) *gorm.DB {
+			return q.Joins(ftsJoin).
+				Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
+				Where(ftsTable+".title LIKE ? OR "+ftsTable+".content_text LIKE ? OR "+authorTable+".name LIKE ?",
+					pattern, pattern, pattern)
 		}
+	}
+
+	// 计数与页码无关，且要把同一个 FTS join 再跑一遍，代价与取数相当，故走缓存。
+	// 键含用户输入的关键词，缓存的条目数上限见 countCacheMaxEntries。
+	key := newCountKey("search", r.lang).add(searchType).add(query).String()
+	total, err := r.db.counts.getOrLoad(key, func() (int64, error) {
+		var n int64
+		err := applyMatch(r.db.Table(poemTable)).Count(&n).Error
+		return n, err
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	var poems []Poem
+	err = applyMatch(r.db.Table(poemTable)).
+		Select(poemTable + ".*").
+		Order(poemTable + ".id").
+		Limit(pageSize).Offset(offset).
+		Find(&poems).Error
+	if err != nil {
+		return nil, 0, err
 	}
 
 	r.loadPoemRelations(poems)

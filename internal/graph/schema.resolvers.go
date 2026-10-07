@@ -84,8 +84,8 @@ func (r *queryResolver) Poem(ctx context.Context, id string, lang *database.Lang
 }
 
 // Poems is the resolver for the poems field.
-func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
-	pag, err := parsePagination(page, pageSize)
+func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, after *string, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
+	pag, err := parsePaginationWithCursor(page, pageSize, after)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +111,17 @@ func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *in
 		typeIDs = []int64{*typeIDInt}
 	}
 
+	// 多取一条用于判断还有没有下一页，由 buildPoemConnection 截掉
+	limit := pag.PageSize + 1
+
 	repo := r.Repo.WithLang(parseLang(lang))
-	poems, totalCount, err := repo.ListPoemsWithFilter(pag.PageSize, pag.Offset, dynastyIDInt, authorIDInt, typeIDs)
+	var poems []database.Poem
+	var totalCount int
+	if pag.IsCursor() {
+		poems, totalCount, err = repo.ListPoemsAfter(limit, pag.After, dynastyIDInt, authorIDInt, typeIDs)
+	} else {
+		poems, totalCount, err = repo.ListPoemsWithFilter(limit, pag.Offset, dynastyIDInt, authorIDInt, typeIDs)
+	}
 	if err != nil {
 		return nil, err
 	}

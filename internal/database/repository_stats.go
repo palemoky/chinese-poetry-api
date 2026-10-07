@@ -1,11 +1,19 @@
 package database
 
+import "fmt"
+
 // 本文件包含各类统计与计数方法。
 
 // CountPoems 返回诗词总数。
+//
+// 读的是物化计数器而非 COUNT(*)：后者要扫完一整棵索引，
+// 而这里是一次主键查找。计数器由触发器维护，见 DB.migratePoemCounter。
 func (r *Repository) CountPoems() (int, error) {
 	var count int64
-	err := r.db.Table(r.poemsTable()).Count(&count).Error
+	err := r.db.Raw(
+		fmt.Sprintf("SELECT value FROM %s WHERE name = ?", countersTable),
+		poemCounterName(r.lang),
+	).Scan(&count).Error
 	return int(count), err
 }
 
@@ -17,8 +25,17 @@ func (r *Repository) CountAuthors() (int, error) {
 }
 
 // CountPoemsByAuthor 返回某位作者名下的作品数。
+//
+// 读的是物化列 authors.poem_count（见 DB.migrateAuthorPoemCountTriggers），
+// 而不是去 poems 表数一遍：GraphQL 的 Author.poemCount 是逐行解析的字段，
+// 一页 20 位作者就会调用 20 次，每次都数一遍属于纯粹的浪费。
 func (r *Repository) CountPoemsByAuthor(authorID int64) (int, error) {
-	return r.countPoemsWhere("author_id = ?", authorID)
+	var count int64
+	err := r.db.Table(r.authorsTable()).
+		Select("poem_count").
+		Where("id = ?", authorID).
+		Scan(&count).Error
+	return int(count), err
 }
 
 // CountPoemsByDynasty 返回某个朝代的作品数。
@@ -130,9 +147,12 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 }
 
 // ListAuthorsWithFilter 分页查询作者列表，可按朝代过滤。
+//
+// 作品数取自物化列 authors.poem_count（由 RefreshAuthorPoemCounts 维护），
+// 而非 JOIN poems + GROUP BY 现算：后者是一次全表聚合，代价与页码无关，
+// 每页都要重来，且排序无法走索引。改用物化列后排序直接吃 idx_..._poem_count。
 func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) ([]AuthorWithStats, int, error) {
 	authorTable := r.authorsTable()
-	poemTable := r.poemsTable()
 
 	query := r.db.Table(authorTable)
 
@@ -141,36 +161,27 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 		query = query.Where(authorTable+".dynasty_id = ?", *dynastyID)
 	}
 
-	// 先取满足条件的总数
-	var totalCount int64
-	if err := query.Count(&totalCount).Error; err != nil {
-		return nil, 0, err
-	}
-
-	// 再取作者及其作品数
-	var results []struct {
-		Author
-		PoemCount int `gorm:"column:poem_count"`
-	}
-
-	err := query.
-		Select(authorTable + ".*, COUNT(" + poemTable + ".id) as poem_count").
-		Joins("LEFT JOIN " + poemTable + " ON " + authorTable + ".id = " + poemTable + ".author_id").
-		Group(authorTable + ".id").
-		Order("poem_count DESC, " + authorTable + ".id ASC").
-		Limit(limit).Offset(offset).
-		Scan(&results).Error
+	// 先取满足条件的总数。与页码无关，每页都会重算，故走缓存
+	key := newCountKey("authors", r.lang).addOptionalID(dynastyID).String()
+	totalCount, err := r.db.counts.getOrLoad(key, func() (int64, error) {
+		var n int64
+		err := query.Count(&n).Error
+		return n, err
+	})
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 转换为对外的 AuthorWithStats
-	authors := make([]AuthorWithStats, len(results))
-	for i, r := range results {
-		authors[i] = AuthorWithStats{
-			Author:    r.Author,
-			PoemCount: r.PoemCount,
-		}
+	// 再取作者及其作品数。排序里带上 id 是为了在作品数相同时打破并列，
+	// 否则顺序不确定，分页会出现重复和遗漏。
+	var authors []AuthorWithStats
+	err = query.
+		Select(authorTable + ".*").
+		Order("poem_count DESC, " + authorTable + ".id ASC").
+		Limit(limit).Offset(offset).
+		Scan(&authors).Error
+	if err != nil {
+		return nil, 0, err
 	}
 
 	return authors, int(totalCount), nil
