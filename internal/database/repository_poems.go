@@ -298,6 +298,27 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 // （由 handler 层强制）在不知不觉中被破坏。
 // 同样采用「先 COUNT 再随机 OFFSET」保证均匀分布。
 func (r *Repository) GetRandomPoemByChar(char string) (*Poem, error) {
+	// 有倒排索引时直接在命中列表里随机取，省掉 COUNT 与 OFFSET 两次全表扫描
+	if ids, ok, err := r.shortTermMatches(char, "content"); err != nil {
+		return nil, err
+	} else if ok {
+		if len(ids) == 0 {
+			return nil, gorm.ErrRecordNotFound
+		}
+		i, err := rand.Int(rand.Reader, big.NewInt(int64(len(ids))))
+		if err != nil {
+			return nil, err
+		}
+		poems, err := r.poemsByIDs(ids[i.Int64() : i.Int64()+1])
+		if err != nil {
+			return nil, err
+		}
+		if len(poems) == 0 {
+			return nil, gorm.ErrRecordNotFound
+		}
+		return &poems[0], nil
+	}
+
 	poemTable := r.poemsTable()
 	ftsTable := r.poemsFtsTable()
 	cond, arg := substringMatch(ftsTable+".content_text", char)
@@ -403,6 +424,21 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	}
 
 	offset := (page - 1) * pageSize
+
+	// 1～2 字的查询用不上 trigram 索引，改走单字倒排索引；不适用时（如索引失效）
+	// 继续走下面的原有路径，两者结果一致。
+	if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
+		return nil, 0, err
+	} else if ok {
+		start := min(offset, len(ids))
+		end := min(offset+pageSize, len(ids))
+		poems, err := r.poemsByIDs(ids[start:end])
+		if err != nil {
+			return nil, 0, err
+		}
+		return poems, int64(len(ids)), nil
+	}
+
 	poemTable := r.poemsTable()
 	authorTable := r.authorsTable()
 	ftsTable := r.poemsFtsTable()

@@ -21,6 +21,9 @@ type DB struct {
 	// 是因为 Repository.WithLang 每次都会返回一个新实例（每个请求至少一次），
 	// 挂在 Repository 上的缓存永远不会被命中。
 	counts countCache
+
+	// idLists 缓存短查询经倒排索引求出的完整命中列表，理由同上。
+	idLists idListCache
 }
 
 // Open 以读写方式打开 SQLite 数据库连接，供数据导入使用。
@@ -289,7 +292,8 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 		return err
 	}
 
-	return nil
+	// 倒排索引从 FTS 表构建，必须放在 FTS 之后
+	return db.migrateCharIndex(lang)
 }
 
 // countersTable 保存物化的行数计数器，每行一个计数。
