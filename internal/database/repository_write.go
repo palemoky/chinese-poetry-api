@@ -139,7 +139,7 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 
 	// 用 CreateInBatches 配合 OnConflict 处理重复，
 	// 依据 (title, content_hash, author_id) 复合唯一索引跳过重复记录
-	return r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
+	err := r.db.Table(r.poemsTable()).Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "title"}, {Name: "content_hash"}, {Name: "author_id"}},
 		DoNothing: true, // 跳过重复记录
 	}).CreateInBatches(poems, batchSize).Error
