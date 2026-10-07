@@ -22,24 +22,56 @@ type DB struct {
 	counts countCache
 }
 
-// Open 打开 SQLite 数据库连接。
+// Open 以读写方式打开 SQLite 数据库连接，供数据导入使用。
 // maxOpenConns：最大连接数，传 0 则取保守默认值 1。
 // maxIdleConns：最大空闲连接数，传 0 则取默认值 1。
 func Open(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
+	// 针对写入优化的 SQLite 连接串：
+	// _journal_mode=WAL   使用 WAL 日志以提升并发能力
+	// _synchronous=NORMAL 在安全性与性能之间取平衡
+	return open(path+"?_foreign_keys=on&_journal_mode=WAL&_synchronous=NORMAL&"+commonDSNParams, maxOpenConns, maxIdleConns)
+}
+
+// OpenReadOnly 以只读方式打开数据库，供 API 服务使用。
+//
+// 服务运行期间语料是只读的（数据由 processor 离线导入），只读打开让这一点由
+// SQLite 来保证，而不是靠约定：任何误写都会直接报错，而不是悄悄改动线上数据。
+// _query_only 在连接层面再拦一道，覆盖 mode=ro 管不到的 PRAGMA 等写操作。
+//
+// 发布的数据库是 WAL 模式，SQLite 只读打开 WAL 库时仍需创建 -shm 文件，
+// 因此数据库所在目录必须可写（Docker 镜像中的 data 卷满足这一点）。
+func OpenReadOnly(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
+	// mode=ro 只在 file: URI 形式的 DSN 中生效，普通路径后的 mode 参数会被静默忽略
+	db, err := open("file:"+path+"?mode=ro&_query_only=1&"+commonDSNParams, maxOpenConns, maxIdleConns)
+	if err != nil {
+		return nil, err
+	}
+
+	// Ping 不会真正打开数据库文件。这里读一次 schema，让文件缺失、损坏或
+	// 目录不可写（无法创建 -shm）在启动时就报错，而不是等到第一个请求。
+	var tables int64
+	if err := db.Raw("SELECT count(*) FROM sqlite_master").Scan(&tables).Error; err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("failed to read database %s: %w", path, err)
+	}
+	return db, nil
+}
+
+// commonDSNParams 是读写与只读两种连接共用的参数：
+// _busy_timeout=5000  数据库被锁时最多等待 5 秒
+// _cache_size=-64000  每个连接 64MB 页缓存（负值单位为 KB，正值为页数）
+// _temp_store=MEMORY  临时表与临时索引放在内存中
+//
+// 不用 cache=shared：SQLite 官方不建议使用共享缓存，它在多连接并发时会改用
+// 表级锁，读请求之间可能互相返回 SQLITE_LOCKED，而 WAL 本身已能让读者互不阻塞。
+const commonDSNParams = "_busy_timeout=5000&_cache_size=-64000&_temp_store=MEMORY"
+
+func open(dsn string, maxOpenConns, maxIdleConns int) (*DB, error) {
 	config := &gorm.Config{
 		Logger:      logger.Default.LogMode(logger.Silent), // 调试时可改为 logger.Info
 		NowFunc:     time.Now,
 		PrepareStmt: true, // 预编译语句以提升性能
 	}
-
-	// 针对并发写入优化的 SQLite 连接串：
-	// _busy_timeout=5000  数据库被锁时最多等待 5 秒
-	// _journal_mode=WAL   使用 WAL 日志以提升并发能力
-	// _synchronous=NORMAL 在安全性与性能之间取平衡
-	// cache=shared        多个连接共享缓存
-	// _cache_size=-64000  64MB 页缓存（负值单位为 KB，正值为页数）
-	// _temp_store=MEMORY  临时表与临时索引放在内存中
-	dsn := path + "?_foreign_keys=on&_journal_mode=WAL&_busy_timeout=5000&_synchronous=NORMAL&cache=shared&_cache_size=-64000&_temp_store=MEMORY"
 
 	db, err := gorm.Open(sqlite.Open(dsn), config)
 	if err != nil {

@@ -71,7 +71,7 @@ func main() {
 	)
 
 	// 按配置的连接池参数打开数据库
-	db, err := database.Open(cfg.Database.Path, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns)
+	db, err := database.OpenReadOnly(cfg.Database.Path, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.Error(err))
 	}
