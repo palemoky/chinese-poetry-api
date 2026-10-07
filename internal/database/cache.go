@@ -1,6 +1,7 @@
 package database
 
 import (
+	"strconv"
 	"sync"
 )
 
@@ -124,9 +125,10 @@ func (r *CachedRepository) GetPoetryTypeIDs(names []string) ([]int64, error) {
 
 // GetOrCreateAuthor 查询或创建作者，结果带缓存。
 func (r *CachedRepository) GetOrCreateAuthor(name string, dynastyID int64) (int64, error) {
-	// 先查缓存，作者名唯一，直接用作 key
+	// 先查缓存。作者以名字 + 朝代区分，key 要同时包含两者
+	key := authorCacheKey(name, dynastyID)
 	r.authorCacheMu.RLock()
-	if id, ok := r.authorCache[name]; ok {
+	if id, ok := r.authorCache[key]; ok {
 		r.authorCacheMu.RUnlock()
 		return id, nil
 	}
@@ -140,14 +142,19 @@ func (r *CachedRepository) GetOrCreateAuthor(name string, dynastyID int64) (int6
 
 	// 结果写入缓存
 	r.authorCacheMu.Lock()
-	r.authorCache[name] = id
+	r.authorCache[key] = id
 	r.authorCacheMu.Unlock()
 
 	return id, nil
 }
 
+// authorCacheKey 拼出作者缓存的 key，\x00 分隔以免名字与朝代 ID 拼接后撞键。
+func authorCacheKey(name string, dynastyID int64) string {
+	return name + "\x00" + strconv.FormatInt(dynastyID, 10)
+}
+
 // CreateAuthorWithID 以指定 ID 创建作者，并把结果写入缓存，
-// 之后按名字调用 GetOrCreateAuthor 会直接命中这个 ID。
+// 之后以同样的名字与朝代调用 GetOrCreateAuthor 会直接命中这个 ID。
 func (r *CachedRepository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
 	got, err := r.Repository.CreateAuthorWithID(id, name, dynastyID)
 	if err != nil {
@@ -155,7 +162,7 @@ func (r *CachedRepository) CreateAuthorWithID(id int64, name string, dynastyID i
 	}
 
 	r.authorCacheMu.Lock()
-	r.authorCache[name] = got
+	r.authorCache[authorCacheKey(name, dynastyID)] = got
 	r.authorCacheMu.Unlock()
 
 	return got, nil

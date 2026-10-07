@@ -23,8 +23,8 @@ func (Dynasty) TableName() string {
 
 // Author 表示一位诗人或作者。
 type Author struct {
-	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"` // 自增主键
-	Name        string    `gorm:"not null;uniqueIndex" json:"name"`   // 唯一索引，防止重复
+	ID          int64     `gorm:"primaryKey;autoIncrement" json:"id"`  // 自增主键
+	Name        string    `gorm:"not null"                json:"name"` // 与 DynastyID 一起唯一，见 migrateTablesForLang
 	DynastyID   *int64    `gorm:"index"                json:"dynasty_id,omitempty"`
 	Dynasty     *Dynasty  `gorm:"foreignKey:DynastyID" json:"dynasty,omitempty"`
 	Description *string   `                            json:"description,omitempty"`
@@ -69,6 +69,11 @@ type Poem struct {
 	// FirstLine 仅在导入阶段使用、不入库：无副标题的词记下首句，
 	// 供同一作者同一词牌有多首时拼成「词牌·首句」区分标题。
 	FirstLine string `gorm:"-" json:"-"`
+
+	// AuthorName 仅在导入阶段使用、不入库：作者的简体名，供去重按「作者名 + 正文」判断。
+	// 作者记录以名字 + 朝代区分，同一首诗若同时收在唐、宋两部分，两份的作者 ID 不同，
+	// 只按作者 ID 去重会让它重复出现。
+	AuthorName string `gorm:"-" json:"-"`
 }
 
 // TableName 返回 Poem 的默认表名。

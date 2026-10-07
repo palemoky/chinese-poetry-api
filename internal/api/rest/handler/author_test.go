@@ -260,3 +260,35 @@ func TestPaginationBoundariesREST(t *testing.T) {
 		})
 	}
 }
+
+// 小传只出现在作者详情里，不出现在列表中。
+func TestAuthorDescriptionOnlyInDetail(t *testing.T) {
+	router, repo, _ := setupTestRouter(t)
+	handler := NewAuthorHandler(repo)
+	router.GET("/authors", handler.ListAuthors)
+	router.GET("/authors/:id", handler.GetAuthor)
+
+	dynastyID, err := repo.GetOrCreateDynasty("宋")
+	require.NoError(t, err)
+	authorID, err := repo.GetOrCreateAuthor("苏轼", dynastyID)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetAuthorDescriptions(map[int64]string{authorID: "苏轼，字子瞻。"}))
+
+	get := func(url string) map[string]any {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		require.Equal(t, http.StatusOK, w.Code, url)
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		return resp
+	}
+
+	detail := get("/authors/" + strconv.FormatInt(authorID, 10))["data"].(map[string]any)
+	assert.Equal(t, "苏轼，字子瞻。", detail["description"])
+
+	list := get("/authors")["data"].([]any)
+	require.NotEmpty(t, list)
+	for _, item := range list {
+		assert.NotContains(t, item.(map[string]any), "description")
+	}
+}

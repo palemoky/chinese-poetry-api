@@ -43,11 +43,12 @@ type DirectiveRoot struct {
 
 type ComplexityRoot struct {
 	Author struct {
-		Dynasty   func(childComplexity int) int
-		ID        func(childComplexity int) int
-		Name      func(childComplexity int) int
-		PoemCount func(childComplexity int) int
-		Poems     func(childComplexity int, page *int, pageSize *int) int
+		Description func(childComplexity int) int
+		Dynasty     func(childComplexity int) int
+		ID          func(childComplexity int) int
+		Name        func(childComplexity int) int
+		PoemCount   func(childComplexity int) int
+		Poems       func(childComplexity int, page *int, pageSize *int) int
 	}
 
 	AuthorConnection struct {
@@ -186,6 +187,12 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 	_ = ec
 	switch typeName + "." + field {
 
+	case "Author.description":
+		if e.ComplexityRoot.Author.Description == nil {
+			break
+		}
+
+		return e.ComplexityRoot.Author.Description(childComplexity), true
 	case "Author.dynasty":
 		if e.ComplexityRoot.Author.Dynasty == nil {
 			break
@@ -749,6 +756,8 @@ type Author {
   id: ID!
   name: String!
   dynasty: Dynasty
+  "Biography from the source corpus, in the requested language variant"
+  description: String
   poems(page: Int = 1, pageSize: Int = 20): PoemConnection!
   poemCount: Int!
 }
@@ -835,6 +844,8 @@ func (ec *executionContext) childFields_Author(ctx context.Context, field graphq
 		return ec.fieldContext_Author_name(ctx, field)
 	case "dynasty":
 		return ec.fieldContext_Author_dynasty(ctx, field)
+	case "description":
+		return ec.fieldContext_Author_description(ctx, field)
 	case "poems":
 		return ec.fieldContext_Author_poems(ctx, field)
 	case "poemCount":
@@ -1549,6 +1560,29 @@ func (ec *executionContext) fieldContext_Author_dynasty(_ context.Context, field
 		},
 	}
 	return fc, nil
+}
+
+func (ec *executionContext) _Author_description(ctx context.Context, field graphql.CollectedField, obj *database.Author) (ret graphql.Marshaler) {
+	return graphql.ResolveField(
+		ctx,
+		ec.OperationContext,
+		field,
+		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
+			return ec.fieldContext_Author_description(ctx, field)
+		},
+		func(ctx context.Context) (any, error) {
+			return obj.Description, nil
+		},
+		nil,
+		func(ctx context.Context, selections ast.SelectionSet, v *string) graphql.Marshaler {
+			return ec.marshalOString2ᚖstring(ctx, selections, v)
+		},
+		true,
+		false,
+	)
+}
+func (ec *executionContext) fieldContext_Author_description(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
+	return graphql.NewScalarFieldContext("Author", field, false, false, errors.New("field of type String does not have child fields"))
 }
 
 func (ec *executionContext) _Author_poems(ctx context.Context, field graphql.CollectedField, obj *database.Author) (ret graphql.Marshaler) {
@@ -4286,6 +4320,8 @@ func (ec *executionContext) _Author(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "dynasty":
 			out.Values[i] = ec._Author_dynasty(ctx, field, obj)
+		case "description":
+			out.Values[i] = ec._Author_description(ctx, field, obj)
 		case "poems":
 			field := field
 

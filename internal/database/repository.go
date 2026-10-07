@@ -9,6 +9,7 @@ type RepositoryInterface interface {
 	GetOrCreateDynasty(name string) (int64, error)
 	GetOrCreateAuthor(name string, dynastyID int64) (int64, error)
 	CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error)
+	SetAuthorDescriptions(descriptions map[int64]string) error
 	GetPoetryTypeID(name string) (int64, error)
 	GetPoetryTypeIDs(names []string) ([]int64, error)
 	InsertPoem(poem *Poem) error

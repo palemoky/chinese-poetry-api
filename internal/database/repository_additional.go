@@ -76,10 +76,19 @@ func (r *Repository) GetAuthorByID(id int64) (*Author, error) {
 	return &author, nil
 }
 
-// GetAuthorByName 按姓名查询作者。
-func (r *Repository) GetAuthorByName(name string) (*Author, error) {
+// GetAuthorByName 按姓名查询作者，dynastyID 非 nil 时只在该朝代中查找。
+//
+// 作者以名字 + 朝代区分，同一个名字可能对应多位作者（同名异人，或五代入宋、
+// 在两个朝代的语料中各有一条记录的诗人）。未指定朝代时取作品最多的那位，
+// 并以 id 为 tiebreaker，保证结果稳定；调用方可以同时传朝代来消除歧义。
+func (r *Repository) GetAuthorByName(name string, dynastyID *int64) (*Author, error) {
+	query := r.db.Table(r.authorsTable()).Where("name = ?", name)
+	if dynastyID != nil {
+		query = query.Where("dynasty_id = ?", *dynastyID)
+	}
+
 	var author Author
-	err := r.db.Table(r.authorsTable()).Where("name = ?", name).First(&author).Error
+	err := query.Order("poem_count DESC, id ASC").First(&author).Error
 	if err != nil {
 		return nil, err
 	}

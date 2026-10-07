@@ -558,3 +558,26 @@ func TestAuthorsWithFilters(t *testing.T) {
 		assert.Equal(t, 0, resp.Authors.TotalCount)
 	})
 }
+
+func TestAuthorDescriptionField(t *testing.T) {
+	resolver, repo := setupTestResolver(t)
+	c := createTestClient(t, resolver)
+
+	dynastyID, err := repo.GetOrCreateDynasty("宋")
+	require.NoError(t, err)
+	withBio, err := repo.GetOrCreateAuthor("苏轼", dynastyID)
+	require.NoError(t, err)
+	withoutBio, err := repo.GetOrCreateAuthor("佚名", dynastyID)
+	require.NoError(t, err)
+	require.NoError(t, repo.SetAuthorDescriptions(map[int64]string{withBio: "苏轼，字子瞻。"}))
+
+	var resp struct {
+		Author struct{ Description *string }
+	}
+	require.NoError(t, c.Post(fmt.Sprintf(`{ author(id: "%d") { description } }`, withBio), &resp))
+	require.NotNil(t, resp.Author.Description)
+	assert.Equal(t, "苏轼，字子瞻。", *resp.Author.Description)
+
+	require.NoError(t, c.Post(fmt.Sprintf(`{ author(id: "%d") { description } }`, withoutBio), &resp))
+	assert.Nil(t, resp.Author.Description)
+}

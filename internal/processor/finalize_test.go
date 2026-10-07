@@ -60,3 +60,20 @@ func TestFinalizePoemsDisambiguatesCiTitles(t *testing.T) {
 	assert.Equal(t, "水调歌头", titles[4])
 	assert.Equal(t, "水调歌头·快哉亭作", titles[5])
 }
+
+// 同一首诗同时收在唐、宋两部分时，作者按朝代分成两条记录、ID 不同，
+// 但仍是同一作者的同一首诗，只保留先出现的一份。
+func TestFinalizePoemsDeduplicatesAcrossDynastyRecords(t *testing.T) {
+	h := contentHash([]string{"同一首诗。"})
+	poems := []*database.Poem{
+		{ID: 1, Title: "雪", AuthorID: ptr(10), AuthorName: "幸夤逊", ContentHash: h}, // 宋诗文件中的记录
+		{ID: 2, Title: "雪", AuthorID: ptr(20), AuthorName: "幸夤逊", ContentHash: h}, // 唐诗文件中的记录
+		{ID: 3, Title: "雪", AuthorID: ptr(30), AuthorName: "别人", ContentHash: h},  // 不同作者：保留
+	}
+	kept, removed := finalizePoems(poems)
+	assert.Equal(t, 1, removed)
+	if assert.Len(t, kept, 2) {
+		assert.Equal(t, int64(1), kept[0].ID)
+		assert.Equal(t, int64(3), kept[1].ID)
+	}
+}

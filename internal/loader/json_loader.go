@@ -90,15 +90,7 @@ func NewJSONLoader(configPath string) (*JSONLoader, error) {
 func (l *JSONLoader) LoadAll() ([]PoemWithMeta, error) {
 	var allPoems []PoemWithMeta
 
-	keys := make([]string, 0, len(l.config.Datasets))
-	for key := range l.config.Datasets {
-		keys = append(keys, key)
-	}
-	slices.SortFunc(keys, func(a, b string) int {
-		return cmp.Or(cmp.Compare(l.config.Datasets[a].ID, l.config.Datasets[b].ID), cmp.Compare(a, b))
-	})
-
-	for _, key := range keys {
+	for _, key := range l.sortedDatasetKeys() {
 		dataset := l.config.Datasets[key]
 		poems, err := l.loadDataset(key, dataset)
 		if err != nil {
@@ -108,6 +100,18 @@ func (l *JSONLoader) LoadAll() ([]PoemWithMeta, error) {
 	}
 
 	return allPoems, nil
+}
+
+// sortedDatasetKeys 按数据集 ID（其次按 key）返回全部数据集的 key。
+func (l *JSONLoader) sortedDatasetKeys() []string {
+	keys := make([]string, 0, len(l.config.Datasets))
+	for key := range l.config.Datasets {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(a, b string) int {
+		return cmp.Or(cmp.Compare(l.config.Datasets[a].ID, l.config.Datasets[b].ID), cmp.Compare(a, b))
+	})
+	return keys
 }
 
 // PoemWithMeta 是诗词数据加上其来源信息。
@@ -307,6 +311,81 @@ func inferDynasty(key, name string) string {
 	return "其他"
 }
 
+// AuthorBio 是作者文件中的一条诗人小传。
+type AuthorBio struct {
+	Name        string
+	Description string
+	Dynasty     string
+}
+
+// LoadAuthorBios 加载各数据集目录下作者文件（authors.tang.json、author.song.json、
+// authors.json 等）中的诗人小传，按数据集 ID 与文件名排序，结果稳定。
+//
+// 作者文件与诗词文件放在一起，在 datas.json 中被列进 excludes，不会被当作诗词加载。
+// 朝代与诗词一样按文件名修正（全唐诗目录下的 authors.song.json 属于宋）。
+// 小传字段在不同文件中分别叫 desc 与 description。
+func (l *JSONLoader) LoadAuthorBios() ([]AuthorBio, error) {
+	type source struct {
+		path    string
+		dynasty string
+	}
+	var sources []source
+	seenDirs := map[string]bool{}
+
+	for _, key := range l.sortedDatasetKeys() {
+		dataset := l.config.Datasets[key]
+		dir := filepath.Join(l.basePath, dataset.Path)
+		if info, err := os.Stat(dir); err != nil {
+			return nil, fmt.Errorf("failed to stat path %s: %w", dir, err)
+		} else if !info.IsDir() {
+			dir = filepath.Dir(dir) // 单文件数据集（如南唐）的作者文件在同一目录下
+		}
+		if seenDirs[dir] {
+			continue
+		}
+		seenDirs[dir] = true
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read directory %s: %w", dir, err)
+		}
+		for _, entry := range entries {
+			name := entry.Name()
+			if entry.IsDir() || !strings.HasPrefix(name, "author") || filepath.Ext(name) != ".json" {
+				continue
+			}
+			sources = append(sources, source{
+				path:    filepath.Join(dir, name),
+				dynasty: fileDynasty(name, l.idToDynasty[dataset.ID]),
+			})
+		}
+	}
+
+	var bios []AuthorBio
+	for _, src := range sources {
+		data, err := os.ReadFile(src.path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read %s: %w", src.path, err)
+		}
+		var raw []map[string]any
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, fmt.Errorf("failed to parse %s: %w", src.path, err)
+		}
+		for _, item := range raw {
+			desc := getString(item, "desc")
+			if desc == "" {
+				desc = getString(item, "description")
+			}
+			name := getString(item, "name")
+			if name == "" || strings.TrimSpace(desc) == "" {
+				continue
+			}
+			bios = append(bios, AuthorBio{Name: name, Description: desc, Dynasty: src.dynasty})
+		}
+	}
+	return bios, nil
+}
+
 // fileDynasty 依据文件名修正数据集级别的朝代。
 //
 // 「全唐诗」目录（数据集 tangsong，「全唐诗全宋诗」）同时收了唐诗与宋诗，
@@ -328,6 +407,7 @@ func getDefaultAuthorFromDataset(datasetKey string) string {
 	authorMap := map[string]string{
 		"caocao":      "曹操",
 		"nalanxingde": "纳兰性德",
+		"youmengying": "张潮", // 源数据只有 content 与 comment，没有作者字段
 	}
 
 	if author, ok := authorMap[datasetKey]; ok {

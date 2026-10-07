@@ -80,5 +80,5 @@ func (h *AuthorHandler) GetAuthor(c *gin.Context) {
 		return
 	}
 
-	respondOK(c, formatAuthor(author))
+	respondOK(c, formatAuthorDetail(author))
 }

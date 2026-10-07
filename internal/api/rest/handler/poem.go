@@ -159,7 +159,26 @@ type poemFilters struct {
 func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, bool) {
 	var filters poemFilters
 
-	// 作者过滤：按 ID 或名称
+	// 朝代过滤：按 ID 或名称
+	dynastyID, ok := parseInt64Query(c, queryDynastyID)
+	if !ok {
+		return poemFilters{}, false
+	}
+	switch {
+	case dynastyID != nil:
+		filters.dynastyID = dynastyID
+	case c.Query(queryDynasty) != "":
+		dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
+		if err != nil {
+			respondError(c, http.StatusNotFound, "dynasty not found")
+			return poemFilters{}, false
+		}
+		filters.dynastyID = &dynasty.ID
+	}
+
+	// 作者过滤：按 ID 或名称。
+	// 同名作者不止一位时（唐代张潮与清代张潮），按名称查找会参考已解析的朝代，
+	// 因此 ?author=张潮&dynasty=清 能取到清代那位；未给朝代则取作品最多者。
 	authorID, ok := parseInt64Query(c, queryAuthorID)
 	if !ok {
 		return poemFilters{}, false
@@ -168,7 +187,7 @@ func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, b
 	case authorID != nil:
 		filters.authorID = authorID
 	case c.Query(queryAuthor) != "":
-		author, err := repo.GetAuthorByName(c.Query(queryAuthor))
+		author, err := repo.GetAuthorByName(c.Query(queryAuthor), filters.dynastyID)
 		if err != nil {
 			respondError(c, http.StatusNotFound, "author not found")
 			return poemFilters{}, false
@@ -197,23 +216,6 @@ func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, b
 			return poemFilters{}, false
 		}
 		filters.typeIDs = ids
-	}
-
-	// 朝代过滤：按 ID 或名称
-	dynastyID, ok := parseInt64Query(c, queryDynastyID)
-	if !ok {
-		return poemFilters{}, false
-	}
-	switch {
-	case dynastyID != nil:
-		filters.dynastyID = dynastyID
-	case c.Query(queryDynasty) != "":
-		dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
-		if err != nil {
-			respondError(c, http.StatusNotFound, "dynasty not found")
-			return poemFilters{}, false
-		}
-		filters.dynastyID = &dynasty.ID
 	}
 
 	return filters, true

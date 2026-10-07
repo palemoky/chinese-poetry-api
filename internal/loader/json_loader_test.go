@@ -65,3 +65,36 @@ func TestLoadAllAssignsDynastyPerFileInStableOrder(t *testing.T) {
 		}, got)
 	}
 }
+
+func TestLoadAuthorBios(t *testing.T) {
+	root := t.TempDir()
+	poem := []map[string]any{{"title": "t", "author": "某", "paragraphs": []string{"一二三。"}}}
+	writeJSON(t, filepath.Join(root, "全唐诗", "poet.tang.0.json"), poem)
+	writeJSON(t, filepath.Join(root, "全唐诗", "authors.tang.json"), []map[string]any{{"name": "李白", "desc": "李白，字太白。"}})
+	writeJSON(t, filepath.Join(root, "全唐诗", "authors.song.json"), []map[string]any{{"name": "蘇軾", "desc": "蘇軾，字子瞻。"}, {"name": "無傳", "desc": ""}})
+	writeJSON(t, filepath.Join(root, "全唐诗", "error", "authors.tang.json"), []map[string]any{{"name": "错", "desc": "子目录不读"}})
+	writeJSON(t, filepath.Join(root, "宋词", "ci.song.0.json"), poem)
+	writeJSON(t, filepath.Join(root, "宋词", "author.song.json"), []map[string]any{{"name": "苏轼", "description": "北宋文学家。", "short_description": "略"}})
+	writeJSON(t, filepath.Join(root, "五代诗词", "nantang", "poetrys.json"), poem)
+	writeJSON(t, filepath.Join(root, "五代诗词", "nantang", "authors.json"), []map[string]any{{"name": "李璟", "desc": "南唐元宗。"}})
+	writeJSON(t, filepath.Join(root, "loader", "datas.json"), map[string]any{
+		"cp_path": "./",
+		"datasets": map[string]any{
+			"wudai-nantang": map[string]any{"name": "五代-南唐", "id": 1, "path": "五代诗词/nantang/poetrys.json", "tag": "paragraphs"},
+			"tangsong":      map[string]any{"name": "全唐诗全宋诗", "id": 3, "path": "全唐诗/", "tag": "paragraphs"},
+			"songci":        map[string]any{"name": "宋词", "id": 5, "path": "宋词/", "tag": "paragraphs"},
+		},
+	})
+
+	l, err := NewJSONLoader(filepath.Join(root, "loader", "datas.json"))
+	require.NoError(t, err)
+	bios, err := l.LoadAuthorBios()
+	require.NoError(t, err)
+
+	assert.Equal(t, []AuthorBio{
+		{Name: "李璟", Description: "南唐元宗。", Dynasty: "五代"},
+		{Name: "蘇軾", Description: "蘇軾，字子瞻。", Dynasty: "宋"}, // 全唐诗目录下的 authors.song.json 属于宋
+		{Name: "李白", Description: "李白，字太白。", Dynasty: "唐"},
+		{Name: "苏轼", Description: "北宋文学家。", Dynasty: "宋"},
+	}, bios, "empty bios and subdirectories are skipped")
+}
