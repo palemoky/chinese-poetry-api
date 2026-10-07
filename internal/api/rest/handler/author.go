@@ -29,7 +29,7 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	pagination, ok := ParsePagination(c)
 	if !ok {
@@ -67,7 +67,7 @@ func (h *AuthorHandler) GetAuthor(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	id, ok := parseID(c, "id", "author")
 	if !ok {

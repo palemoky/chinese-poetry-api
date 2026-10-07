@@ -10,7 +10,7 @@ import "fmt"
 // 而这里是一次主键查找。计数器由触发器维护，见 DB.migratePoemCounter。
 func (r *Repository) CountPoems() (int, error) {
 	var count int64
-	err := r.db.Raw(
+	err := r.conn().Raw(
 		fmt.Sprintf("SELECT value FROM %s WHERE name = ?", countersTable),
 		poemCounterName(r.lang),
 	).Scan(&count).Error
@@ -20,7 +20,7 @@ func (r *Repository) CountPoems() (int, error) {
 // CountAuthors 返回作者总数。
 func (r *Repository) CountAuthors() (int, error) {
 	var count int64
-	err := r.db.Table(r.authorsTable()).Count(&count).Error
+	err := r.conn().Table(r.authorsTable()).Count(&count).Error
 	return int(count), err
 }
 
@@ -31,7 +31,7 @@ func (r *Repository) CountAuthors() (int, error) {
 // 一页 20 位作者就会调用 20 次，每次都数一遍属于纯粹的浪费。
 func (r *Repository) CountPoemsByAuthor(authorID int64) (int, error) {
 	var count int64
-	err := r.db.Table(r.authorsTable()).
+	err := r.conn().Table(r.authorsTable()).
 		Select("poem_count").
 		Where("id = ?", authorID).
 		Scan(&count).Error
@@ -51,7 +51,7 @@ func (r *Repository) CountPoemsByType(typeID int64) (int, error) {
 // CountAuthorsByDynasty 返回某朝代下至少有一首作品的作者数（去重）。
 func (r *Repository) CountAuthorsByDynasty(dynastyID int64) (int, error) {
 	var count int64
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("dynasty_id = ?", dynastyID).
 		Distinct("author_id").
 		Count(&count).Error
@@ -65,7 +65,7 @@ func (r *Repository) CountAuthorsByDynasty(dynastyID int64) (int, error) {
 // 导致这些字段在运行时全部报错。
 func (r *Repository) countPoemsWhere(query string, args ...any) (int, error) {
 	var count int64
-	err := r.db.Table(r.poemsTable()).Where(query, args...).Count(&count).Error
+	err := r.conn().Table(r.poemsTable()).Where(query, args...).Count(&count).Error
 	return int(count), err
 }
 
@@ -86,7 +86,7 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 	}
 
 	var count int64
-	err = r.db.Table(r.dynastiesTable()).Where("name != ?", "其他").Count(&count).Error
+	err = r.conn().Table(r.dynastiesTable()).Where("name != ?", "其他").Count(&count).Error
 	if err != nil {
 		return nil, err
 	}
@@ -101,7 +101,7 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 		PoemCount int `gorm:"column:poem_count"`
 	}
 
-	err = r.db.Table(dynastyTable).
+	err = r.conn().Table(dynastyTable).
 		Select(dynastyTable + ".*, COUNT(" + poemTable + ".id) as poem_count").
 		Joins("LEFT JOIN " + poemTable + " ON " + dynastyTable + ".id = " + poemTable + ".dynasty_id").
 		Group(dynastyTable + ".id").
@@ -126,7 +126,7 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 		PoemCount int `gorm:"column:poem_count"`
 	}
 
-	err = r.db.Table(typeTable).
+	err = r.conn().Table(typeTable).
 		Select(typeTable + ".*, COUNT(" + poemTable + ".id) as poem_count").
 		Joins("LEFT JOIN " + poemTable + " ON " + typeTable + ".id = " + poemTable + ".type_id").
 		Group(typeTable + ".id").
@@ -154,7 +154,7 @@ func (r *Repository) GetStatistics() (*Statistics, error) {
 func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) ([]AuthorWithStats, int, error) {
 	authorTable := r.authorsTable()
 
-	query := r.db.Table(authorTable)
+	query := r.conn().Table(authorTable)
 
 	// 应用朝代过滤
 	if dynastyID != nil {

@@ -17,16 +17,15 @@ import (
 
 // Poems is the resolver for the poems field.
 //
-// 注意：该字段没有 lang 参数，而 gqlgen 解析子字段时用的是原始请求上下文，
-// 父查询的 lang 传不到这里，因此这里返回的始终是简体。
-// 给 Author.poems 单独加一个 lang 参数可以解决，但那属于 schema 变更。
+// 该字段没有自己的 lang 参数，语言变体沿用外层查询的，见 langFromContext。
 func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *int, pageSize *int) (*database.PoemConnection, error) {
 	pag, err := parsePagination(page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	poems, totalCount, err := r.Repo.ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
+	repo := r.repo(ctx, langFromContext(ctx))
+	poems, totalCount, err := repo.ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -36,11 +35,10 @@ func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *
 
 // PoemCount is the resolver for the poemCount field.
 //
-// 这里以及 Dynasty、PoetryType 上的计数都走默认的简体表。
-// 与上面的 Author.poems 一样读不到查询的 lang，但此处无妨：
+// 这里以及 Dynasty、PoetryType 上的计数都走默认的简体表：
 // 简繁两套表是同一份语料的互转结果，计数完全一致。
 func (r *authorResolver) PoemCount(ctx context.Context, obj *database.Author) (int, error) {
-	return r.Repo.CountPoemsByAuthor(obj.ID)
+	return r.repo(ctx, database.LangHans).CountPoemsByAuthor(obj.ID)
 }
 
 // Node is the resolver for the node field.
@@ -50,12 +48,12 @@ func (r *authorEdgeResolver) Node(ctx context.Context, obj *database.AuthorEdge)
 
 // PoemCount is the resolver for the poemCount field.
 func (r *dynastyResolver) PoemCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	return r.Repo.CountPoemsByDynasty(obj.ID)
+	return r.repo(ctx, database.LangHans).CountPoemsByDynasty(obj.ID)
 }
 
 // AuthorCount is the resolver for the authorCount field.
 func (r *dynastyResolver) AuthorCount(ctx context.Context, obj *database.Dynasty) (int, error) {
-	return r.Repo.CountAuthorsByDynasty(obj.ID)
+	return r.repo(ctx, database.LangHans).CountAuthorsByDynasty(obj.ID)
 }
 
 // Content is the resolver for the content field.
@@ -69,12 +67,12 @@ func (r *poemResolver) Content(ctx context.Context, obj *database.Poem) ([]strin
 
 // PoemCount is the resolver for the poemCount field.
 func (r *poetryTypeResolver) PoemCount(ctx context.Context, obj *database.PoetryType) (int, error) {
-	return r.Repo.CountPoemsByType(obj.ID)
+	return r.repo(ctx, database.LangHans).CountPoemsByType(obj.ID)
 }
 
 // Poem is the resolver for the poem field.
 func (r *queryResolver) Poem(ctx context.Context, id string, lang *database.Lang) (*database.Poem, error) {
-	repo := r.Repo.WithLang(parseLang(lang))
+	repo := r.repo(ctx, parseLang(lang))
 
 	poem, err := repo.GetPoemByID(id)
 	if err != nil {
@@ -114,7 +112,7 @@ func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *in
 	// 多取一条用于判断还有没有下一页，由 buildPoemConnection 截掉
 	limit := pag.PageSize + 1
 
-	repo := r.Repo.WithLang(parseLang(lang))
+	repo := r.repo(ctx, parseLang(lang))
 	var poems []database.Poem
 	var totalCount int
 	if pag.IsCursor() {
@@ -152,7 +150,7 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *dat
 	}
 
 	langVal := parseLang(lang)
-	repo := r.Repo.WithLang(langVal)
+	repo := r.repo(ctx, langVal)
 	poems, total, err := repo.SearchPoems(query, st, pag.Page, pag.PageSize)
 	if err != nil {
 		return nil, err
@@ -185,7 +183,7 @@ func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dyn
 
 	// 与 REST 一致，带语言上下文调用仓储层的 GetRandomPoem
 	langVal := parseLang(lang)
-	repo := r.Repo.WithLang(langVal)
+	repo := r.repo(ctx, langVal)
 	return repo.GetRandomPoem(dynastyIDInt, nil, typeIDs)
 }
 
@@ -197,7 +195,7 @@ func (r *queryResolver) Author(ctx context.Context, id string, lang *database.La
 	}
 
 	// 走 Repository 的方法，由它处理动态表名
-	return r.Repo.WithLang(parseLang(lang)).GetAuthorByID(authorID)
+	return r.repo(ctx, parseLang(lang)).GetAuthorByID(authorID)
 }
 
 // Authors is the resolver for the authors field.
@@ -212,7 +210,7 @@ func (r *queryResolver) Authors(ctx context.Context, lang *database.Lang, page *
 		return nil, err
 	}
 
-	repo := r.Repo.WithLang(parseLang(lang))
+	repo := r.repo(ctx, parseLang(lang))
 	authors, totalCount, err := repo.ListAuthorsWithFilter(pag.PageSize, pag.Offset, dynastyIDInt)
 	if err != nil {
 		return nil, err
@@ -245,7 +243,7 @@ func (r *queryResolver) PoemTypes(ctx context.Context, lang *database.Lang) ([]*
 
 // Statistics is the resolver for the statistics field.
 func (r *queryResolver) Statistics(ctx context.Context, lang *database.Lang) (*database.Statistics, error) {
-	return r.Repo.GetStatistics()
+	return r.repo(ctx, database.LangHans).GetStatistics()
 }
 
 // PoemsByDynasty is the resolver for the poemsByDynasty field.

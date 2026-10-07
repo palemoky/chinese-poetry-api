@@ -14,7 +14,7 @@ import (
 func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 	var poem Poem
 	// 注意：表名是动态的（简繁两套表），GORM 的 Preload 无法正确处理，因此关联数据统一改为手动查询
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("id = ?", id).
 		First(&poem).Error
 	if err != nil {
@@ -24,12 +24,12 @@ func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 	// 加载作者
 	if poem.AuthorID != nil {
 		var author Author
-		if err := r.db.Table(r.authorsTable()).First(&author, *poem.AuthorID).Error; err == nil {
+		if err := r.conn().Table(r.authorsTable()).First(&author, *poem.AuthorID).Error; err == nil {
 			poem.Author = &author
 			// 加载作者所属朝代
 			if author.DynastyID != nil {
 				var dynasty Dynasty
-				if err := r.db.Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
+				if err := r.conn().Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
 					poem.Author.Dynasty = &dynasty
 				}
 			}
@@ -39,7 +39,7 @@ func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 	// 加载诗词所属朝代
 	if poem.DynastyID != nil {
 		var dynasty Dynasty
-		if err := r.db.Table(r.dynastiesTable()).First(&dynasty, *poem.DynastyID).Error; err == nil {
+		if err := r.conn().Table(r.dynastiesTable()).First(&dynasty, *poem.DynastyID).Error; err == nil {
 			poem.Dynasty = &dynasty
 		}
 	}
@@ -47,7 +47,7 @@ func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 	// 加载体裁
 	if poem.TypeID != nil {
 		var ptype PoetryType
-		if err := r.db.Table(r.poetryTypesTable()).First(&ptype, *poem.TypeID).Error; err == nil {
+		if err := r.conn().Table(r.poetryTypesTable()).First(&ptype, *poem.TypeID).Error; err == nil {
 			poem.Type = &ptype
 		}
 	}
@@ -90,7 +90,7 @@ func (r *Repository) loadPoemRelations(poems []Poem) error {
 			ids = append(ids, id)
 		}
 		var authorList []Author
-		if err := r.db.Table(r.authorsTable()).Where("id IN ?", ids).Find(&authorList).Error; err != nil {
+		if err := r.conn().Table(r.authorsTable()).Where("id IN ?", ids).Find(&authorList).Error; err != nil {
 			return err
 		}
 		for i := range authorList {
@@ -110,7 +110,7 @@ func (r *Repository) loadPoemRelations(poems []Poem) error {
 			ids = append(ids, id)
 		}
 		var dynastyList []Dynasty
-		if err := r.db.Table(r.dynastiesTable()).Where("id IN ?", ids).Find(&dynastyList).Error; err != nil {
+		if err := r.conn().Table(r.dynastiesTable()).Where("id IN ?", ids).Find(&dynastyList).Error; err != nil {
 			return err
 		}
 		for i := range dynastyList {
@@ -126,7 +126,7 @@ func (r *Repository) loadPoemRelations(poems []Poem) error {
 			ids = append(ids, id)
 		}
 		var typeList []PoetryType
-		if err := r.db.Table(r.poetryTypesTable()).Where("id IN ?", ids).Find(&typeList).Error; err != nil {
+		if err := r.conn().Table(r.poetryTypesTable()).Where("id IN ?", ids).Find(&typeList).Error; err != nil {
 			return err
 		}
 		for i := range typeList {
@@ -216,7 +216,7 @@ func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, autho
 			String()
 		totalCount, err = r.db.counts.getOrLoad(key, func() (int64, error) {
 			var n int64
-			err := applyFilters(r.db.Table(r.poemsTable())).Count(&n).Error
+			err := applyFilters(r.conn().Table(r.poemsTable())).Count(&n).Error
 			return n, err
 		})
 	}
@@ -225,7 +225,7 @@ func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, autho
 	}
 
 	// 再取当前分页数据
-	query := applyFilters(r.db.Table(r.poemsTable()))
+	query := applyFilters(r.conn().Table(r.poemsTable()))
 	if after != nil {
 		query = query.Where("id > ?", *after)
 	}
@@ -278,7 +278,7 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 			String()
 		count, err = r.db.counts.getOrLoad(key, func() (int64, error) {
 			var n int64
-			err := applyFilters(r.db.Table(r.poemsTable())).Count(&n).Error
+			err := applyFilters(r.conn().Table(r.poemsTable())).Count(&n).Error
 			return n, err
 		})
 	}
@@ -287,7 +287,7 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 	}
 
 	return r.pickRandomPoem(count, func() *gorm.DB {
-		return applyFilters(r.db.Table(r.poemsTable())).Order("id ASC")
+		return applyFilters(r.conn().Table(r.poemsTable())).Order("id ASC")
 	})
 }
 
@@ -324,7 +324,7 @@ func (r *Repository) GetRandomPoemByChar(char string) (*Poem, error) {
 	cond, arg := substringMatch(ftsTable+".content_text", char)
 
 	matches := func() *gorm.DB {
-		return r.db.Table(poemTable).
+		return r.conn().Table(poemTable).
 			Joins("JOIN "+ftsTable+" ON "+ftsTable+".rowid = "+poemTable+".id").
 			Where(cond, arg)
 	}
@@ -387,7 +387,7 @@ func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem,
 	key := newCountKey("author_poems", r.lang).addID(authorID).String()
 	totalCount, err := r.db.counts.getOrLoad(key, func() (int64, error) {
 		var n int64
-		err := r.db.Table(r.poemsTable()).Where("author_id = ?", authorID).Count(&n).Error
+		err := r.conn().Table(r.poemsTable()).Where("author_id = ?", authorID).Count(&n).Error
 		return n, err
 	})
 	if err != nil {
@@ -395,7 +395,7 @@ func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem,
 	}
 
 	var poems []Poem
-	err = r.db.Table(r.poemsTable()).
+	err = r.conn().Table(r.poemsTable()).
 		Where("author_id = ?", authorID).
 		Limit(limit).Offset(offset).
 		Order("id ASC").
@@ -483,7 +483,7 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	key := newCountKey("search", r.lang).add(searchType).add(query).String()
 	total, err := r.db.counts.getOrLoad(key, func() (int64, error) {
 		var n int64
-		err := applyMatch(r.db.Table(poemTable)).Count(&n).Error
+		err := applyMatch(r.conn().Table(poemTable)).Count(&n).Error
 		return n, err
 	})
 	if err != nil {
@@ -491,7 +491,7 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	}
 
 	var poems []Poem
-	err = applyMatch(r.db.Table(poemTable)).
+	err = applyMatch(r.conn().Table(poemTable)).
 		Select(poemTable + ".*").
 		Order(poemTable + ".id").
 		Limit(pageSize).Offset(offset).
