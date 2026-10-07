@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,6 +16,22 @@ func TestLoadDefaults(t *testing.T) {
 	assert.Equal(t, defaultTrustedProxies, cfg.Server.TrustedProxies)
 	assert.Equal(t, 5000, cfg.GraphQL.ComplexityLimit)
 	assert.True(t, cfg.GraphQL.Introspection)
+	assert.Equal(t, "data/poetry.db", cfg.Database.Path)
+}
+
+// database.path 曾在读完配置文件后被强行改回 data/poetry.db，配置文件里写了也不生效
+func TestLoadDatabasePath(t *testing.T) {
+	file := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(file, []byte("database:\n  path: /srv/poetry.db\n"), 0o600))
+
+	cfg, err := Load(file)
+	require.NoError(t, err)
+	assert.Equal(t, "/srv/poetry.db", cfg.Database.Path)
+
+	t.Setenv("DB_PATH", "/mnt/poetry.db")
+	cfg, err = Load(file)
+	require.NoError(t, err)
+	assert.Equal(t, "/mnt/poetry.db", cfg.Database.Path, "the environment overrides the file")
 }
 
 func TestLoadTrustedProxiesFromEnv(t *testing.T) {
