@@ -184,5 +184,10 @@ func (r *Repository) ListAuthorsWithFilter(limit, offset int, dynastyID *int64) 
 		return nil, 0, err
 	}
 
+	// GraphQL 的 authors 列表靠这里带出 Author.dynasty，漏掉的话该字段一律为 null
+	if err := r.attachAuthorDynasties(authors); err != nil {
+		return nil, 0, err
+	}
+
 	return authors, int(totalCount), nil
 }

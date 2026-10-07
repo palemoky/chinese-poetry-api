@@ -5,7 +5,6 @@ package database
 // GetAuthorsWithStats 返回作者列表及各自的作品数量。
 func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, error) {
 	authorTable := r.authorsTable()
-	dynastyTable := r.dynastiesTable()
 
 	var authors []AuthorWithStats
 
@@ -24,37 +23,43 @@ func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, 
 		return nil, err
 	}
 
-	// 为每位作者补上所属朝代
-	dynastyIDs := make(map[int64]bool)
+	if err := r.attachAuthorDynasties(authors); err != nil {
+		return nil, err
+	}
+	return authors, nil
+}
+
+// attachAuthorDynasties 一次查询为一批作者补上所属朝代。
+func (r *Repository) attachAuthorDynasties(authors []AuthorWithStats) error {
+	idSet := make(map[int64]bool)
 	for _, a := range authors {
 		if a.DynastyID != nil {
-			dynastyIDs[*a.DynastyID] = true
+			idSet[*a.DynastyID] = true
 		}
 	}
-
-	if len(dynastyIDs) > 0 {
-		ids := make([]int64, 0, len(dynastyIDs))
-		for id := range dynastyIDs {
-			ids = append(ids, id)
-		}
-		var dynasties []Dynasty
-		r.conn().Table(dynastyTable).Where("id IN ?", ids).Find(&dynasties)
-
-		dynastyMap := make(map[int64]*Dynasty)
-		for i := range dynasties {
-			dynastyMap[dynasties[i].ID] = &dynasties[i]
-		}
-
-		for i := range authors {
-			if authors[i].DynastyID != nil {
-				if d, ok := dynastyMap[*authors[i].DynastyID]; ok {
-					authors[i].Dynasty = d
-				}
-			}
-		}
+	if len(idSet) == 0 {
+		return nil
 	}
 
-	return authors, nil
+	ids := make([]int64, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
+	}
+	var dynasties []Dynasty
+	if err := r.conn().Table(r.dynastiesTable()).Where("id IN ?", ids).Find(&dynasties).Error; err != nil {
+		return err
+	}
+
+	byID := make(map[int64]*Dynasty, len(dynasties))
+	for i := range dynasties {
+		byID[dynasties[i].ID] = &dynasties[i]
+	}
+	for i := range authors {
+		if authors[i].DynastyID != nil {
+			authors[i].Dynasty = byID[*authors[i].DynastyID]
+		}
+	}
+	return nil
 }
 
 // GetAuthorByID 按 ID 查询作者。
