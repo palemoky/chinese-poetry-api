@@ -190,7 +190,7 @@ query {
 
 ## 数据集
 
-本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，包含：
+本项目基于 [chinese-poetry](https://github.com/chinese-poetry/chinese-poetry) 数据集，使用的是修正了错字、朝代与作者等问题的 [palemoky/chinese-poetry](https://github.com/palemoky/chinese-poetry)（`fix-typo` 分支），包含：
 
 |   分类   |  数量  |   分类   |  数量  |   分类   |  数量  |   分类   |  数量  |
 | :------: | :----: | :------: | :----: | :------: | :----: | :------: | :----: |
