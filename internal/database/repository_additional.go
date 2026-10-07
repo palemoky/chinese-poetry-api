@@ -14,7 +14,7 @@ func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, 
 	// 排序里加上 id 是为了在 poem_count 相同时打破并列：
 	// 否则大量作品数相同的作者之间顺序不确定，执行计划一变，
 	// LIMIT/OFFSET 分页就会出现重复和遗漏。
-	err := r.db.Table(authorTable).
+	err := r.conn().Table(authorTable).
 		Select(authorTable + ".*").
 		Order("poem_count DESC, " + authorTable + ".id ASC").
 		Limit(limit).
@@ -38,7 +38,7 @@ func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, 
 			ids = append(ids, id)
 		}
 		var dynasties []Dynasty
-		r.db.Table(dynastyTable).Where("id IN ?", ids).Find(&dynasties)
+		r.conn().Table(dynastyTable).Where("id IN ?", ids).Find(&dynasties)
 
 		dynastyMap := make(map[int64]*Dynasty)
 		for i := range dynasties {
@@ -60,7 +60,7 @@ func (r *Repository) GetAuthorsWithStats(limit, offset int) ([]AuthorWithStats, 
 // GetAuthorByID 按 ID 查询作者。
 func (r *Repository) GetAuthorByID(id int64) (*Author, error) {
 	var author Author
-	err := r.db.Table(r.authorsTable()).First(&author, id).Error
+	err := r.conn().Table(r.authorsTable()).First(&author, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +68,7 @@ func (r *Repository) GetAuthorByID(id int64) (*Author, error) {
 	// 加载所属朝代
 	if author.DynastyID != nil {
 		var dynasty Dynasty
-		if err := r.db.Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
+		if err := r.conn().Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
 			author.Dynasty = &dynasty
 		}
 	}
@@ -82,7 +82,7 @@ func (r *Repository) GetAuthorByID(id int64) (*Author, error) {
 // 在两个朝代的语料中各有一条记录的诗人）。未指定朝代时取作品最多的那位，
 // 并以 id 为 tiebreaker，保证结果稳定；调用方可以同时传朝代来消除歧义。
 func (r *Repository) GetAuthorByName(name string, dynastyID *int64) (*Author, error) {
-	query := r.db.Table(r.authorsTable()).Where("name = ?", name)
+	query := r.conn().Table(r.authorsTable()).Where("name = ?", name)
 	if dynastyID != nil {
 		query = query.Where("dynasty_id = ?", *dynastyID)
 	}
@@ -96,7 +96,7 @@ func (r *Repository) GetAuthorByName(name string, dynastyID *int64) (*Author, er
 	// 加载所属朝代
 	if author.DynastyID != nil {
 		var dynasty Dynasty
-		if err := r.db.Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
+		if err := r.conn().Table(r.dynastiesTable()).First(&dynasty, *author.DynastyID).Error; err == nil {
 			author.Dynasty = &dynasty
 		}
 	}
@@ -111,7 +111,7 @@ func (r *Repository) GetAuthorByName(name string, dynastyID *int64) (*Author, er
 // id 唯一且单调，同时与 ListPoemsWithFilter 的排序保持一致。
 func (r *Repository) GetPoemsByAuthor(authorID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("author_id = ?", authorID).
 		Order("id ASC").
 		Limit(limit).
@@ -136,7 +136,7 @@ func (r *Repository) GetDynastiesWithStats() ([]DynastyWithStats, error) {
 	var dynasties []DynastyWithStats
 
 	// 数据量大时子查询比 JOIN 更快，故此处用子查询统计
-	err := r.db.Table(dynastyTable).
+	err := r.conn().Table(dynastyTable).
 		Select(dynastyTable + ".*, " +
 			"(SELECT COUNT(*) FROM " + poemTable + " WHERE " + poemTable + ".dynasty_id = " + dynastyTable + ".id) as poem_count, " +
 			"(SELECT COUNT(*) FROM " + authorTable + " WHERE " + authorTable + ".dynasty_id = " + dynastyTable + ".id) as author_count").
@@ -149,21 +149,21 @@ func (r *Repository) GetDynastiesWithStats() ([]DynastyWithStats, error) {
 // GetDynastyByID 按 ID 查询朝代。
 func (r *Repository) GetDynastyByID(id int64) (*Dynasty, error) {
 	var dynasty Dynasty
-	err := r.db.Table(r.dynastiesTable()).First(&dynasty, id).Error
+	err := r.conn().Table(r.dynastiesTable()).First(&dynasty, id).Error
 	return &dynasty, err
 }
 
 // GetDynastyByName 按名称查询朝代。
 func (r *Repository) GetDynastyByName(name string) (*Dynasty, error) {
 	var dynasty Dynasty
-	err := r.db.Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
+	err := r.conn().Table(r.dynastiesTable()).Where("name = ?", name).First(&dynasty).Error
 	return &dynasty, err
 }
 
 // GetPoemsByDynasty 查询指定朝代的诗词。排序理由同 GetPoemsByAuthor。
 func (r *Repository) GetPoemsByDynasty(dynastyID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("dynasty_id = ?", dynastyID).
 		Order("id ASC").
 		Limit(limit).
@@ -187,7 +187,7 @@ func (r *Repository) GetPoetryTypesWithStats() ([]PoetryTypeWithStats, error) {
 	var types []PoetryTypeWithStats
 
 	// 数据量大时子查询比 JOIN 更快
-	err := r.db.Table(typeTable).
+	err := r.conn().Table(typeTable).
 		Select(typeTable + ".*, (SELECT COUNT(*) FROM " + poemTable + " WHERE " + poemTable + ".type_id = " + typeTable + ".id) as poem_count").
 		Order("poem_count DESC, " + typeTable + ".id ASC").
 		Find(&types).Error
@@ -198,14 +198,14 @@ func (r *Repository) GetPoetryTypesWithStats() ([]PoetryTypeWithStats, error) {
 // GetPoetryTypeByID 按 ID 查询体裁。
 func (r *Repository) GetPoetryTypeByID(id int64) (*PoetryType, error) {
 	var poetryType PoetryType
-	err := r.db.Table(r.poetryTypesTable()).First(&poetryType, id).Error
+	err := r.conn().Table(r.poetryTypesTable()).First(&poetryType, id).Error
 	return &poetryType, err
 }
 
 // GetPoemsByType 查询指定体裁的诗词。排序理由同 GetPoemsByAuthor。
 func (r *Repository) GetPoemsByType(typeID int64, limit, offset int) ([]Poem, error) {
 	var poems []Poem
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("type_id = ?", typeID).
 		Order("id ASC").
 		Limit(limit).

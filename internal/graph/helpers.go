@@ -1,8 +1,11 @@
 package graph
 
 import (
+	"context"
 	"fmt"
 	"strconv"
+
+	"github.com/99designs/gqlgen/graphql"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/helpers"
@@ -104,6 +107,23 @@ func parseOptionalID(id *string) (*int64, error) {
 // parseLang 把可选的 Lang 指针转换为 Lang 取值，为 nil 时返回默认语言。
 func parseLang(lang *database.Lang) database.Lang {
 	return helpers.ParseLangPointer(lang)
+}
+
+// langFromContext 取离当前字段最近的祖先字段上的 lang 参数。
+//
+// 嵌套字段（如 Author.poems）没有自己的 lang 参数，gqlgen 也不会把父字段的参数传下来；
+// 只按默认简体去查，`authors(lang: ZH_HANT) { edges { node { poems { … } } } }`
+// 就会在繁体作者下面返回简体诗词。顶层查询的 lang 都带默认值，因此总能找到。
+func langFromContext(ctx context.Context) database.Lang {
+	for fc := graphql.GetFieldContext(ctx); fc != nil; fc = fc.Parent {
+		switch l := fc.Args["lang"].(type) {
+		case *database.Lang:
+			return parseLang(l)
+		case database.Lang:
+			return parseLang(&l)
+		}
+	}
+	return database.LangHans
 }
 
 // buildPoemConnection 根据诗词切片与分页信息构造 PoemConnection。
