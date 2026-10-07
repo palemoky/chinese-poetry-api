@@ -252,7 +252,7 @@ func (r *Repository) charPostings(ch rune, fields charField) ([]int64, error) {
 		Title   []byte
 		Content []byte
 	}
-	err := r.db.Raw(
+	err := r.conn().Raw(
 		fmt.Sprintf("SELECT title, content FROM %s WHERE cp = ?", charIndexTable(r.lang)), int64(ch),
 	).Scan(&rows).Error
 	if err != nil || len(rows) == 0 {
@@ -301,7 +301,7 @@ func (r *Repository) shortTermMatches(query, searchType string) (ids []int64, ok
 		}
 	}
 
-	if ready, err := charIndexReady(r.db.DB, r.lang); err != nil || !ready {
+	if ready, err := charIndexReady(r.conn(), r.lang); err != nil || !ready {
 		return nil, false, err
 	}
 
@@ -359,7 +359,7 @@ func (r *Repository) verifySubstring(candidates []int64, query string, fields ch
 	matched := make([]int64, 0, len(candidates)/4)
 	for chunk := range slices.Chunk(candidates, charIndexVerifyChunk) {
 		var ids []int64
-		err := r.db.Table(ftsTable).
+		err := r.conn().Table(ftsTable).
 			Select("rowid").
 			Where("rowid IN ?", chunk).
 			Where(cond, args...).
@@ -381,10 +381,10 @@ func (r *Repository) verifySubstring(candidates []int64, query string, fields ch
 // 再逐行回查作者（实测 40ms），IN 则先在小小的作者表里筛出 id，再走 author_id 索引（1ms）。
 func (r *Repository) poemIDsByAuthorName(query string) ([]int64, error) {
 	cond, arg := substringMatch("name", query)
-	authors := r.db.Table(r.authorsTable()).Select("id").Where(cond, arg)
+	authors := r.conn().Table(r.authorsTable()).Select("id").Where(cond, arg)
 
 	var ids []int64
-	err := r.db.Table(r.poemsTable()).
+	err := r.conn().Table(r.poemsTable()).
 		Where("author_id IN (?)", authors).
 		Order("id").
 		Pluck("id", &ids).Error
@@ -404,7 +404,7 @@ func (r *Repository) allModeMatches(query string) ([]int64, error) {
 	for _, column := range []string{"title", "content_text"} {
 		cond, arg := substringMatch(column, query)
 		var matched []int64
-		if err := r.db.Table(ftsTable).Where(cond, arg).Order("rowid").Pluck("rowid", &matched).Error; err != nil {
+		if err := r.conn().Table(ftsTable).Where(cond, arg).Order("rowid").Pluck("rowid", &matched).Error; err != nil {
 			return nil, err
 		}
 		ids = unionSorted(ids, matched)
@@ -437,7 +437,7 @@ func (r *Repository) poemsByIDs(ids []int64) ([]Poem, error) {
 	if len(ids) == 0 {
 		return poems, nil
 	}
-	err := r.db.Table(r.poemsTable()).Where("id IN ?", ids).Order("id ASC").Find(&poems).Error
+	err := r.conn().Table(r.poemsTable()).Where("id IN ?", ids).Order("id ASC").Find(&poems).Error
 	if err != nil {
 		return nil, err
 	}

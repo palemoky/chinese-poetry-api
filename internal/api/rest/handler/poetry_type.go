@@ -29,7 +29,7 @@ func (h *PoetryTypeHandler) ListPoetryTypes(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	types, err := repo.GetPoetryTypesWithStats()
 	if err != nil {
@@ -56,7 +56,7 @@ func (h *PoetryTypeHandler) GetPoetryType(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	id, ok := parseID(c, "id", "poetry type")
 	if !ok {
