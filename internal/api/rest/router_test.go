@@ -1,6 +1,8 @@
 package rest
 
 import (
+	stdgzip "compress/gzip"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -139,4 +141,63 @@ func TestRouterAnswersHead(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/dynasties", nil))
 	assert.Equal(t, http.StatusNotFound, w.Code)
+}
+
+func TestRouterCompressesLargeResponses(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	cfg.Server.Mode = gin.TestMode
+	cfg.RateLimit.Enabled = false
+	cfg.Database.Path = filepath.Join(t.TempDir(), "poetry.db")
+	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
+
+	db, repo := testutil.SetupTestDB(t)
+	router, err := SetupRouter(cfg, db, repo)
+	require.NoError(t, err)
+
+	serveIf := func(path, acceptEncoding, ifNoneMatch string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if acceptEncoding != "" {
+			req.Header.Set("Accept-Encoding", acceptEncoding)
+		}
+		if ifNoneMatch != "" {
+			req.Header.Set("If-None-Match", ifNoneMatch)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+	serve := func(path, acceptEncoding string) *httptest.ResponseRecorder {
+		return serveIf(path, acceptEncoding, "")
+	}
+
+	// 体裁列表由 Migrate 预置，超过 1KB
+	plain := serve("/api/v1/types", "")
+	require.Equal(t, http.StatusOK, plain.Code)
+	require.Greater(t, plain.Body.Len(), gzipMinLength)
+	assert.Empty(t, plain.Header().Get("Content-Encoding"), "the client did not ask for gzip")
+
+	w := serve("/api/v1/types", "gzip, deflate, br")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "gzip", w.Header().Get("Content-Encoding"))
+	assert.Contains(t, w.Header().Values("Vary"), "Accept-Encoding")
+	assert.Less(t, w.Body.Len(), plain.Body.Len())
+
+	zr, err := stdgzip.NewReader(w.Body)
+	require.NoError(t, err)
+	body, err := io.ReadAll(zr)
+	require.NoError(t, err)
+	assert.Equal(t, plain.Body.String(), string(body))
+
+	// 压缩不影响缓存：缓存头照旧，带 ETag 回来校验时 304 没有响应体也不标压缩
+	assert.Equal(t, "public, max-age=3600", w.Header().Get("Cache-Control"))
+	notModified := serveIf("/api/v1/types", "gzip", w.Header().Get("ETag"))
+	assert.Equal(t, http.StatusNotModified, notModified.Code)
+	assert.Empty(t, notModified.Header().Get("Content-Encoding"))
+	assert.Zero(t, notModified.Body.Len())
+
+	// 太小的响应不值得压缩
+	small := serve("/api/v1/health", "gzip")
+	assert.Empty(t, small.Header().Get("Content-Encoding"))
+	assert.JSONEq(t, `{"status":"healthy"}`, small.Body.String())
 }
