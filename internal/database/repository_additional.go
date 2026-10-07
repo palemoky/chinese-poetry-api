@@ -112,7 +112,9 @@ func (r *Repository) GetPoemsByAuthor(authorID int64, limit, offset int) ([]Poem
 		return nil, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, err
+	}
 	return poems, nil
 }
 
@@ -162,7 +164,9 @@ func (r *Repository) GetPoemsByDynasty(dynastyID int64, limit, offset int) ([]Po
 		return nil, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, err
+	}
 	return poems, nil
 }
 
@@ -202,6 +206,8 @@ func (r *Repository) GetPoemsByType(typeID int64, limit, offset int) ([]Poem, er
 		return nil, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, err
+	}
 	return poems, nil
 }

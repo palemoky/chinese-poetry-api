@@ -433,3 +433,32 @@ func TestRandomPoem(t *testing.T) {
 		})
 	}
 }
+
+// 数据库故障要返回 500：此前一律回 404「没有符合条件的诗」，
+// 服务端故障在客户端看来只是筛选条件太窄。
+func TestRandomPoemDatabaseErrorIs500(t *testing.T) {
+	router, repo := setupPoemTestRouter(t)
+	createTestPoem(t, repo, 1, "静夜思", "床前明月光")
+
+	h := NewPoemHandler(repo)
+	router.GET("/poems/random", h.RandomPoem)
+
+	// 先确认正常情况下能取到
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/poems/random?char=床", nil))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	w = httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/poems/random?char=雪", nil))
+	require.Equal(t, http.StatusNotFound, w.Code)
+
+	sqlDB, err := repo.DB().DB.DB()
+	require.NoError(t, err)
+	require.NoError(t, sqlDB.Close())
+
+	for _, url := range []string{"/poems/random?author_id=1", "/poems/random?char=春"} {
+		w = httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, url, nil))
+		assert.Equal(t, http.StatusInternalServerError, w.Code, url)
+	}
+}
