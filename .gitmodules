@@ -1,3 +1,4 @@
 [submodule "poetry-data"]
 	path = poetry-data
-	url = https://github.com/chinese-poetry/chinese-poetry.git
+	url = https://github.com/palemoky/chinese-poetry.git
+	branch = fix-typo

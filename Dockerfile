@@ -41,7 +41,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM alpine:3.24
 
 # su-exec lets startup.sh drop root after fixing data-volume ownership
-RUN apk add --no-cache ca-certificates curl gzip su-exec \
+RUN apk add --no-cache ca-certificates curl gzip su-exec zstd \
     && addgroup -S poetry \
     && adduser -S -G poetry -H -h /app poetry
 

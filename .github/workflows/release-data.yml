@@ -43,18 +43,10 @@ jobs:
             --input poetry-data \
             --output poetry.db
 
-      - name: Compress databases
-        run: |
-          gzip -9 poetry.db
-          sha256sum *.db.gz > checksums.txt
-
+      # 统计要在压缩前做，压缩后原文件就不在了
       - name: Collect statistics
         id: stats
         run: |
-          # 解压临时统计
-          gunzip -k poetry.db.gz
-
-          # 统计数据
           POEMS=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM poems_zh_hans')
           AUTHORS=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM authors_zh_hans')
           DYNASTIES=$(sqlite3 poetry.db 'SELECT COUNT(*) FROM dynasties_zh_hans')
@@ -63,8 +55,15 @@ jobs:
           echo "authors=$AUTHORS" >> $GITHUB_OUTPUT
           echo "dynasties=$DYNASTIES" >> $GITHUB_OUTPUT
 
-          # 清理临时文件
-          rm poetry.db
+      # zstd 比 gzip -9 小约 16%（509MB → 426MB），解压也快得多，新镜像优先下载它。
+      # .gz 继续发布：旧镜像的启动脚本只认 poetry.db.gz，停发会让它们无法更新数据。
+      # --long=27 的窗口是 128MB，解压时须带同样的参数（或更大的 --memory）。
+      - name: Compress databases
+        run: |
+          zstd -19 --long=27 -T0 -q poetry.db -o poetry.db.zst
+          gzip -9 poetry.db
+          sha256sum poetry.db.gz poetry.db.zst > checksums.txt
+          ls -l poetry.db.gz poetry.db.zst
 
       # CHANGELOG.md 是唯一来源（含人工润色），这里截取本版本至上一个 x.y.0 之间的内容；
       # 只有 x.y.0 会发布 Release，中间的补丁版本一并列出
@@ -95,6 +94,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           files: |
+            poetry.db.zst
             poetry.db.gz
             checksums.txt
           body: |
@@ -114,7 +114,8 @@ jobs:
             ### 📦 文件说明
             | 文件 | 说明 |
             |------|------|
-            | `poetry.db.gz` | 统一数据库（包含简体和繁体表） |
+            | `poetry.db.zst` | 统一数据库（包含简体和繁体表），zstd 压缩，解压：`zstd -d --long=27 poetry.db.zst` |
+            | `poetry.db.gz` | 同一数据库的 gzip 压缩版，内容相同、体积更大 |
             | `checksums.txt` | SHA256 校验和 |
 
             ### 🌏 多语言支持
