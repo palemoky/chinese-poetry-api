@@ -13,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 
+	"github.com/palemoky/chinese-poetry-api/internal/api/middleware"
 	"github.com/palemoky/chinese-poetry-api/internal/api/rest"
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
@@ -28,6 +29,10 @@ const (
 	writeTimeout      = 30 * time.Second
 	idleTimeout       = 120 * time.Second
 )
+
+// maxGraphQLBodyBytes 是 GraphQL 请求体的上限。正常的查询连同变量不过几 KB，
+// 64 KB 绰绰有余，同时让超大的请求体在解析前就被拒绝。
+const maxGraphQLBodyBytes = 64 << 10
 
 // graphqlHandler 构造 GraphQL 请求的 Gin handler。
 func graphqlHandler(resolver *graph.Resolver, cfg config.GraphQLConfig) gin.HandlerFunc {
@@ -90,7 +95,7 @@ func main() {
 	}
 
 	// 注册 GraphQL 相关路由
-	router.POST("/graphql", graphqlHandler(resolver, cfg.GraphQL))
+	router.POST("/graphql", middleware.BodyLimit(maxGraphQLBodyBytes), graphqlHandler(resolver, cfg.GraphQL))
 	if cfg.GraphQL.Playground {
 		router.GET("/playground", playgroundHandler())
 		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))

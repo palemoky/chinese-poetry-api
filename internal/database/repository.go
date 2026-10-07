@@ -1,7 +1,10 @@
 package database
 
 import (
+	"context"
+
 	"github.com/vbauerster/mpb/v8"
+	"gorm.io/gorm"
 )
 
 // RepositoryInterface 定义仓储层对外提供的操作集合。
@@ -30,6 +33,10 @@ type RepositoryInterface interface {
 type Repository struct {
 	db   *DB
 	lang Lang // 决定使用哪套语言变体的表，留空表示默认（兼容旧模式）
+
+	// ctx 随查询传给数据库驱动。请求的上下文被取消（客户端断开、请求超时）时，
+	// 正在执行的 SQLite 查询会被中断，而不是继续占着连接跑完一个没人要的结果。
+	ctx context.Context
 }
 
 // NewRepository 创建使用默认语言（简体）的仓储。
@@ -45,7 +52,20 @@ func NewRepositoryWithLang(db *DB, lang Lang) *Repository {
 // WithLang 返回一个切换了语言变体的新 Repository 实例，
 // 从而支持运行时切换语言且不影响原实例。
 func (r *Repository) WithLang(lang Lang) *Repository {
-	return &Repository{db: r.db, lang: lang}
+	return &Repository{db: r.db, lang: lang, ctx: r.ctx}
+}
+
+// WithContext 返回一个查询时携带 ctx 的新 Repository 实例，语言变体不变。
+func (r *Repository) WithContext(ctx context.Context) *Repository {
+	return &Repository{db: r.db, lang: r.lang, ctx: ctx}
+}
+
+// conn 返回本仓储查询所用的连接，设置了 ctx 时绑定到它。
+func (r *Repository) conn() *gorm.DB {
+	if r.ctx == nil {
+		return r.db.DB
+	}
+	return r.db.WithContext(r.ctx)
 }
 
 // 按本仓储的语言变体拼接表名

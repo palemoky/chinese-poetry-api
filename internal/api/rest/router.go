@@ -29,6 +29,10 @@ func dataVersionETag(path string) string {
 	return fmt.Sprintf(`W/"%x-%x"`, info.Size(), info.ModTime().UnixNano())
 }
 
+// requestTimeout 是单个请求的处理时限，到点后仍在执行的数据库查询会被中断。
+// 正常的查询都在毫秒级，留出足够余量的同时小于 http.Server 的 WriteTimeout。
+const requestTimeout = 10 * time.Second
+
 // SetupRouter 初始化 Gin 路由并注册全部接口。
 func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository) (*gin.Engine, error) {
 	// 设置 Gin 运行模式
@@ -43,6 +47,7 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 	}
 	router.Use(middleware.RequestLogger(logger.Default(), "/api/v1/health"))
 	router.Use(gin.Recovery())
+	router.Use(middleware.RequestTimeout(requestTimeout))
 
 	// 跨域中间件
 	router.Use(middleware.CORS())
