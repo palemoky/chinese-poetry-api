@@ -69,6 +69,28 @@ func (r *Repository) GetOrCreateAuthor(name string, dynastyID int64) (int64, err
 	return author.ID, nil
 }
 
+// CreateAuthorWithID 以指定 ID 创建作者，返回该名字实际对应的作者 ID。
+//
+// 导入时简繁两套表各建一次作者，用显式 ID 才能让同一位诗人在两套表里 ID 相同
+// （自增 ID 取决于插入顺序，两边只要有一处顺序不同，之后的 ID 就全部错开）。
+// 若该名字已存在（例如两个繁体名转成简体后相同），沿用已有记录的 ID。
+func (r *Repository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
+	author := Author{ID: id, Name: name, DynastyID: &dynastyID}
+	err := r.db.Table(r.authorsTable()).Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "name"}},
+		DoNothing: true,
+	}).Create(&author).Error
+	if err != nil {
+		return 0, err
+	}
+
+	var existing Author
+	if err := r.db.Table(r.authorsTable()).Select("id").Where("name = ?", name).First(&existing).Error; err != nil {
+		return 0, err
+	}
+	return existing.ID, nil
+}
+
 // GetPoetryTypeID 按名称查询体裁 ID。
 func (r *Repository) GetPoetryTypeID(name string) (int64, error) {
 	var poetryType PoetryType
