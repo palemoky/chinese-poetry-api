@@ -78,6 +78,10 @@ download_database() {
         return 1
     fi
 
+    # The server opens the database in WAL mode. If it was killed rather than
+    # stopped cleanly, the old database's -wal/-shm files are still here, and
+    # SQLite would replay that WAL onto the new file and corrupt it.
+    rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"
     mv -f "${DB_PATH}.tmp" "${DB_PATH}"
     mv -f "${tmp_checksum}" "${CHECKSUM_FILE}"
     rm -f "${tmp_gz}"
