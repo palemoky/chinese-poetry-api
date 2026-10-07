@@ -360,7 +360,7 @@ func (db *DB) RefreshPoemCounter(lang Lang) error {
 		return fmt.Errorf("failed to refresh poem counter for %s: %w", lang, err)
 	}
 
-	db.counts.invalidate()
+	db.invalidateCaches()
 	return nil
 }
 
@@ -441,7 +441,7 @@ func (db *DB) RefreshAuthorPoemCounts(lang Lang) error {
 		return fmt.Errorf("failed to refresh poem_count on %s: %w", authorTable, err)
 	}
 
-	db.counts.invalidate()
+	db.invalidateCaches()
 	return nil
 }
 

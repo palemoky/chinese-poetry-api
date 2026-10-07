@@ -197,3 +197,40 @@ func TestCharIndexVersionMismatchIsNotReady(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, ready)
 }
+
+// referenceAllMode 是 "all" 模式改写前的语义：一条 SQL，标题、正文、作者名三者 OR。
+func referenceAllMode(t *testing.T, repo *Repository, query string) []int64 {
+	t.Helper()
+	pattern := "%" + query + "%"
+	var ids []int64
+	require.NoError(t, repo.db.Raw(`SELECT p.id FROM poems_zh_hans p
+		JOIN poems_fts_zh_hans f ON f.rowid = p.id
+		LEFT JOIN authors_zh_hans a ON p.author_id = a.id
+		WHERE f.title LIKE ? OR f.content_text LIKE ? OR a.name LIKE ?
+		ORDER BY p.id`, pattern, pattern, pattern).Scan(&ids).Error)
+	return ids
+}
+
+// "all" 模式拆成三条查询再合并后，结果必须与原先那条 OR 查询一致，
+// 无论走不走倒排索引。
+func TestAllModeMatchesSingleQuerySemantics(t *testing.T) {
+	db := setupTestDB(t)
+	repo := NewRepository(db)
+	charIndexCorpus(t, repo, 300)
+
+	// 3 字以上走拆分后的 FTS 查询；标点走同一路径；"春风客"/"明月" 同时命中作者名
+	queries := []string{"春风明", "明月人", "，春", "。", "春风客", "明月", "李白", "不存在的"}
+
+	check := func(phase string) {
+		for _, q := range queries {
+			want := referenceAllMode(t, repo, q)
+			got := searchAll(t, repo, q, "all")
+			assert.Equal(t, want, got.ids, "%s: q=%q", phase, q)
+			assert.EqualValues(t, len(want), got.total, "%s: q=%q", phase, q)
+		}
+	}
+
+	check("without index")
+	require.NoError(t, db.BuildCharIndex(LangHans))
+	check("with index")
+}

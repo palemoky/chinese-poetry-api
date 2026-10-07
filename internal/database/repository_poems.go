@@ -430,13 +430,18 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
 		return nil, 0, err
 	} else if ok {
-		start := min(offset, len(ids))
-		end := min(offset+pageSize, len(ids))
-		poems, err := r.poemsByIDs(ids[start:end])
+		return r.pageOfIDs(ids, offset, pageSize)
+	}
+
+	// "all" 不能像其他模式那样一条 SQL 搞定：标题、正文与作者名之间的 OR 跨了
+	// FTS 表与作者表，SQLite 无法把它下推给 FTS5，整条查询退化为全表扫描
+	// （实测 3 字查询 0.49s，而单搜正文仅 6ms）。拆成三条各自走索引的查询再合并。
+	if searchType != "title" && searchType != "content" && searchType != "author" {
+		ids, err := r.allModeMatches(query)
 		if err != nil {
 			return nil, 0, err
 		}
-		return poems, int64(len(ids)), nil
+		return r.pageOfIDs(ids, offset, pageSize)
 	}
 
 	poemTable := r.poemsTable()
@@ -471,16 +476,6 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 			return q.Joins(authorJoin).Where(cond, arg)
 		}
 
-	default: // "all"
-		// 标题、正文（走 FTS）与作者名一并搜索
-		applyMatch = func(q *gorm.DB) *gorm.DB {
-			titleCond, arg := substringMatch(ftsTable+".title", query)
-			contentCond, _ := substringMatch(ftsTable+".content_text", query)
-			authorCond, _ := substringMatch(authorTable+".name", query)
-			return q.Joins(ftsJoin).
-				Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-				Where(titleCond+" OR "+contentCond+" OR "+authorCond, arg, arg, arg)
-		}
 	}
 
 	// 计数与页码无关，且要把同一个 FTS join 再跑一遍，代价与取数相当，故走缓存。

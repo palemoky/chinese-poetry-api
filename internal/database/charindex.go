@@ -232,7 +232,7 @@ func (db *DB) BuildCharIndex(lang Lang) error {
 		return fmt.Errorf("failed to build char index for %s: %w", lang, err)
 	}
 
-	db.idLists.invalidate()
+	db.invalidateCaches()
 	return nil
 }
 
@@ -376,18 +376,59 @@ func (r *Repository) verifySubstring(candidates []int64, query string, fields ch
 
 // poemIDsByAuthorName 返回作者名包含 query 的全部诗词 id（升序），
 // 对应 SearchPoems 在 "all" 模式下对作者名的匹配。
+//
+// 写成 author_id IN (子查询) 而不是 JOIN：JOIN 时 SQLite 选择扫描整张 poems 表
+// 再逐行回查作者（实测 40ms），IN 则先在小小的作者表里筛出 id，再走 author_id 索引（1ms）。
 func (r *Repository) poemIDsByAuthorName(query string) ([]int64, error) {
-	poemTable := r.poemsTable()
-	authorTable := r.authorsTable()
-	cond, arg := substringMatch(authorTable+".name", query)
+	cond, arg := substringMatch("name", query)
+	authors := r.db.Table(r.authorsTable()).Select("id").Where(cond, arg)
 
 	var ids []int64
-	err := r.db.Table(poemTable).
-		Joins("JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-		Where(cond, arg).
-		Order(poemTable+".id").
-		Pluck(poemTable+".id", &ids).Error
+	err := r.db.Table(r.poemsTable()).
+		Where("author_id IN (?)", authors).
+		Order("id").
+		Pluck("id", &ids).Error
 	return ids, err
+}
+
+// allModeMatches 求出 "all" 模式（标题、正文或作者名包含 query）的完整命中 id 列表，
+// 三部分各自走索引后合并，结果进 idLists 缓存。
+func (r *Repository) allModeMatches(query string) ([]int64, error) {
+	key := newCountKey("all", r.lang).add(query).String()
+	if ids, hit := r.db.idLists.get(key); hit {
+		return ids, nil
+	}
+
+	ftsTable := r.poemsFtsTable()
+	var ids []int64
+	for _, column := range []string{"title", "content_text"} {
+		cond, arg := substringMatch(column, query)
+		var matched []int64
+		if err := r.db.Table(ftsTable).Where(cond, arg).Order("rowid").Pluck("rowid", &matched).Error; err != nil {
+			return nil, err
+		}
+		ids = unionSorted(ids, matched)
+	}
+
+	authorIDs, err := r.poemIDsByAuthorName(query)
+	if err != nil {
+		return nil, err
+	}
+	ids = unionSorted(ids, authorIDs)
+
+	r.db.idLists.set(key, ids)
+	return ids, nil
+}
+
+// pageOfIDs 取升序 id 列表中的一页诗词，并以列表长度作为总数。
+func (r *Repository) pageOfIDs(ids []int64, offset, pageSize int) ([]Poem, int64, error) {
+	start := min(offset, len(ids))
+	end := min(offset+pageSize, len(ids))
+	poems, err := r.poemsByIDs(ids[start:end])
+	if err != nil {
+		return nil, 0, err
+	}
+	return poems, int64(len(ids)), nil
 }
 
 // poemsByIDs 按 id 升序取出一批诗词并补齐关联数据。

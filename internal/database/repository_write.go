@@ -123,7 +123,7 @@ func (r *Repository) InsertPoem(poem *Poem) error {
 		return err
 	}
 	// 诗词数量变了，缓存的 COUNT 结果随之失效
-	r.db.counts.invalidate()
+	r.db.invalidateCaches()
 	return nil
 }
 
@@ -147,7 +147,7 @@ func (r *Repository) BatchInsertPoems(poems []*Poem, batchSize int) error {
 		return err
 	}
 
-	r.db.counts.invalidate()
+	r.db.invalidateCaches()
 	return nil
 }
 
@@ -239,6 +239,6 @@ func (r *Repository) UpsertPoem(poem *Poem) error {
 		return err
 	}
 
-	r.db.counts.invalidate()
+	r.db.invalidateCaches()
 	return nil
 }
