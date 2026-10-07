@@ -124,6 +124,10 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("graphql.complexity_limit", 5000)
 	v.SetDefault("search.max_results", 1000)
 	v.SetDefault("search.default_page_size", 20)
+	// 默认路径与 docker-compose 中挂载的卷保持一致。poetry.db 同时包含简体与繁体两套表，
+	// 具体查哪套由 API 请求中的 lang 参数决定。
+	// 这里只设默认值：此前它在读完配置文件后被强行覆盖，配置文件里的 database.path 从不生效。
+	v.SetDefault("database.path", "data/poetry.db")
 	// 数据库连接池，0 表示自动推算（在 Load 中依据 runtime.NumCPU 确定）
 	v.SetDefault("database.max_open_conns", 0)
 	v.SetDefault("database.max_idle_conns", 0)
@@ -144,12 +148,10 @@ func bindEnvVars(v *viper.Viper) {
 		v.Set("server.trusted_proxies", parseProxyList(proxies))
 	}
 
-	// 数据目录写死，与 docker-compose 中挂载的卷保持一致
-	dataDir := "data"
-
-	// 统一使用 poetry.db，其中同时包含简体与繁体两套表；
-	// 具体查哪套由 API 请求中的 lang 参数决定
-	v.Set("database.path", fmt.Sprintf("%s/poetry.db", dataDir))
+	// 数据库
+	if path := os.Getenv("DB_PATH"); path != "" {
+		v.Set("database.path", path)
+	}
 
 	// 限流
 	if enabled := os.Getenv("RATE_LIMIT_ENABLED"); enabled != "" {
