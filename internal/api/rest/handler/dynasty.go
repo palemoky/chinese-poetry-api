@@ -29,7 +29,7 @@ func (h *DynastyHandler) ListDynasties(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	dynasties, err := repo.GetDynastiesWithStats()
 	if err != nil {
@@ -56,7 +56,7 @@ func (h *DynastyHandler) GetDynasty(c *gin.Context) {
 	if !ok {
 		return
 	}
-	repo := h.repo.WithLang(lang)
+	repo := h.repo.WithContext(c.Request.Context()).WithLang(lang)
 
 	id, ok := parseID(c, "id", "dynasty")
 	if !ok {
