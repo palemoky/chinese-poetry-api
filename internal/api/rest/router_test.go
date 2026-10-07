@@ -3,6 +3,8 @@ package rest
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/palemoky/chinese-poetry-api/internal/config"
+	"github.com/palemoky/chinese-poetry-api/internal/testutil"
 )
 
 // newLimitedRouter 返回 burst 为 1 的路由：同一客户端的第二个请求即会被限流。
@@ -67,4 +70,43 @@ func TestRouterTrustsNoProxyWhenEmpty(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, get(router, "172.17.0.1:1000", "198.51.100.1"))
 	assert.Equal(t, http.StatusTooManyRequests, get(router, "172.17.0.1:1001", "198.51.100.2"))
+}
+
+func TestRouterCachePolicies(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	cfg.Server.Mode = gin.TestMode
+	cfg.RateLimit.Enabled = false
+	cfg.Database.Path = filepath.Join(t.TempDir(), "poetry.db")
+	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
+
+	db, repo := testutil.SetupTestDB(t)
+	router, err := SetupRouter(cfg, db, repo)
+	require.NoError(t, err)
+
+	serve := func(path, ifNoneMatch string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		if ifNoneMatch != "" {
+			req.Header.Set("If-None-Match", ifNoneMatch)
+		}
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		return w
+	}
+
+	w := serve("/api/v1/dynasties", "")
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "public, max-age=3600", w.Header().Get("Cache-Control"))
+	etag := w.Header().Get("ETag")
+	require.NotEmpty(t, etag)
+
+	assert.Equal(t, http.StatusNotModified, serve("/api/v1/dynasties", etag).Code)
+	assert.Equal(t, http.StatusNotModified, serve("/api/v1/stats", etag).Code)
+
+	// 随机诗词与健康检查不能缓存，也不能因为带了 ETag 就回 304
+	for _, path := range []string{"/api/v1/poems/random", "/api/v1/health"} {
+		w := serve(path, etag)
+		assert.NotEqual(t, http.StatusNotModified, w.Code, path)
+		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), path)
+	}
 }
