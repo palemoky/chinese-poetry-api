@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -19,6 +20,7 @@ var (
 	outputDB   string
 	workers    int
 	configPath string
+	minPoems   int64
 )
 
 func main() {
@@ -37,6 +39,16 @@ func main() {
 	rootCmd.Flags().StringVarP(&outputDB, "output", "o", "poetry.db", "Output unified SQLite database")
 	rootCmd.Flags().IntVarP(&workers, "workers", "w", 0, "Number of concurrent workers (0 = number of CPUs)")
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to datas.json config file (default: <input>/loader/datas.json)")
+	rootCmd.PersistentFlags().Int64Var(&minPoems, "min-poems", 300000, "Fail verification when either variant has fewer poems")
+
+	rootCmd.AddCommand(&cobra.Command{
+		Use:   "verify <database>",
+		Short: "Check that an imported database is fit for release",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return verifyDatabase(args[0])
+		},
+	})
 
 	if err := rootCmd.Execute(); err != nil {
 		logger.Fatal("Command execution failed", zap.Error(err))
@@ -84,7 +96,66 @@ func run(cmd *cobra.Command, args []string) error {
 		logger.Warn("Failed to print statistics", zap.Error(err))
 	}
 
+	// 检查不通过时以非零状态退出，发布流程就此中止
+	return verifyDatabase(outputDB)
+}
+
+// verifyDatabase 对导入完成的数据库做发布前检查，打印结果；
+// 在 GitHub Actions 中还会写进任务摘要，方便人工核对朝代分布。
+func verifyDatabase(dbPath string) error {
+	db, err := database.OpenReadOnly(dbPath, 1, 1)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+
+	report, err := db.VerifyRelease(minPoems)
+	if err != nil {
+		return fmt.Errorf("failed to verify database: %w", err)
+	}
+
+	md := renderReport(report)
+	fmt.Print("\n" + md)
+	if path := os.Getenv("GITHUB_STEP_SUMMARY"); path != "" {
+		if err := appendFile(path, md); err != nil {
+			logger.Warn("Failed to write job summary", zap.Error(err))
+		}
+	}
+
+	if !report.Passed() {
+		return fmt.Errorf("database %s failed release verification", dbPath)
+	}
 	return nil
+}
+
+// renderReport 把检查结果渲染为 Markdown 表格。
+func renderReport(report *database.VerifyReport) string {
+	var b strings.Builder
+	b.WriteString("### Release verification\n\n| Check | Result | Detail |\n| --- | --- | --- |\n")
+	for _, c := range report.Checks {
+		result := "✅"
+		if !c.Passed {
+			result = "❌"
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s |\n", c.Name, result, c.Detail)
+	}
+	b.WriteString("\n### Poems by dynasty (zh-Hans)\n\n| Dynasty | Poems |\n| --- | ---: |\n")
+	for _, d := range report.Dynasties {
+		fmt.Fprintf(&b, "| %s | %d |\n", d.Name, d.Count)
+	}
+	return b.String()
+}
+
+func appendFile(path, content string) error {
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	return f.Close()
 }
 
 // processUnifiedDatabase 重建数据库，并依次导入简体与繁体两套数据。
