@@ -5,9 +5,9 @@ set -e
 DATA_DIR="data"
 DB_FILE="poetry.db"
 DB_PATH="${DATA_DIR}/${DB_FILE}"
-DB_GZ="${DB_PATH}.gz"
 CHECKSUM_FILE="${DATA_DIR}/checksums.txt"
-GITHUB_RELEASE_URL="https://github.com/palemoky/chinese-poetry-api/releases/latest/download"
+# Override DATA_RELEASE_URL to download from a mirror
+GITHUB_RELEASE_URL="${DATA_RELEASE_URL:-https://github.com/palemoky/chinese-poetry-api/releases/latest/download}"
 
 # Drop root privileges. In the Docker image the container starts as root so the
 # data volume can be handed over to the unprivileged user first: volumes created
@@ -25,56 +25,73 @@ echo "=== Chinese Poetry API Startup ==="
 # Create data directory if it doesn't exist
 mkdir -p "${DATA_DIR}"
 
+# Print the checksum recorded for file $1 in checksums file $2 (empty if absent).
+checksum_of() {
+    awk -v f="$1" '$2 == f || $2 == "*" f { print $1 }' "$2"
+}
+
 # Download, verify and install the database.
 # Everything goes to temporary files first and only replaces the local copy once
 # verified, so a failed download never leaves a broken or half-updated data dir.
 # Returns non-zero on failure instead of exiting, letting the caller fall back
 # to an existing local database.
 download_database() {
-    echo "Downloading database and checksums..."
+    echo "Downloading checksums..."
 
-    tmp_gz="${DB_GZ}.tmp"
     tmp_checksum="${CHECKSUM_FILE}.tmp"
-
-    if ! curl -Lfo "${tmp_gz}" "${GITHUB_RELEASE_URL}/${DB_FILE}.gz"; then
-        echo "ERROR: Failed to download database"
-        rm -f "${tmp_gz}"
-        return 1
-    fi
-
     if ! curl -Lfo "${tmp_checksum}" "${GITHUB_RELEASE_URL}/checksums.txt"; then
         echo "ERROR: Failed to download checksums"
-        rm -f "${tmp_gz}" "${tmp_checksum}"
+        rm -f "${tmp_checksum}"
         return 1
     fi
 
-    # Verify downloaded .gz file
+    # Prefer the zstd archive (about 16% smaller, much faster to unpack). Older
+    # releases only have the gzip one, and images without zstd fall back to it too.
+    archive="${DB_FILE}.gz"
+    if command -v zstd >/dev/null 2>&1 && checksum_of "${DB_FILE}.zst" "${tmp_checksum}" | grep -q .; then
+        archive="${DB_FILE}.zst"
+    fi
+    tmp_archive="${DATA_DIR}/${archive}.tmp"
+
+    echo "Downloading ${archive}..."
+    if ! curl -Lfo "${tmp_archive}" "${GITHUB_RELEASE_URL}/${archive}"; then
+        echo "ERROR: Failed to download database"
+        rm -f "${tmp_archive}" "${tmp_checksum}"
+        return 1
+    fi
+
+    # Verify downloaded archive
     echo "Verifying download integrity..."
-    expected_checksum=$(grep "${DB_FILE}.gz" "${tmp_checksum}" | awk '{print $1}')
+    expected_checksum=$(checksum_of "${archive}" "${tmp_checksum}")
 
     if [ -z "$expected_checksum" ]; then
-        echo "ERROR: Could not find checksum for ${DB_FILE}.gz"
-        rm -f "${tmp_gz}" "${tmp_checksum}"
+        echo "ERROR: Could not find checksum for ${archive}"
+        rm -f "${tmp_archive}" "${tmp_checksum}"
         return 1
     fi
 
-    actual_checksum=$(sha256sum "${tmp_gz}" | awk '{print $1}')
+    actual_checksum=$(sha256sum "${tmp_archive}" | awk '{print $1}')
 
     if [ "$actual_checksum" != "$expected_checksum" ]; then
         echo "ERROR: Checksum mismatch!"
         echo "  Expected: $expected_checksum"
         echo "  Actual:   $actual_checksum"
-        rm -f "${tmp_gz}" "${tmp_checksum}"
+        rm -f "${tmp_archive}" "${tmp_checksum}"
         return 1
     fi
 
     echo "✓ Download verified"
 
-    # Extract next to the target, then swap it in with a rename
+    # Extract next to the target, then swap it in with a rename.
+    # The zstd archive is built with --long=27, which decompression must match.
     echo "Extracting ${DB_FILE}..."
-    if ! gunzip -c "${tmp_gz}" > "${DB_PATH}.tmp"; then
+    case "${archive}" in
+        *.zst) extract="zstd -d --long=27 -q -c" ;;
+        *)     extract="gunzip -c" ;;
+    esac
+    if ! ${extract} "${tmp_archive}" > "${DB_PATH}.tmp"; then
         echo "ERROR: Failed to extract database"
-        rm -f "${tmp_gz}" "${tmp_checksum}" "${DB_PATH}.tmp"
+        rm -f "${tmp_archive}" "${tmp_checksum}" "${DB_PATH}.tmp"
         return 1
     fi
 
@@ -84,7 +101,7 @@ download_database() {
     rm -f "${DB_PATH}-wal" "${DB_PATH}-shm"
     mv -f "${DB_PATH}.tmp" "${DB_PATH}"
     mv -f "${tmp_checksum}" "${CHECKSUM_FILE}"
-    rm -f "${tmp_gz}"
+    rm -f "${tmp_archive}"
 
     echo "✓ Database ready: $DB_PATH"
 }
@@ -110,8 +127,8 @@ check_for_updates() {
     fi
 
     echo "→ New database version available"
-    remote_checksum=$(grep "${DB_FILE}.gz" "$temp_checksum" | awk '{print $1}')
-    local_checksum=$(grep "${DB_FILE}.gz" "$CHECKSUM_FILE" | awk '{print $1}')
+    remote_checksum=$(checksum_of "${DB_FILE}.gz" "$temp_checksum")
+    local_checksum=$(checksum_of "${DB_FILE}.gz" "$CHECKSUM_FILE")
     echo "  Local:  $(echo "$local_checksum" | cut -c1-16)..."
     echo "  Remote: $(echo "$remote_checksum" | cut -c1-16)..."
 
