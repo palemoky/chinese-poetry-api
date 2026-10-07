@@ -1,0 +1,62 @@
+# git-cliff 配置：根据 Conventional Commits 生成 CHANGELOG
+# 文档：https://git-cliff.org/docs/configuration
+#
+# 中文描述：在提交末尾加 `Changelog: <中文>` 尾注，生成时优先使用；没有则用英文标题
+#
+# 常用命令：
+#   make release                         # 发版：新版本插入 CHANGELOG.md 顶部（历史不会被覆盖），确认后提交并打 tag
+#   make changelog                       # 预览下个版本的内容
+#   git cliff --unreleased               # 预览尚未发布的变更
+#   git cliff --latest --strip header    # 只输出最新版本的变更
+
+[changelog]
+header = """
+# 更新日志
+
+本项目所有值得关注的变更都记录在此文件中，由 [git-cliff](https://git-cliff.org) 根据提交记录生成并人工整理。
+"""
+body = """
+{% if version -%}
+## [{{ version | trim_start_matches(pat="v") }}](https://github.com/palemoky/chinese-poetry-api/releases/tag/{{ version }}) - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else -%}
+## 未发布
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim | upper_first }}
+{% for commit in commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif -%}
+  {% if commit.breaking %}[**破坏性变更**] {% endif -%}
+  {%- set zh = commit.footers | filter(attribute="token", value="Changelog") | first -%}
+  {{ zh.value | default(value=commit.message | upper_first) }} \
+  ([{{ commit.id | truncate(length=7, end="") }}](https://github.com/palemoky/chinese-poetry-api/commit/{{ commit.id }}))
+{%- endfor %}
+{% endfor %}
+"""
+footer = ""
+trim = false
+postprocessors = [
+  # 把提交信息中的 (#123) 转成 PR 链接
+  { pattern = '\(#(\d+)\)', replace = "([#${1}](https://github.com/palemoky/chinese-poetry-api/pull/${1}))" },
+]
+
+[git]
+conventional_commits = true
+# 不符合规范的提交（如 GitHub 网页编辑产生的 "Update README.md"）不进入 CHANGELOG
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9]+\\.[0-9]+\\.[0-9]+.*"
+sort_commits = "oldest"
+# 分组标题前的 HTML 注释用于控制排序，渲染时会被 striptags 去掉
+commit_parsers = [
+  { message = "^Merge", skip = true },
+  { message = "^feat", group = "<!-- 0 -->✨ 新功能" },
+  { message = "^fix", group = "<!-- 1 -->🐛 问题修复" },
+  { message = "^perf", group = "<!-- 2 -->⚡ 性能优化" },
+  { message = "^security", group = "<!-- 3 -->🔒 安全" },
+  { message = "^(refactor|db)", group = "<!-- 4 -->♻️ 重构" },
+  { message = "^docs", group = "<!-- 5 -->📝 文档" },
+  # 以下类型对使用者意义不大，不写入 CHANGELOG
+  { message = "^(ci|test|chore|style|build)", skip = true },
+]
