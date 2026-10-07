@@ -3,7 +3,7 @@ package database
 import (
 	"crypto/rand"
 	"math/big"
-	"strconv"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -57,9 +57,12 @@ func (r *Repository) GetPoemByID(id string) (*Poem, error) {
 
 // loadPoemRelations 为一批诗词批量加载作者、朝代与体裁，
 // 通过先收集 ID 再按 IN 查询的方式避免 N+1 查询。
-func (r *Repository) loadPoemRelations(poems []Poem) {
+//
+// 查询失败时返回错误，而不是带着缺失的关联数据照常返回：
+// 否则一次数据库故障在调用方看来只是「这批诗恰好没有作者」，无从察觉。
+func (r *Repository) loadPoemRelations(poems []Poem) error {
 	if len(poems) == 0 {
-		return
+		return nil
 	}
 
 	// 收集去重后的关联 ID
@@ -87,7 +90,9 @@ func (r *Repository) loadPoemRelations(poems []Poem) {
 			ids = append(ids, id)
 		}
 		var authorList []Author
-		r.db.Table(r.authorsTable()).Where("id IN ?", ids).Find(&authorList)
+		if err := r.db.Table(r.authorsTable()).Where("id IN ?", ids).Find(&authorList).Error; err != nil {
+			return err
+		}
 		for i := range authorList {
 			authors[authorList[i].ID] = &authorList[i]
 			// 作者的朝代也一并纳入待查集合
@@ -105,7 +110,9 @@ func (r *Repository) loadPoemRelations(poems []Poem) {
 			ids = append(ids, id)
 		}
 		var dynastyList []Dynasty
-		r.db.Table(r.dynastiesTable()).Where("id IN ?", ids).Find(&dynastyList)
+		if err := r.db.Table(r.dynastiesTable()).Where("id IN ?", ids).Find(&dynastyList).Error; err != nil {
+			return err
+		}
 		for i := range dynastyList {
 			dynasties[dynastyList[i].ID] = &dynastyList[i]
 		}
@@ -119,7 +126,9 @@ func (r *Repository) loadPoemRelations(poems []Poem) {
 			ids = append(ids, id)
 		}
 		var typeList []PoetryType
-		r.db.Table(r.poetryTypesTable()).Where("id IN ?", ids).Find(&typeList)
+		if err := r.db.Table(r.poetryTypesTable()).Where("id IN ?", ids).Find(&typeList).Error; err != nil {
+			return err
+		}
 		for i := range typeList {
 			types[typeList[i].ID] = &typeList[i]
 		}
@@ -148,6 +157,8 @@ func (r *Repository) loadPoemRelations(poems []Poem) {
 			}
 		}
 	}
+
+	return nil
 }
 
 // ListPoemsWithFilter 按可选条件分页查询诗词列表。
@@ -228,16 +239,16 @@ func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, autho
 		return nil, 0, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, 0, err
+	}
 	return poems, int(totalCount), nil
 }
 
 // GetRandomPoem 按可选条件随机返回一首诗词，多个体裁之间为 OR 关系。
 // 采用「先 COUNT 再随机 OFFSET」的方式，保证结果在过滤集合内均匀分布。
+// 过滤集合为空时返回 gorm.ErrRecordNotFound，其余错误原样返回。
 func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) (*Poem, error) {
-	poemTable := r.poemsTable()
-
-	// 把过滤条件统一附加到查询上
 	applyFilters := func(q *gorm.DB) *gorm.DB {
 		if dynastyID != nil {
 			q = q.Where("dynasty_id = ?", *dynastyID)
@@ -251,28 +262,33 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 		return q
 	}
 
-	// 统计命中数量
+	// 计数与 listPoems 共用同一套来源与缓存键：无过滤读计数器，带过滤走 TTL 缓存。
+	// 随机接口是被反复刷新的那一类，每次都现数一遍很不划算。
 	var count int64
-	if err := applyFilters(r.db.Table(poemTable)).Count(&count).Error; err != nil || count == 0 {
-		return nil, gorm.ErrRecordNotFound
+	var err error
+	if dynastyID == nil && authorID == nil && len(typeIDs) == 0 {
+		var n int
+		n, err = r.CountPoems()
+		count = int64(n)
+	} else {
+		key := newCountKey("poems", r.lang).
+			addOptionalID(dynastyID).
+			addOptionalID(authorID).
+			addIDs(typeIDs).
+			String()
+		count, err = r.db.counts.getOrLoad(key, func() (int64, error) {
+			var n int64
+			err := applyFilters(r.db.Table(r.poemsTable())).Count(&n).Error
+			return n, err
+		})
 	}
-
-	// 在 [0, count) 内取随机偏移
-	randomBig, err := rand.Int(rand.Reader, big.NewInt(count))
 	if err != nil {
 		return nil, err
 	}
-	offset := int(randomBig.Int64())
 
-	// 取该偏移位置上的诗词
-	var poem Poem
-	err = applyFilters(r.db.Table(poemTable)).Order("id ASC").Offset(offset).Limit(1).First(&poem).Error
-	if err != nil {
-		return nil, err
-	}
-
-	// 再按 ID 完整加载一次，补齐关联数据
-	return r.GetPoemByID(strconv.FormatInt(poem.ID, 10))
+	return r.pickRandomPoem(count, func() *gorm.DB {
+		return applyFilters(r.db.Table(r.poemsTable())).Order("id ASC")
+	})
 }
 
 // GetRandomPoemByChar 随机返回一首正文包含指定汉字的诗词（用于飞花令等玩法）。
@@ -284,38 +300,65 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 func (r *Repository) GetRandomPoemByChar(char string) (*Poem, error) {
 	poemTable := r.poemsTable()
 	ftsTable := r.poemsFtsTable()
-	pattern := "%" + char + "%"
+	cond, arg := substringMatch(ftsTable+".content_text", char)
 
-	matches := func(q *gorm.DB) *gorm.DB {
-		return q.Joins("JOIN "+ftsTable+" ON "+ftsTable+".rowid = "+poemTable+".id").
-			Where(ftsTable+".content_text LIKE ?", pattern)
+	matches := func() *gorm.DB {
+		return r.db.Table(poemTable).
+			Joins("JOIN "+ftsTable+" ON "+ftsTable+".rowid = "+poemTable+".id").
+			Where(cond, arg)
 	}
 
-	// 统计命中数量
-	var count int64
-	if err := matches(r.db.Table(poemTable)).Count(&count).Error; err != nil || count == 0 {
+	// 单字不足 trigram 的三字符，用不上 FTS 索引，COUNT 要扫一遍整张 FTS 表，
+	// 因此计数走缓存；汉字的取值空间有限，缓存很快就能覆盖常用字。
+	key := newCountKey("char", r.lang).add(char).String()
+	count, err := r.db.counts.getOrLoad(key, func() (int64, error) {
+		var n int64
+		err := matches().Count(&n).Error
+		return n, err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return r.pickRandomPoem(count, func() *gorm.DB {
+		return matches().Order(poemTable + ".id ASC")
+	})
+}
+
+// pickRandomPoem 在 query 的 count 条有序结果里均匀随机取一首，并补齐关联数据。
+// count 为 0 时返回 gorm.ErrRecordNotFound。
+//
+// 关联数据用 loadPoemRelations 补齐。先前的写法是取出整行后再按 ID 调一次
+// GetPoemByID：同一行查两遍，外加逐个查作者、作者朝代、诗词朝代与体裁，
+// 一首诗 6 次查询；现在是取数 1 次加关联数据至多 3 次 IN 查询。
+func (r *Repository) pickRandomPoem(count int64, query func() *gorm.DB) (*Poem, error) {
+	if count == 0 {
 		return nil, gorm.ErrRecordNotFound
 	}
 
-	// 在 [0, count) 内取随机偏移
 	randomBig, err := rand.Int(rand.Reader, big.NewInt(count))
 	if err != nil {
 		return nil, err
 	}
-	offset := int(randomBig.Int64())
 
-	// 取该偏移位置上的诗词
-	var poem Poem
-	err = matches(r.db.Table(poemTable)).
-		Select(poemTable + ".*").
-		Order(poemTable + ".id ASC").
-		Offset(offset).Limit(1).First(&poem).Error
+	// 计数可能来自缓存，与当前数据存在短暂偏差；偏移落空时按「没有结果」处理，
+	// 而不是报 500——语料在运行期是只读的，这只会发生在导入刚改动数据之后。
+	var poems []Poem
+	err = query().
+		Select(r.poemsTable() + ".*").
+		Offset(int(randomBig.Int64())).Limit(1).
+		Find(&poems).Error
 	if err != nil {
 		return nil, err
 	}
+	if len(poems) == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
 
-	// 再按 ID 完整加载一次，补齐关联数据
-	return r.GetPoemByID(strconv.FormatInt(poem.ID, 10))
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, err
+	}
+	return &poems[0], nil
 }
 
 // ListAuthorPoems 分页查询指定作者的诗词。
@@ -340,7 +383,9 @@ func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem,
 		return nil, 0, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, 0, err
+	}
 	return poems, int(totalCount), nil
 }
 
@@ -358,7 +403,6 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	}
 
 	offset := (page - 1) * pageSize
-	pattern := "%" + query + "%"
 	poemTable := r.poemsTable()
 	authorTable := r.authorsTable()
 	ftsTable := r.poemsFtsTable()
@@ -373,28 +417,33 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	case "title":
 		// 仅搜标题，走 FTS trigram 索引
 		applyMatch = func(q *gorm.DB) *gorm.DB {
-			return q.Joins(ftsJoin).Where(ftsTable+".title LIKE ?", pattern)
+			cond, arg := substringMatch(ftsTable+".title", query)
+			return q.Joins(ftsJoin).Where(cond, arg)
 		}
 
 	case "content":
 		// 仅搜正文，走 FTS trigram 索引
 		applyMatch = func(q *gorm.DB) *gorm.DB {
-			return q.Joins(ftsJoin).Where(ftsTable+".content_text LIKE ?", pattern)
+			cond, arg := substringMatch(ftsTable+".content_text", query)
+			return q.Joins(ftsJoin).Where(cond, arg)
 		}
 
 	case "author":
 		// 仅搜作者名。作者表很小，普通 LIKE 足够快
 		applyMatch = func(q *gorm.DB) *gorm.DB {
-			return q.Joins(authorJoin).Where(authorTable+".name LIKE ?", pattern)
+			cond, arg := substringMatch(authorTable+".name", query)
+			return q.Joins(authorJoin).Where(cond, arg)
 		}
 
 	default: // "all"
 		// 标题、正文（走 FTS）与作者名一并搜索
 		applyMatch = func(q *gorm.DB) *gorm.DB {
+			titleCond, arg := substringMatch(ftsTable+".title", query)
+			contentCond, _ := substringMatch(ftsTable+".content_text", query)
+			authorCond, _ := substringMatch(authorTable+".name", query)
 			return q.Joins(ftsJoin).
 				Joins("LEFT JOIN "+authorTable+" ON "+poemTable+".author_id = "+authorTable+".id").
-				Where(ftsTable+".title LIKE ? OR "+ftsTable+".content_text LIKE ? OR "+authorTable+".name LIKE ?",
-					pattern, pattern, pattern)
+				Where(titleCond+" OR "+contentCond+" OR "+authorCond, arg, arg, arg)
 		}
 	}
 
@@ -420,6 +469,26 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 		return nil, 0, err
 	}
 
-	r.loadPoemRelations(poems)
+	if err := r.loadPoemRelations(poems); err != nil {
+		return nil, 0, err
+	}
 	return poems, total, nil
+}
+
+// globEscaper 把 GLOB 的元字符放进字符类，使其按字面匹配。
+var globEscaper = strings.NewReplacer("*", "[*]", "?", "[?]", "[", "[[]")
+
+// substringMatch 构造「column 包含 s」的条件及其参数，s 按字面匹配。
+//
+// 默认用 LIKE '%s%'，这是 FTS5 trigram 索引能加速的写法。但 s 里的 % 与 _
+// 会被 LIKE 当成通配符（搜 "%" 等于匹配全部），而转义它们所需的 ESCAPE 子句
+// 恰恰会让 SQLite 不再把条件下推给 FTS5，查询退化为全表扫描。
+// 因此只在 s 含有这两个字符时改用 GLOB：% 与 _ 在 GLOB 里本就是普通字符，
+// trigram 同样能用 GLOB 走索引。GLOB 区分 ASCII 大小写，而 LIKE 不区分，
+// 这点差别只影响那些本来就带着 % 或 _ 的查询，可以接受。
+func substringMatch(column, s string) (cond string, arg string) {
+	if !strings.ContainsAny(s, "%_") {
+		return column + " LIKE ?", "%" + s + "%"
+	}
+	return column + " GLOB ?", "*" + globEscaper.Replace(s) + "*"
 }

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"slices"
 	"strconv"
@@ -8,6 +9,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 )
@@ -249,8 +251,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		}
 
 		poem, err := repo.GetRandomPoemByChar(char)
-		if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			respondError(c, http.StatusNotFound, "no poems found containing the given character")
+			return
+		}
+		if err != nil {
+			respondError(c, http.StatusInternalServerError, "failed to retrieve random poem")
 			return
 		}
 
@@ -264,8 +270,12 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 	}
 
 	poem, err := repo.GetRandomPoem(filters.dynastyID, filters.authorID, filters.typeIDs)
-	if err != nil {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		respondError(c, http.StatusNotFound, "no poems found matching the criteria")
+		return
+	}
+	if err != nil {
+		respondError(c, http.StatusInternalServerError, "failed to retrieve random poem")
 		return
 	}
 
