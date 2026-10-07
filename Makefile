@@ -1,4 +1,4 @@
-.PHONY: help build build-processor build-server clean test run-server run-processor process-data docker-build docker-run graphql-gen deps tidy fmt gofumpt lint install dev
+.PHONY: help changelog build build-processor build-server clean test run-server run-processor process-data docker-build docker-run graphql-gen deps tidy fmt gofumpt lint install dev
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -55,6 +55,7 @@ help:
 	@echo "  make fmt                - 格式化代码"
 	@echo "  make lint               - 运行linter"
 	@echo "  make tidy               - 整理依赖"
+	@echo "  make changelog          - 预览下个版本的 CHANGELOG"
 	@echo ""
 	@echo "$(GREEN)Docker命令:$(NC)"
 	@echo "  make docker-build       - 构建Docker镜像"
@@ -69,7 +70,7 @@ help:
 	@echo "  make info               - 显示系统信息"
 	@echo ""
 	@echo "$(GREEN)发布命令:$(NC)"
-	@echo "  make release v1.0.0     - 创建并推送版本标签"
+	@echo "  make release            - 更新 CHANGELOG，创建并推送版本标签"
 
 ## info: 显示系统信息
 info:
@@ -118,6 +119,11 @@ tidy:
 	@echo "$(BLUE)整理依赖...$(NC)"
 	@go mod tidy
 	@echo "$(GREEN)✓ 依赖整理完成$(NC)"
+
+## changelog: 预览上次发版以来、将写入 CHANGELOG 的内容（需安装 git-cliff）
+changelog:
+	@command -v git-cliff >/dev/null || { echo "$(RED)未找到 git-cliff，请先安装：brew install git-cliff$(NC)"; exit 1; }
+	@git cliff --unreleased --strip header
 
 ## fmt: 格式化代码
 # gofumpt，而非 go fmt：.golangci.yml 启用的格式化器是 gofumpt，它比 gofmt 严格，
@@ -305,8 +311,12 @@ db-stats:
 	fi
 
 ## release: 创建并推送版本标签
-release:  ## Create and push version tag
-	@if [ -n "$$(git status --porcelain)" ]; then \
+release:  ## Update CHANGELOG, create and push version tag
+	@if ! command -v git-cliff >/dev/null; then \
+		echo "$(RED)Error: git-cliff not found, install it with: brew install git-cliff$(NC)"; \
+		exit 1; \
+	fi; \
+	if [ -n "$$(git status --porcelain)" ]; then \
 		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
 		echo "$(YELLOW)Please commit or stash your changes before releasing$(NC)"; \
 		exit 1; \
@@ -355,6 +365,20 @@ release:  ## Create and push version tag
 			echo "$(RED)Error: New version $$VERSION must be greater than $$LATEST_TAG$(NC)"; \
 			exit 1; \
 		fi; \
+	fi; \
+	echo "$(BLUE)Updating CHANGELOG.md...$(NC)"; \
+	git cliff --unreleased --tag $$VERSION --prepend CHANGELOG.md 2>/dev/null || exit 1; \
+	if git diff --quiet CHANGELOG.md; then \
+		echo "$(YELLOW)⚠ No user-facing changes since $$LATEST_TAG, CHANGELOG.md unchanged$(NC)"; \
+	else \
+		git --no-pager diff --stat CHANGELOG.md; \
+		echo "$(YELLOW)CHANGELOG.md updated. Review/edit it now (e.g. translate English entries), then press Enter to continue, or Ctrl-C to abort.$(NC)"; \
+		read -r _; \
+		git add CHANGELOG.md; \
+		git commit -m "docs(changelog): release $$VERSION" || exit 1; \
+		echo "$(BLUE)Pushing changelog commit...$(NC)"; \
+		git push origin HEAD || exit 1; \
+		echo "$(GREEN)✓ CHANGELOG.md committed$(NC)"; \
 	fi; \
 	if git config user.signingkey >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then \
 		echo "$(BLUE)Creating GPG signed tag $$VERSION...$(NC)"; \
