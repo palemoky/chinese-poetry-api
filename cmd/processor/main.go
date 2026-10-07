@@ -139,6 +139,12 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []l
 		return fmt.Errorf("failed to build char index: %w", err)
 	}
 
+	// 删除只在导入时用到的索引与列，必须放在所有写入之后
+	logger.Info("Finalizing database")
+	if err := db.FinalizeImport(); err != nil {
+		return fmt.Errorf("failed to finalize database: %w", err)
+	}
+
 	// 优化数据库文件
 	logger.Info("Optimizing database")
 	if err := db.Exec("VACUUM").Error; err != nil {

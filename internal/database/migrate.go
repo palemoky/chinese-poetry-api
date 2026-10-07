@@ -145,6 +145,44 @@ func NewDBFromGorm(db *gorm.DB) *DB {
 }
 
 // Migrate 为简体、繁体两套表创建全部表结构、索引与初始数据。
+// metadataImportFinalized 标记数据库已由 FinalizeImport 收尾。
+const metadataImportFinalized = "import_finalized"
+
+// importFinalized 判断数据库是否已收尾。metadata 表不存在（如测试只建了部分表）时视为未收尾。
+func (db *DB) importFinalized() bool {
+	var n int64
+	err := db.Raw("SELECT COUNT(*) FROM metadata WHERE key = ?", metadataImportFinalized).Scan(&n).Error
+	return err == nil && n > 0
+}
+
+// FinalizeImport 删除只在导入时用到的结构，供导入全部完成、VACUUM 之前调用。
+//
+// 唯一索引 (title, content_hash, author_id) 与 content_hash 列只用于导入时跳过重复记录：
+// 去重本来就在写库前完成，二者在发布库里只占空间（两套表合计约 100MB）。
+// 删掉以后库里不能再导入数据，因此同时写入标记，让之后的 Migrate 不再重建它们。
+// 另外合并 FTS 索引的分段：逐批写入会留下许多小分段，合并后更小，查询也少查几段。
+func (db *DB) FinalizeImport() error {
+	for _, lang := range []Lang{LangHans, LangHant} {
+		poemTable := PoemsTable(lang)
+		ftsTable := PoemsFtsTable(lang)
+		for _, stmt := range []string{
+			fmt.Sprintf("DROP INDEX IF EXISTS idx_%s_unique_author", poemTable),
+			fmt.Sprintf("DROP INDEX IF EXISTS idx_%s_unique", poemTable),
+			fmt.Sprintf("ALTER TABLE %s DROP COLUMN content_hash", poemTable),
+			fmt.Sprintf("INSERT INTO %s(%s) VALUES('optimize')", ftsTable, ftsTable),
+		} {
+			if err := db.Exec(stmt).Error; err != nil {
+				return fmt.Errorf("failed to finalize %s: %s: %w", poemTable, stmt, err)
+			}
+		}
+	}
+
+	return db.Exec(
+		`INSERT OR REPLACE INTO metadata (key, value, updated_at) VALUES (?, ?, ?)`,
+		metadataImportFinalized, "1", time.Now(),
+	).Error
+}
+
 func (db *DB) Migrate() error {
 	// 先建元数据表
 	if err := db.Exec(`CREATE TABLE IF NOT EXISTS metadata (
@@ -279,14 +317,21 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 	}
 
 	// 诗词表索引
-	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_type ON %s(type_id)", poemTable, poemTable))
-	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_title ON %s(title)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_author ON %s(author_id)", poemTable, poemTable))
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_dynasty ON %s(dynasty_id)", poemTable, poemTable))
-	// 唯一索引含作者：同文不同作者（《全唐诗》重出诗）各自保留。索引名带 _author，避免沿用旧库中不含作者的同名索引
-	db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique_author ON %s(title, content_hash, author_id)", poemTable, poemTable))
-	// 复合索引，用于多体裁随机取词（type_id IN ... 叠加 id 范围查找）
+	// 复合索引，用于按体裁过滤与多体裁随机取词（type_id IN ... 叠加 id 范围查找）
 	db.Exec(fmt.Sprintf("CREATE INDEX IF NOT EXISTS idx_%s_type_id ON %s(type_id, id)", poemTable, poemTable))
+	// 旧库中多余的索引：SQLite 的索引都隐含 rowid，(type_id) 与上面的 (type_id, id) 完全等价；
+	// 标题上的普通索引没有任何查询用到，标题检索走 FTS
+	db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS idx_%s_type", poemTable))
+	db.Exec(fmt.Sprintf("DROP INDEX IF EXISTS idx_%s_title", poemTable))
+
+	// 唯一索引只在导入时用来跳过重复记录，FinalizeImport 会把它连同 content_hash 列一起删掉；
+	// 已收尾的库不能再建，否则服务每次启动都会在只读的发布库上把它重建一遍。
+	// 唯一索引含作者：同文不同作者（《全唐诗》重出诗）各自保留。索引名带 _author，避免沿用旧库中不含作者的同名索引
+	if !db.importFinalized() {
+		db.Exec(fmt.Sprintf("CREATE UNIQUE INDEX IF NOT EXISTS idx_%s_unique_author ON %s(title, content_hash, author_id)", poemTable, poemTable))
+	}
 
 	if err := db.migrateFtsForLang(lang); err != nil {
 		return err
