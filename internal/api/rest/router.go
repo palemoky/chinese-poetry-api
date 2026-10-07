@@ -9,6 +9,7 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/api/rest/handler"
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/logger"
 )
 
 // SetupRouter 初始化 Gin 路由并注册全部接口。
@@ -23,7 +24,7 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 	if err := router.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("invalid trusted proxies: %w", err)
 	}
-	router.Use(gin.Logger())
+	router.Use(middleware.RequestLogger(logger.Default(), "/api/v1/health"))
 	router.Use(gin.Recovery())
 
 	// 跨域中间件
