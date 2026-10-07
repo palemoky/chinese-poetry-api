@@ -1,12 +1,9 @@
 package processor
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -310,7 +307,9 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 		return nil
 	}
 
-	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)))
+	// 整体去重、词题去歧（需要看到全部诗词才能判断）
+	allPoems, removed := finalizePoems(allPoems)
+	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)), zap.Int("duplicates_removed", removed))
 
 	// 写入阶段单独用一个进度条容器
 	progress := mpb.New(
@@ -451,13 +450,15 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		return nil, fmt.Errorf("failed to marshal paragraphs: %w", err)
 	}
 
-	// 计算正文哈希用于去重。
-	// 这里对拼接后的纯文本取哈希（而非 JSON 字节），
-	// 这样原本被合并成一句的正文（"A。B。"）在归一化后
-	// 与正确拆分的版本（["A。","B。"]）能得到相同的哈希值。
-	joinedText := strings.Join(paragraphs, "")
-	hash := sha256.Sum256([]byte(joinedText))
-	contentHash := hex.EncodeToString(hash[:])
+	// 正文哈希：规整（去标点、空白）后计算，供唯一索引与 finalizePoems 去重使用
+	hash := contentHash(paragraphs)
+
+	// 无副标题的词记下首句，同一作者同一词牌有多首时用于区分标题
+	firstLine := ""
+	if (typeInfo.Category == "词" || typeInfo.Category == "宋词") && rhythmic != "" &&
+		(poem.Title == "" || poem.Title == poem.Rhythmic) {
+		firstLine = firstClause(paragraphs)
+	}
 
 	dbPoem := &database.Poem{
 		ID:          poemID,
@@ -466,7 +467,8 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		DynastyID:   &dynastyID,
 		TypeID:      &typeID,
 		Content:     datatypes.JSON(contentJSON),
-		ContentHash: contentHash,
+		ContentHash: hash,
+		FirstLine:   firstLine,
 	}
 
 	return dbPoem, nil
