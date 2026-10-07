@@ -105,6 +105,43 @@ func TestGraphQLLangSelectsVariant(t *testing.T) {
 		}
 	})
 
+	// Author.poems 没有自己的 lang 参数，曾经不论外层查的是哪个变体都返回简体
+	t.Run("nested author poems follow the outer lang", func(t *testing.T) {
+		for lang, want := range map[string]string{"ZH_HANS": "简体标题", "ZH_HANT": "繁體標題"} {
+			var resp struct {
+				Authors struct {
+					Edges []struct {
+						Node struct {
+							Poems struct {
+								Edges []struct {
+									Node struct{ Title string }
+								}
+							}
+						}
+					}
+				}
+				Poem struct {
+					Author struct {
+						Poems struct {
+							Edges []struct {
+								Node struct{ Title string }
+							}
+						}
+					}
+				}
+			}
+			require.NoError(t, c.Post(`query {
+				authors(lang: `+lang+`) { edges { node { poems { edges { node { title } } } } } }
+				poem(id: "1", lang: `+lang+`) { author { poems { edges { node { title } } } } }
+			}`, &resp))
+			require.Len(t, resp.Authors.Edges, 1)
+			require.Len(t, resp.Authors.Edges[0].Node.Poems.Edges, 1)
+			assert.Equal(t, want, resp.Authors.Edges[0].Node.Poems.Edges[0].Node.Title, "authors(lang: %s)", lang)
+			require.Len(t, resp.Poem.Author.Poems.Edges, 1)
+			assert.Equal(t, want, resp.Poem.Author.Poems.Edges[0].Node.Title, "poem(lang: %s)", lang)
+		}
+	})
+
 	t.Run("searchPoems", func(t *testing.T) {
 		var resp struct {
 			SearchPoems struct{ TotalCount int }
