@@ -1,10 +1,13 @@
 package loader
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 )
 
 // DataConfig 对应 datas.json 的结构。
@@ -80,10 +83,23 @@ func NewJSONLoader(configPath string) (*JSONLoader, error) {
 }
 
 // LoadAll 加载全部数据集中的诗词数据。
+//
+// 数据集按 ID 顺序加载，而不是遍历 map：诗词 ID 按加载顺序分配（见 processor），
+// map 的遍历顺序每次运行都不同，此前同一份数据每次发布都会得到一套不同的诗词 ID，
+// 外部保存的 /poems/:id 链接随之失效。
 func (l *JSONLoader) LoadAll() ([]PoemWithMeta, error) {
 	var allPoems []PoemWithMeta
 
-	for key, dataset := range l.config.Datasets {
+	keys := make([]string, 0, len(l.config.Datasets))
+	for key := range l.config.Datasets {
+		keys = append(keys, key)
+	}
+	slices.SortFunc(keys, func(a, b string) int {
+		return cmp.Or(cmp.Compare(l.config.Datasets[a].ID, l.config.Datasets[b].ID), cmp.Compare(a, b))
+	})
+
+	for _, key := range keys {
+		dataset := l.config.Datasets[key]
 		poems, err := l.loadDataset(key, dataset)
 		if err != nil {
 			return nil, fmt.Errorf("failed to load dataset %s: %w", key, err)
@@ -141,10 +157,11 @@ func (l *JSONLoader) loadDataset(key string, dataset DatasetInfo) ([]PoemWithMet
 				continue
 			}
 
+			fileDyn := fileDynasty(entry.Name(), dynasty)
 			for _, poem := range filePoems {
 				poemWithMeta := PoemWithMeta{
 					PoemData:    poem,
-					Dynasty:     dynasty,
+					Dynasty:     fileDyn,
 					DatasetName: dataset.Name,
 					DatasetKey:  key,
 				}
@@ -269,6 +286,7 @@ func inferDynasty(key, name string) string {
 		"mengzi":            "先秦",
 		"caocao":            "魏晋",
 		"nalanxingde":       "清",
+		"youmengying":       "清", // 张潮《幽梦影》
 	}
 
 	if dynasty, ok := dynastyMap[key]; ok {
@@ -287,6 +305,22 @@ func inferDynasty(key, name string) string {
 	}
 
 	return "其他"
+}
+
+// fileDynasty 依据文件名修正数据集级别的朝代。
+//
+// 「全唐诗」目录（数据集 tangsong，「全唐诗全宋诗」）同时收了唐诗与宋诗，
+// 两者只靠文件名区分：poet.tang.N.json 与 poet.song.N.json。按数据集整体
+// 判为唐时，约 25 万首宋诗都被标成了唐诗。
+func fileDynasty(fileName, datasetDynasty string) string {
+	switch {
+	case strings.Contains(fileName, ".song."):
+		return "宋"
+	case strings.Contains(fileName, ".tang."):
+		return "唐"
+	default:
+		return datasetDynasty
+	}
 }
 
 // getDefaultAuthorFromDataset 返回数据集的默认作者，用于数据中缺少 author 字段的情况。

@@ -8,4 +8,7 @@ import (
 type PoemWork struct {
 	loader.PoemWithMeta
 	ID int64
+
+	// SourceTraditional 表示这首诗的源文本以繁体书写，见 Processor.toVariant。
+	SourceTraditional bool
 }

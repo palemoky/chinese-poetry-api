@@ -146,6 +146,21 @@ func (r *CachedRepository) GetOrCreateAuthor(name string, dynastyID int64) (int6
 	return id, nil
 }
 
+// CreateAuthorWithID 以指定 ID 创建作者，并把结果写入缓存，
+// 之后按名字调用 GetOrCreateAuthor 会直接命中这个 ID。
+func (r *CachedRepository) CreateAuthorWithID(id int64, name string, dynastyID int64) (int64, error) {
+	got, err := r.Repository.CreateAuthorWithID(id, name, dynastyID)
+	if err != nil {
+		return 0, err
+	}
+
+	r.authorCacheMu.Lock()
+	r.authorCache[name] = got
+	r.authorCacheMu.Unlock()
+
+	return got, nil
+}
+
 // ClearCache 清空全部缓存。
 func (r *CachedRepository) ClearCache() {
 	r.dynastyCacheMu.Lock()
