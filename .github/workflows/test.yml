@@ -32,6 +32,11 @@ jobs:
         with:
           version: latest
 
+      # Only fails on vulnerabilities reachable from our code, not on every
+      # advisory in the module graph
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest -tags fts5 ./...
+
       - name: Run tests
         run: go test -tags fts5 -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
