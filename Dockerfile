@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.25-alpine AS builder
+FROM golang:1.27-alpine AS builder
 
 WORKDIR /build
 
@@ -24,11 +24,16 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
     -o server ./cmd/server
 
 # Runtime stage
-FROM alpine:latest
+FROM alpine:3.24
 
-RUN apk add --no-cache ca-certificates curl gzip
+# su-exec lets startup.sh drop root after fixing data-volume ownership
+RUN apk add --no-cache ca-certificates curl gzip su-exec \
+    && addgroup -S poetry \
+    && adduser -S -G poetry -H -h /app poetry
 
 WORKDIR /app
+
+RUN mkdir -p data && chown poetry:poetry data
 
 # Copy binary, config, and startup script
 COPY --link --from=builder --chmod=755 /build/server .
@@ -47,4 +52,7 @@ EXPOSE 1279
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT}/api/v1/health || exit 1
 
+# The container starts as root only long enough for startup.sh to chown the
+# data volume (volumes created by older images are root-owned), then it
+# re-executes itself as the unprivileged poetry user.
 CMD ["./startup.sh"]
