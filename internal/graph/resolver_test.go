@@ -557,6 +557,27 @@ func TestAuthorsWithFilters(t *testing.T) {
 		// 测试数据中宋朝没有作者
 		assert.Equal(t, 0, resp.Authors.TotalCount)
 	})
+
+	// 列表中的作者曾经不带朝代，dynasty 一律为 null
+	t.Run("listed authors carry their dynasty", func(t *testing.T) {
+		var resp struct {
+			Authors struct {
+				Edges []struct {
+					Node struct {
+						Name    string
+						Dynasty *struct{ Name string }
+					}
+				}
+			}
+		}
+
+		require.NoError(t, c.Post(`query { authors { edges { node { name dynasty { name } } } } }`, &resp))
+		require.NotEmpty(t, resp.Authors.Edges)
+		for _, e := range resp.Authors.Edges {
+			require.NotNil(t, e.Node.Dynasty, e.Node.Name)
+			assert.Equal(t, "唐", e.Node.Dynasty.Name, e.Node.Name)
+		}
+	})
 }
 
 func TestAuthorDescriptionField(t *testing.T) {
