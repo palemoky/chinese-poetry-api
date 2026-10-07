@@ -2,6 +2,7 @@ package database
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -55,6 +56,36 @@ func OpenReadOnly(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
 		return nil, fmt.Errorf("failed to read database %s: %w", path, err)
 	}
 	return db, nil
+}
+
+// OpenForServing 打开供 API 服务使用的数据库：先补齐结构，再以只读方式提供服务。
+//
+// 服务端只读数据，但启动时仍要跑一次迁移：查询依赖的部分结构（如物化的
+// authors.poem_count 与 counters 计数器）是随版本新增的，用户卷里的老库并不存在，
+// 直接起服务只会在第一个请求上报 "no such column"。迁移需要写权限，
+// 因此用一条临时的读写连接完成后即关闭，之后的所有请求都走只读连接。
+// Migrate 是幂等的，只补缺失的表、列、索引与触发器，不会改动已导入的诗词。
+//
+// 读写模式下 SQLite 会为不存在的路径建一个空库，迁移随后还会把它补成一个
+// 结构完整、却一首诗也没有的库，因此打开前先确认文件存在。
+func OpenForServing(path string, maxOpenConns, maxIdleConns int) (*DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("database not found: %w", err)
+	}
+
+	rw, err := Open(path, 1, 1)
+	if err != nil {
+		return nil, err
+	}
+	migrateErr := rw.Migrate()
+	if err := rw.Close(); err != nil && migrateErr == nil {
+		migrateErr = fmt.Errorf("failed to close migration connection: %w", err)
+	}
+	if migrateErr != nil {
+		return nil, fmt.Errorf("failed to migrate database: %w", migrateErr)
+	}
+
+	return OpenReadOnly(path, maxOpenConns, maxIdleConns)
 }
 
 // commonDSNParams 是读写与只读两种连接共用的参数：

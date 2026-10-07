@@ -70,22 +70,12 @@ func main() {
 		zap.Int("max_idle_conns", cfg.Database.MaxIdleConns),
 	)
 
-	// 按配置的连接池参数打开数据库
-	db, err := database.OpenReadOnly(cfg.Database.Path, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns)
+	// 补齐数据库结构后以只读方式打开，详见 OpenForServing
+	db, err := database.OpenForServing(cfg.Database.Path, cfg.Database.MaxOpenConns, cfg.Database.MaxIdleConns)
 	if err != nil {
 		logger.Fatal("Failed to open database", zap.Error(err))
 	}
 	defer func() { _ = db.Close() }()
-
-	// 补齐数据库结构后再对外提供服务。
-	//
-	// 服务端只读数据，但仍要跑一次迁移：查询依赖的部分结构（如物化的
-	// authors.poem_count 与 counters 计数器）是随版本新增的，老库里并不存在，
-	// 直接起服务只会在第一个请求上报 "no such column"。
-	// Migrate 是幂等的，只补缺失的表、列、索引与触发器，不会改动已导入的诗词。
-	if err := db.Migrate(); err != nil {
-		logger.Fatal("Failed to migrate database", zap.Error(err))
-	}
 
 	// 创建仓储
 	repo := database.NewRepository(db)

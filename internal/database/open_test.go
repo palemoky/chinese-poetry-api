@@ -87,3 +87,35 @@ func TestOpenReadOnlyFailsOnMissingFile(t *testing.T) {
 	_, err := OpenReadOnly(filepath.Join(t.TempDir(), "missing.db"), 1, 1)
 	assert.Error(t, err)
 }
+
+// 用户卷里的老库缺少新版本才有的结构，OpenForServing 必须先补齐再只读打开，
+// 否则只读连接上的迁移会因为写权限直接失败，服务起不来。
+func TestOpenForServingMigratesOldDatabase(t *testing.T) {
+	path := buildReleasedDB(t)
+
+	// 模拟老版本发布的库：没有 counters 计数表
+	old, err := Open(path, 1, 1)
+	require.NoError(t, err)
+	require.NoError(t, old.Exec("DROP TABLE "+countersTable).Error)
+	require.NoError(t, old.Close())
+
+	db, err := OpenForServing(path, 2, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	count, err := NewRepository(db).CountPoems()
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	_, err = NewRepository(db).GetOrCreateDynasty("宋")
+	assert.Error(t, err, "serving connections must still be read-only")
+}
+
+func TestOpenForServingFailsOnMissingFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.db")
+	_, err := OpenForServing(path, 1, 1)
+	require.Error(t, err)
+
+	_, statErr := os.Stat(path)
+	assert.True(t, os.IsNotExist(statErr), "must not create an empty database")
+}
