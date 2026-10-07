@@ -275,14 +275,37 @@ func (p *Processor) attachBios(byIdentity map[string]*plannedAuthor, bios []load
 	return nil
 }
 
-// authorIdentity 返回判定「是否同一位作者」所用的键：归一化并转为简体后的名字，
+// authorIdentity 返回判定「是否同一位作者」所用的键：canonicalAuthorName 求得的名字，
 // 加上原始朝代名。author 须已经过 NormalizeText，空名已替换为「佚名」。
 func authorIdentity(author, dynasty string) (string, error) {
-	name, err := classifier.ToSimplified(author)
+	name, err := canonicalAuthorName(author)
+	if err != nil {
+		return "", err
+	}
+	return name + "\x00" + dynasty, nil
+}
+
+// canonicalAuthorName 把作者名归一到一个在简繁两表中都不会撞名的写法：先转简体，
+// 再经繁体转回简体。
+//
+// 只转简体不够：源数据里同一人常有异体写法，如「朱庆余」与「朱庆馀」、「曹稆孙」与「曹穞孙」。
+// 它们的简体不同，在简体表里是两位作者；转成繁体却都是「朱慶餘」「曹穭孫」，
+// 繁体表按名字 + 朝代只能存一条。两表的作者因此对不上，同一首诗在简体表里出现两次，
+// 在繁体表里只剩一首，诗词 ID 也随之错开。往返一次后，繁体相同的写法归为同一个键。
+func canonicalAuthorName(author string) (string, error) {
+	simplified, err := classifier.ToSimplified(author)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert author %q: %w", author, err)
 	}
-	return name + "\x00" + dynasty, nil
+	traditional, err := classifier.ToTraditional(simplified)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert author %q: %w", author, err)
+	}
+	name, err := classifier.ToSimplified(traditional)
+	if err != nil {
+		return "", fmt.Errorf("failed to convert author %q: %w", author, err)
+	}
+	return name, nil
 }
 
 // Process 以多 worker 并发处理全部诗词，并批量写入数据库。
@@ -532,9 +555,10 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 	if err != nil {
 		return nil, err
 	}
-	authorName, err := classifier.ToSimplified(author)
+	// 去重同样按归一后的名字判断，否则异体写法下的同一首诗在简体表里会保留两份
+	authorName, err := canonicalAuthorName(author)
 	if err != nil {
-		return nil, fmt.Errorf("failed to convert author %q: %w", author, err)
+		return nil, err
 	}
 
 	// 正文哈希：规整（去标点、空白）后计算，供唯一索引与 finalizePoems 去重使用。

@@ -82,6 +82,28 @@ func TestPlanAuthors(t *testing.T) {
 	assert.Equal(t, "陸游", hant[3].name, "the traditional table keeps the first-seen spelling")
 }
 
+// 异体写法的简体不同、繁体相同，必须归为同一位作者：
+// 否则简体表里是两位作者，繁体表里只能存一条，两表的作者与诗词 ID 就会错开。
+func TestPlanAuthorsMergesVariantSpellings(t *testing.T) {
+	for _, pair := range [][2]string{{"朱庆余", "朱庆馀"}, {"曹稆孙", "曹穞孙"}} {
+		a, err := canonicalAuthorName(pair[0])
+		require.NoError(t, err)
+		b, err := canonicalAuthorName(pair[1])
+		require.NoError(t, err)
+		assert.Equal(t, a, b, "%s / %s", pair[0], pair[1])
+	}
+
+	poems := []loader.PoemWithMeta{poemBy("朱庆余", "唐"), poemBy("朱庆馀", "唐"), poemBy("朱庆余", "宋")}
+	scripts, err := detectSourceScripts(poems)
+	require.NoError(t, err)
+	for _, toTrad := range []bool{false, true} {
+		planned, err := (&Processor{convertToTraditional: toTrad}).planAuthors(poems, scripts, nil)
+		require.NoError(t, err)
+		require.Len(t, planned, 2, "one 唐 author for both spellings, plus the 宋 one (traditional: %t)", toTrad)
+		assert.Equal(t, []int64{1, 2}, []int64{planned[0].id, planned[1].id})
+	}
+}
+
 // 繁体源文本生成繁体库时必须原样保留：简转繁会改掉简繁同形的字。
 func TestToVariantKeepsSourceScript(t *testing.T) {
 	hant := &Processor{convertToTraditional: true}
