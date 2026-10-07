@@ -2,9 +2,11 @@ package config
 
 import (
 	"fmt"
+	"net/netip"
 	"os"
 	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -22,6 +24,19 @@ type Config struct {
 type ServerConfig struct {
 	Port int    `mapstructure:"port"`
 	Mode string `mapstructure:"mode"`
+
+	// TrustedProxies 是允许设置 X-Forwarded-For 等转发头的代理地址（IP 或 CIDR）。
+	// 只有来自这些地址的请求，其转发头才会被用来确定客户端 IP；
+	// 其余请求一律以 TCP 对端地址为准，否则任何人改一下请求头就能绕过按 IP 限流。
+	TrustedProxies []string `mapstructure:"trusted_proxies"`
+}
+
+// defaultTrustedProxies 只信任回环与私有网段：覆盖同机反代、Docker 网桥等常见部署，
+// 又不会让直接来自公网的请求伪造客户端 IP。
+// 若前面是公网上的 CDN（如直接接入 Cloudflare），需通过配置显式填写其地址段。
+var defaultTrustedProxies = []string{
+	"127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+	"::1/128", "fc00::/7",
 }
 
 // DatabaseConfig 是数据库配置。
@@ -47,7 +62,11 @@ type RateLimitConfig struct {
 
 // GraphQLConfig 是 GraphQL 相关配置。
 type GraphQLConfig struct {
-	Playground bool `mapstructure:"playground"`
+	Playground    bool `mapstructure:"playground"`
+	Introspection bool `mapstructure:"introspection"`
+	// ComplexityLimit 是单个查询允许的最大复杂度，分页字段的开销按 pageSize 倍数计入，
+	// 用来挡住层层嵌套、一次请求放大成海量查询的写法。
+	ComplexityLimit int `mapstructure:"complexity_limit"`
 }
 
 // SearchConfig 是搜索相关配置。
@@ -93,6 +112,7 @@ func Load(configPath string) (*Config, error) {
 func setDefaults(v *viper.Viper) {
 	v.SetDefault("server.port", 8080)
 	v.SetDefault("server.mode", "release")
+	v.SetDefault("server.trusted_proxies", defaultTrustedProxies)
 	v.SetDefault("download.enabled", true)
 	v.SetDefault("download.release_version", "latest")
 	v.SetDefault("rate_limit.enabled", true)
@@ -101,7 +121,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("rate_limit.by_ip", true)
 	v.SetDefault("graphql.playground", false)
 	v.SetDefault("graphql.introspection", true)
-	v.SetDefault("graphql.complexity_limit", 1000)
+	v.SetDefault("graphql.complexity_limit", 5000)
 	v.SetDefault("search.max_results", 1000)
 	v.SetDefault("search.default_page_size", 20)
 	// 数据库连接池，0 表示自动推算（在 Load 中依据 runtime.NumCPU 确定）
@@ -118,6 +138,10 @@ func bindEnvVars(v *viper.Viper) {
 	}
 	if mode := os.Getenv("GIN_MODE"); mode != "" {
 		v.Set("server.mode", mode)
+	}
+	// 以逗号分隔；设为 none 表示不信任任何代理
+	if proxies, ok := os.LookupEnv("TRUSTED_PROXIES"); ok {
+		v.Set("server.trusted_proxies", parseProxyList(proxies))
 	}
 
 	// 数据目录写死，与 docker-compose 中挂载的卷保持一致
@@ -169,6 +193,16 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("database path cannot be empty")
 	}
 
+	for _, proxy := range c.Server.TrustedProxies {
+		if !isIPOrPrefix(proxy) {
+			return fmt.Errorf("invalid trusted proxy %q: must be an IP or CIDR", proxy)
+		}
+	}
+
+	if c.GraphQL.ComplexityLimit <= 0 {
+		return fmt.Errorf("graphql complexity_limit must be positive")
+	}
+
 	if c.RateLimit.RequestsPerSecond <= 0 {
 		return fmt.Errorf("rate limit requests_per_second must be positive")
 	}
@@ -202,4 +236,28 @@ func (c *Config) applyConnectionPoolDefaults() {
 		// 空闲连接数取最大连接数的一半左右
 		c.Database.MaxIdleConns = max(c.Database.MaxOpenConns/2, 1)
 	}
+}
+
+// parseProxyList 解析逗号分隔的代理列表，"none" 或空串表示不信任任何代理。
+func parseProxyList(s string) []string {
+	s = strings.TrimSpace(s)
+	if s == "" || strings.EqualFold(s, "none") {
+		return []string{}
+	}
+
+	var proxies []string
+	for item := range strings.SplitSeq(s, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			proxies = append(proxies, item)
+		}
+	}
+	return proxies
+}
+
+func isIPOrPrefix(s string) bool {
+	if _, err := netip.ParseAddr(s); err == nil {
+		return true
+	}
+	_, err := netip.ParsePrefix(s)
+	return err == nil
 }

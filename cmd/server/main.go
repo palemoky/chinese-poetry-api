@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -18,13 +17,24 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
-	"github.com/palemoky/chinese-poetry-api/internal/graph/generated"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
 )
 
+// HTTP 服务的超时设置。不设超时时，慢速发送请求头或请求体的连接会一直占着，
+// 少量客户端就能耗尽服务端的连接与协程。
+const (
+	readHeaderTimeout = 5 * time.Second
+	readTimeout       = 15 * time.Second
+	writeTimeout      = 30 * time.Second
+	idleTimeout       = 120 * time.Second
+)
+
 // graphqlHandler 构造 GraphQL 请求的 Gin handler。
-func graphqlHandler(resolver *graph.Resolver) gin.HandlerFunc {
-	h := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
+func graphqlHandler(resolver *graph.Resolver, cfg config.GraphQLConfig) gin.HandlerFunc {
+	h := graph.NewServer(resolver, graph.ServerOptions{
+		ComplexityLimit: cfg.ComplexityLimit,
+		Introspection:   cfg.Introspection,
+	})
 
 	return func(c *gin.Context) {
 		h.ServeHTTP(c.Writer, c.Request)
@@ -84,10 +94,13 @@ func main() {
 	resolver := graph.NewResolver(db, repo)
 
 	// 初始化 Gin 路由
-	router := rest.SetupRouter(cfg, db, repo)
+	router, err := rest.SetupRouter(cfg, db, repo)
+	if err != nil {
+		logger.Fatal("Failed to set up router", zap.Error(err))
+	}
 
 	// 注册 GraphQL 相关路由
-	router.POST("/graphql", graphqlHandler(resolver))
+	router.POST("/graphql", graphqlHandler(resolver, cfg.GraphQL))
 	if cfg.GraphQL.Playground {
 		router.GET("/playground", playgroundHandler())
 		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))
@@ -95,8 +108,12 @@ func main() {
 
 	// 构造 HTTP 服务
 	srv := &http.Server{
-		Addr:    fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler: router,
+		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
+		Handler:           router,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	// 在独立协程中启动服务

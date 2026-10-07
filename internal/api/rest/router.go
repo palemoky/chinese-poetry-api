@@ -1,6 +1,8 @@
 package rest
 
 import (
+	"fmt"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/palemoky/chinese-poetry-api/internal/api/middleware"
@@ -10,11 +12,17 @@ import (
 )
 
 // SetupRouter 初始化 Gin 路由并注册全部接口。
-func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository) *gin.Engine {
+func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository) (*gin.Engine, error) {
 	// 设置 Gin 运行模式
 	gin.SetMode(cfg.Server.Mode)
 
 	router := gin.New()
+
+	// Gin 默认信任所有代理，ClientIP 会直接采信请求方自填的 X-Forwarded-For，
+	// 按 IP 限流因此形同虚设；这里只信任配置中列出的代理
+	if err := router.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("invalid trusted proxies: %w", err)
+	}
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 
@@ -58,5 +66,5 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 		v1.GET("/types/:id", poetryTypeHandler.GetPoetryType)
 	}
 
-	return router
+	return router, nil
 }
