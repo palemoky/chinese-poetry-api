@@ -65,7 +65,7 @@ func (r *Repository) conn() *gorm.DB {
 	if r.ctx == nil {
 		return r.db.DB
 	}
-	return r.db.DB.WithContext(r.ctx)
+	return r.db.WithContext(r.ctx)
 }
 
 // 按本仓储的语言变体拼接表名
