@@ -110,3 +110,33 @@ func TestRouterCachePolicies(t *testing.T) {
 		assert.Equal(t, "no-store", w.Header().Get("Cache-Control"), path)
 	}
 }
+
+// Gin 不会替 GET 路由自动响应 HEAD，此前 curl -I 一律得到 404
+func TestRouterAnswersHead(t *testing.T) {
+	cfg, err := config.Load("")
+	require.NoError(t, err)
+	cfg.Server.Mode = gin.TestMode
+	cfg.RateLimit.Enabled = false
+	cfg.Database.Path = filepath.Join(t.TempDir(), "poetry.db")
+	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
+
+	db, repo := testutil.SetupTestDB(t)
+	router, err := SetupRouter(cfg, db, repo)
+	require.NoError(t, err)
+
+	for path, cacheControl := range map[string]string{
+		"/api/v1/health":    "no-store",
+		"/api/v1/dynasties": "public, max-age=3600",
+		"/api/v1/stats":     "public, max-age=3600",
+	} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodHead, path, nil))
+		assert.Equal(t, http.StatusOK, w.Code, path)
+		assert.Equal(t, cacheControl, w.Header().Get("Cache-Control"), path)
+	}
+
+	// 写操作的方法仍然不接受
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/v1/dynasties", nil))
+	assert.Equal(t, http.StatusNotFound, w.Code)
+}

@@ -2,6 +2,7 @@ package rest
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -33,6 +34,11 @@ func dataVersionETag(path string) string {
 // 正常的查询都在毫秒级，留出足够余量的同时小于 http.Server 的 WriteTimeout。
 const requestTimeout = 10 * time.Second
 
+// readMethods 是只读接口接受的方法。Gin 不会替 GET 路由自动响应 HEAD，
+// 不单独注册的话 HEAD 请求（如 curl -I、部分监控探针）会得到 404。
+// HEAD 的响应体由 net/http 丢弃，响应头与 GET 一致。
+var readMethods = []string{http.MethodGet, http.MethodHead}
+
 // SetupRouter 初始化 Gin 路由并注册全部接口。
 func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository) (*gin.Engine, error) {
 	// 设置 Gin 运行模式
@@ -62,35 +68,35 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 	v1 := router.Group("/api/v1")
 	{
 		// 每次结果都可能不同的接口不缓存
-		v1.GET("/health", middleware.NoStore(), handler.HealthHandler(db))
+		v1.Match(readMethods, "/health", middleware.NoStore(), handler.HealthHandler(db))
 
 		poemHandler := handler.NewPoemHandler(repo)
-		v1.GET("/poems/random", middleware.NoStore(), poemHandler.RandomPoem)
+		v1.Match(readMethods, "/poems/random", middleware.NoStore(), poemHandler.RandomPoem)
 
 		// 其余接口的结果只随数据库变化
 		cached := v1.Group("", middleware.Cache(cacheMaxAge, dataVersionETag(cfg.Database.Path)))
 
 		// 统计数据
-		cached.GET("/stats", handler.StatsHandler(repo))
+		cached.Match(readMethods, "/stats", handler.StatsHandler(repo))
 
 		// 诗词相关
-		cached.GET("/poems", poemHandler.ListPoems)
-		cached.GET("/poems/search", poemHandler.SearchPoems)
+		cached.Match(readMethods, "/poems", poemHandler.ListPoems)
+		cached.Match(readMethods, "/poems/search", poemHandler.SearchPoems)
 
 		// 作者相关
 		authorHandler := handler.NewAuthorHandler(repo)
-		cached.GET("/authors", authorHandler.ListAuthors)
-		cached.GET("/authors/:id", authorHandler.GetAuthor)
+		cached.Match(readMethods, "/authors", authorHandler.ListAuthors)
+		cached.Match(readMethods, "/authors/:id", authorHandler.GetAuthor)
 
 		// 朝代相关
 		dynastyHandler := handler.NewDynastyHandler(repo)
-		cached.GET("/dynasties", dynastyHandler.ListDynasties)
-		cached.GET("/dynasties/:id", dynastyHandler.GetDynasty)
+		cached.Match(readMethods, "/dynasties", dynastyHandler.ListDynasties)
+		cached.Match(readMethods, "/dynasties/:id", dynastyHandler.GetDynasty)
 
 		// 体裁相关
 		poetryTypeHandler := handler.NewPoetryTypeHandler(repo)
-		cached.GET("/types", poetryTypeHandler.ListPoetryTypes)
-		cached.GET("/types/:id", poetryTypeHandler.GetPoetryType)
+		cached.Match(readMethods, "/types", poetryTypeHandler.ListPoetryTypes)
+		cached.Match(readMethods, "/types/:id", poetryTypeHandler.GetPoetryType)
 	}
 
 	return router, nil
