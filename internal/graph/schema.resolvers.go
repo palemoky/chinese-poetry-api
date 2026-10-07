@@ -17,16 +17,15 @@ import (
 
 // Poems is the resolver for the poems field.
 //
-// 注意：该字段没有 lang 参数，而 gqlgen 解析子字段时用的是原始请求上下文，
-// 父查询的 lang 传不到这里，因此这里返回的始终是简体。
-// 给 Author.poems 单独加一个 lang 参数可以解决，但那属于 schema 变更。
+// 该字段没有自己的 lang 参数，语言变体沿用外层查询的，见 langFromContext。
 func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *int, pageSize *int) (*database.PoemConnection, error) {
 	pag, err := parsePagination(page, pageSize)
 	if err != nil {
 		return nil, err
 	}
 
-	poems, totalCount, err := r.Repo.ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
+	repo := r.Repo.WithLang(langFromContext(ctx))
+	poems, totalCount, err := repo.ListAuthorPoems(obj.ID, pag.PageSize, pag.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -36,8 +35,7 @@ func (r *authorResolver) Poems(ctx context.Context, obj *database.Author, page *
 
 // PoemCount is the resolver for the poemCount field.
 //
-// 这里以及 Dynasty、PoetryType 上的计数都走默认的简体表。
-// 与上面的 Author.poems 一样读不到查询的 lang，但此处无妨：
+// 这里以及 Dynasty、PoetryType 上的计数都走默认的简体表：
 // 简繁两套表是同一份语料的互转结果，计数完全一致。
 func (r *authorResolver) PoemCount(ctx context.Context, obj *database.Author) (int, error) {
 	return r.Repo.CountPoemsByAuthor(obj.ID)
