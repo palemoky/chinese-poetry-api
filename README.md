@@ -9,7 +9,7 @@
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 [![License](https://img.shields.io/github/license/palemoky/chinese-poetry-api)](https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE)
 
-基于 Go 语言的高性能中国古诗词 API 服务，支持 REST 和 GraphQL 接口，提供简体/繁体中文、爬虫练习场等功能。
+基于 Go 语言的高性能中国古诗词 API 服务，支持 REST、GraphQL 和 MCP 接口，提供简体/繁体中文、爬虫练习场等功能。
 
 在线版：https://poetry.palemoky.com
 
@@ -23,7 +23,7 @@
 - **海量数据**: 包含唐诗、宋词、元曲等近 40 万首诗词
 - **强大搜索**: 支持全文搜索、标题/内容/作者分类搜索
 - **双语支持**: 同一数据库同时存储简体和繁体中文，通过 `?lang=` 参数切换
-- **多种接口**: REST API 和 GraphQL 双接口支持
+- **多种接口**: 支持 REST API、GraphQL 和 MCP
 - **限流保护**: 内置 IP 限流，防止滥用
 - **容器化**: Docker 镜像开箱即用，支持多架构（amd64/arm64）
 - **智能分类**: 按朝代、作者、诗词类型自动分类
@@ -178,6 +178,26 @@ query {
   }
 }
 ```
+
+### MCP
+
+端点：`http://localhost:1279/mcp`（Streamable HTTP，无状态）
+
+大模型客户端可以通过 [Model Context Protocol](https://modelcontextprotocol.io) 直接查询诗词，例如在 Claude Code 中添加：
+
+```bash
+claude mcp add --transport http poetry http://localhost:1279/mcp
+```
+
+| 工具 | 说明 |
+|------|------|
+| `search_poems` | 按字面子串搜索标题、正文或作者 |
+| `list_poems` | 按作者、朝代、体裁筛选诗词 |
+| `random_poem` | 随机一首诗词，可限定条件或指定包含某字 |
+| `get_author` | 按姓名查询作者小传与作品数 |
+| `get_statistics` | 查询总量及可用的朝代、体裁 |
+
+所有工具都是只读的，并共用服务的 IP 限流。工具一律按名称访问数据，结果中不含 ID，因为 ID 在数据更新后可能变化。搜索是字面匹配而不是语义匹配，名称需要与 `lang` 选择的简繁写法一致。
 
 ## 搜索功能
 

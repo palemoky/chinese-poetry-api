@@ -19,6 +19,7 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
+	"github.com/palemoky/chinese-poetry-api/internal/mcpserver"
 )
 
 // HTTP 服务的超时设置。不设超时时，慢速发送请求头或请求体的连接会一直占着，
@@ -101,6 +102,10 @@ func main() {
 		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))
 	}
 
+	// 注册 MCP 路由。无状态模式只用 POST，但 GET、DELETE 也要交给 SDK 回 405：
+	// 客户端靠它判断服务端不提供事件流，404 会被当成连接失败
+	router.Match([]string{http.MethodPost, http.MethodGet, http.MethodDelete}, "/mcp", gin.WrapH(mcpserver.NewHandler(repo)))
+
 	// 构造 HTTP 服务
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
@@ -117,6 +122,7 @@ func main() {
 			zap.Int("port", cfg.Server.Port),
 			zap.String("rest_api", fmt.Sprintf("http://localhost:%d/api/v1", cfg.Server.Port)),
 			zap.String("graphql", fmt.Sprintf("http://localhost:%d/graphql", cfg.Server.Port)),
+			zap.String("mcp", fmt.Sprintf("http://localhost:%d/mcp", cfg.Server.Port)),
 		)
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

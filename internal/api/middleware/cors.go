@@ -15,7 +15,8 @@ func CORS() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		h := c.Writer.Header()
 		h.Set("Access-Control-Allow-Origin", "*")
-		h.Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cache-Control, X-Requested-With")
+		// Mcp-* 是 MCP 客户端随请求发送的头，少了它们浏览器里的客户端过不了预检
+		h.Set("Access-Control-Allow-Headers", "Content-Type, Accept, Cache-Control, X-Requested-With, Mcp-Protocol-Version, Mcp-Method, Mcp-Name")
 		h.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		// 预检结果缓存一天，避免浏览器每个 GraphQL POST 前都先发一次 OPTIONS
 		h.Set("Access-Control-Max-Age", "86400")
