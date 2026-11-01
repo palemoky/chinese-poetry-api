@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # Cross-compilation helpers (xx-go, xx-apk, xx-verify)
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.9.0 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.10.0 AS xx
 
 # Build stage
 # Runs on the build host's own architecture and cross-compiles for the target.
