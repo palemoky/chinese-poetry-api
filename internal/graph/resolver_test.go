@@ -65,37 +65,20 @@ func createTestData(t *testing.T, repo *database.Repository) (dynastyID, authorI
 	return dynastyID, authorID, poem.ID
 }
 
-func TestPoemQuery(t *testing.T) {
+// 诗词 ID 每次数据发布都可能变化，API 不再暴露：Poem 没有 id 字段，也没有按 ID 查询的 poem。
+func TestPoemHasNoID(t *testing.T) {
 	resolver, repo := setupTestResolver(t)
 	_, _, _ = createTestData(t, repo)
 	c := createTestClient(t, resolver)
 
-	t.Run("get existing poem", func(t *testing.T) {
-		var resp struct {
-			Poem struct {
-				Title   string
-				Content []string
-			}
-		}
+	var resp struct{}
+	err := c.Post(`query { randomPoem { id title } }`, &resp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `Cannot query field \"id\" on type \"Poem\"`)
 
-		err := c.Post(`query { poem(id: "1") { title content } }`, &resp)
-		require.NoError(t, err)
-		assert.Equal(t, "静夜思", resp.Poem.Title)
-		assert.Len(t, resp.Poem.Content, 4)
-	})
-
-	t.Run("get non-existent poem returns error", func(t *testing.T) {
-		var resp struct {
-			Poem *struct {
-				Title string
-			}
-		}
-
-		// 查询不存在的诗词时 GraphQL 会返回错误
-		err := c.Post(`query { poem(id: "999") { title } }`, &resp)
-		// 诗词本就不存在，报错属于预期行为
-		assert.Error(t, err)
-	})
+	err = c.Post(`query { poem(id: "1") { title } }`, &resp)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `Cannot query field \"poem\" on type \"Query\"`)
 }
 
 func TestPoemsQuery(t *testing.T) {
@@ -318,8 +301,8 @@ func TestResolverWithContext(t *testing.T) {
 
 	ctx := context.Background()
 
-	// 直接测试 poem resolver（lang 为 nil 时默认简体）
-	poem, err := resolver.Query().Poem(ctx, "1", nil)
+	// 直接调用 resolver（lang 为 nil 时默认简体），库里只有这一首
+	poem, err := resolver.Query().RandomPoem(ctx, nil, nil, nil)
 	require.NoError(t, err)
 	assert.NotNil(t, poem)
 	assert.Equal(t, "静夜思", poem.Title)

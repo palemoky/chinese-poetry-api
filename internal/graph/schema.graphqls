@@ -9,9 +9,6 @@ enum Lang {
 }
 
 type Query {
-  "Get a single poem by ID"
-  poem(id: ID!, lang: Lang = ZH_HANS): Poem
-
   """
   Get a list of poems with pagination and filters.
 
@@ -83,8 +80,11 @@ enum SearchType {
 }
 
 
+"""
+A poem. It has no ID: poem IDs are assigned on import and may change with every data release, so a
+stored ID could point to another poem later.
+"""
 type Poem {
-  id: ID!
   title: String!
   content: [String!]!
   author: Author
