@@ -236,8 +236,10 @@ func (r *queryResolver) PoemTypes(ctx context.Context, lang *database.Lang) ([]*
 }
 
 // Statistics is the resolver for the statistics field.
+//
+// 计数在简繁两套表中一致，但 poemsByDynasty 里的朝代名要与 lang 一致，所以按 lang 选表。
 func (r *queryResolver) Statistics(ctx context.Context, lang *database.Lang) (*database.Statistics, error) {
-	return r.repo(ctx, database.LangHans).GetStatistics()
+	return r.repo(ctx, parseLang(lang)).GetStatistics()
 }
 
 // PoemsByDynasty is the resolver for the poemsByDynasty field.
