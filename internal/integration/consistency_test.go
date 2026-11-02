@@ -39,7 +39,7 @@ func setupTestEnv(t *testing.T) (*gin.Engine, *client.Client, *database.Reposito
 	cfg := &config.Config{
 		Server: config.ServerConfig{Mode: "test"},
 	}
-	restRouter, err := rest.SetupRouter(cfg, db, repo)
+	restRouter, err := rest.SetupRouter(cfg, db, repo, nil)
 	require.NoError(t, err)
 
 	// 初始化 GraphQL 客户端

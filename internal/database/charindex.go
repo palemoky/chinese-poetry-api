@@ -423,15 +423,15 @@ func (r *Repository) allModeMatches(query string) ([]int64, error) {
 func (r *Repository) pageOfIDs(ids []int64, offset, pageSize int) ([]Poem, int64, error) {
 	start := min(offset, len(ids))
 	end := min(offset+pageSize, len(ids))
-	poems, err := r.poemsByIDs(ids[start:end])
+	poems, err := r.PoemsByIDs(ids[start:end])
 	if err != nil {
 		return nil, 0, err
 	}
 	return poems, int64(len(ids)), nil
 }
 
-// poemsByIDs 按 ids 的顺序取出一批诗词并补齐关联数据，不存在的 id 跳过。
-func (r *Repository) poemsByIDs(ids []int64) ([]Poem, error) {
+// PoemsByIDs 按 ids 的顺序取出一批诗词并补齐关联数据，不存在的 id 跳过。
+func (r *Repository) PoemsByIDs(ids []int64) ([]Poem, error) {
 	poems := []Poem{}
 	if len(ids) == 0 {
 		return poems, nil

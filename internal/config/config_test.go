@@ -59,3 +59,19 @@ func TestLoadConfigFile(t *testing.T) {
 	assert.Equal(t, 5000, cfg.GraphQL.ComplexityLimit)
 	assert.Equal(t, defaultTrustedProxies, cfg.Server.TrustedProxies)
 }
+
+func TestLoadSemanticFromEnv(t *testing.T) {
+	cfg, err := Load("")
+	require.NoError(t, err)
+	assert.Equal(t, "data/poetry-vectors.db", cfg.Semantic.VectorsPath)
+	assert.Empty(t, cfg.Semantic.EmbeddingURL, "off unless configured")
+
+	t.Setenv("VECTORS_PATH", "/data/v.db")
+	t.Setenv("EMBEDDING_API_URL", "http://ollama:11434/v1")
+	t.Setenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+	cfg, err = Load("")
+	require.NoError(t, err)
+	assert.Equal(t, SemanticConfig{
+		VectorsPath: "/data/v.db", EmbeddingURL: "http://ollama:11434/v1", EmbeddingModel: "BAAI/bge-m3",
+	}, cfg.Semantic)
+}

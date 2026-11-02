@@ -31,3 +31,15 @@ graphql:
 search:
   max_results: 1000
   default_page_size: 20
+
+semantic:
+  # Optional semantic search ("poems about missing home", English descriptions, half-remembered
+  # lines). Enabled only when both the vector file and an embedding API are available.
+  # Vector file released next to poetry.db; override with VECTORS_PATH.
+  # vectors_path: data/poetry-vectors.db
+  # OpenAI-compatible embeddings API, e.g. a local Ollama with `ollama pull bge-m3`.
+  # Override with EMBEDDING_API_URL. The API key, if any, is read from EMBEDDING_API_KEY only.
+  # embedding_url: http://localhost:11434/v1
+  # Model name at that API; defaults to the model recorded in the vector file. It must be the same
+  # model, possibly under another name (e.g. BAAI/bge-m3). Override with EMBEDDING_MODEL.
+  # embedding_model: bge-m3

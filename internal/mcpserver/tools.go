@@ -18,6 +18,7 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/api/rest/handler"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 )
 
 const (
@@ -50,8 +51,13 @@ var errInternal = errors.New("internal error, please try again later")
 
 // tools 实现各个 MCP 工具。
 type tools struct {
-	repo *database.Repository
+	repo     *database.Repository
+	searcher *semantic.Searcher
 }
+
+// 语义检索返回的是供模型挑选的候选：评测中让客户端模型从前 30 条里挑，
+// 命中率高于任何服务端排序，再多则收益很小、token 却成倍增加。
+const defaultSemanticLimit = 30
 
 // PoemOutput 是返回给模型的一首诗词。
 type PoemOutput struct {
@@ -77,6 +83,18 @@ type SearchPoemsInput struct {
 	Lang       string `json:"lang,omitempty" jsonschema:"Script: zh-Hans (default, simplified) or zh-Hant (traditional)"`
 	Page       int    `json:"page,omitempty" jsonschema:"Page number starting at 1"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Results per page, default 10, at most 50"`
+}
+
+// SearchByMeaningInput 是 search_poems_by_meaning 的参数。
+type SearchByMeaningInput struct {
+	Query string `json:"query" jsonschema:"What the poem is about or how it goes, in any language, e.g. 送别朋友时的不舍 or a lonely fisherman in the snow"`
+	Lang  string `json:"lang,omitempty" jsonschema:"Script of the returned poems: zh-Hans (default, simplified) or zh-Hant (traditional)"`
+	Limit int    `json:"limit,omitempty" jsonschema:"Number of candidates, default 30, at most 50"`
+}
+
+// CandidatesOutput 是按相关度排序的候选诗词。
+type CandidatesOutput struct {
+	Poems []PoemOutput `json:"poems"`
 }
 
 // ListPoemsInput 是 list_poems 的参数。
@@ -164,8 +182,16 @@ func addTool[In, Out any](s *mcp.Server, t *mcp.Tool, h func(context.Context, In
 	})
 }
 
-func registerTools(s *mcp.Server, repo *database.Repository) {
-	t := &tools{repo: repo}
+func registerTools(s *mcp.Server, repo *database.Repository, searcher *semantic.Searcher) {
+	t := &tools{repo: repo, searcher: searcher}
+
+	if searcher != nil {
+		addTool(s, &mcp.Tool{
+			Name: "search_poems_by_meaning",
+			Description: "Find poems by meaning from a description in any language: a theme, a scene, a feeling or a half-remembered line. " +
+				"Returns candidates ranked by combined meaning and literal match; read them and pick the ones that fit, the best is often not first.",
+		}, t.searchByMeaning)
+	}
 
 	addTool(s, &mcp.Tool{
 		Name: "search_poems",
@@ -234,6 +260,51 @@ func (t *tools) searchPoems(ctx context.Context, in SearchPoemsInput) (PoemsOutp
 
 	hasMore := int64(page)*int64(pageSize) < total
 	return newPoemsOutput(poems, page, pageSize, hasMore)
+}
+
+func (t *tools) searchByMeaning(ctx context.Context, in SearchByMeaningInput) (CandidatesOutput, error) {
+	repo, err := t.repoFor(ctx, in.Lang)
+	if err != nil {
+		return CandidatesOutput{}, err
+	}
+
+	query := strings.TrimSpace(in.Query)
+	if query == "" {
+		return CandidatesOutput{}, inputErrorf("query must not be empty")
+	}
+	limit := in.Limit
+	if limit == 0 {
+		limit = defaultSemanticLimit
+	}
+	if limit < 1 || limit > semantic.MaxLimit {
+		return CandidatesOutput{}, inputErrorf("limit must be between 1 and %d", semantic.MaxLimit)
+	}
+
+	ids, err := t.searcher.Search(ctx, repo, query, limit)
+	switch {
+	case errors.Is(err, semantic.ErrQueryTooLong):
+		return CandidatesOutput{}, inputErrorf("%s", err.Error())
+	case errors.Is(err, semantic.ErrEmbedding):
+		// 不是调用方的错，但要让模型知道该改用 search_poems，而不是反复重试
+		logger.Warn("Semantic search embedding failed", zap.Error(err))
+		return CandidatesOutput{}, inputErrorf("semantic search is temporarily unavailable; use search_poems instead")
+	case err != nil:
+		return CandidatesOutput{}, err
+	}
+
+	poems, err := repo.PoemsByIDs(ids)
+	if err != nil {
+		return CandidatesOutput{}, err
+	}
+	out := CandidatesOutput{Poems: make([]PoemOutput, 0, len(poems))}
+	for i := range poems {
+		p, err := newPoemOutput(&poems[i])
+		if err != nil {
+			return CandidatesOutput{}, err
+		}
+		out.Poems = append(out.Poems, p)
+	}
+	return out, nil
 }
 
 func (t *tools) listPoems(ctx context.Context, in ListPoemsInput) (PoemsOutput, error) {

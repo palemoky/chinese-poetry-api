@@ -13,6 +13,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 )
 
 const (
@@ -32,6 +33,13 @@ words poets actually used: for homesickness try 故乡 or 思归, not 思乡诗.
 Dynasty, author and type names must be written in the script selected by lang. get_statistics lists
 the available dynasties and poetry types.`
 
+// semanticInstructions 在启用语义检索时追加到 instructions 后面。
+const semanticInstructions = `
+
+search_poems_by_meaning finds poems from a description in any language: a theme, a scene, a feeling
+or a half-remembered line. It returns candidates, not answers: the best match is often not first,
+so read them and pick the ones that fit. Use search_poems when you know the exact words.`
+
 // NewHandler 构造 MCP 的 Streamable HTTP handler。
 //
 // 使用无状态模式：工具都是只读查询，不需要会话，服务重启或多实例部署时也不会丢状态。
@@ -40,8 +48,10 @@ the available dynasties and poetry types.`
 // 关闭 DNS 重绑定保护：它拦截的是从回环地址进来、Host 却不是本机的请求，
 // 而本机反代转发的公网请求正是这样，开着会让反代后的服务全部 403。
 // 这里只提供公开数据，没有凭证或本地资源可被重绑定页面利用。
-func NewHandler(repo *database.Repository) http.Handler {
-	server := newServer(repo)
+//
+// searcher 为 nil 时不提供语义检索工具。
+func NewHandler(repo *database.Repository, searcher *semantic.Searcher) http.Handler {
+	server := newServer(repo, searcher)
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return server
 	}, &mcp.StreamableHTTPOptions{
@@ -54,12 +64,16 @@ func NewHandler(repo *database.Repository) http.Handler {
 }
 
 // newServer 创建 MCP 服务并注册全部工具。
-func newServer(repo *database.Repository) *mcp.Server {
+func newServer(repo *database.Repository, searcher *semantic.Searcher) *mcp.Server {
+	text := instructions
+	if searcher != nil {
+		text += semanticInstructions
+	}
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: serverName, Title: "Chinese Poetry", Version: serverVersion},
-		&mcp.ServerOptions{Instructions: instructions},
+		&mcp.ServerOptions{Instructions: text},
 	)
-	registerTools(server, repo)
+	registerTools(server, repo, searcher)
 	return server
 }
 

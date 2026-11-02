@@ -16,6 +16,7 @@ import (
 	"gorm.io/datatypes"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 	"github.com/palemoky/chinese-poetry-api/internal/testutil"
 )
 
@@ -64,8 +65,14 @@ func seedTypedPoem(t *testing.T, repo *database.Repository, typeName string, id 
 // connect 启动 HTTP 服务并用 SDK 的客户端连上，覆盖序列化与 schema 校验的完整链路。
 func connect(t *testing.T, repo *database.Repository) *mcp.ClientSession {
 	t.Helper()
+	return connectWith(t, repo, nil)
+}
 
-	srv := httptest.NewServer(NewHandler(repo))
+// connectWith 与 connect 相同，但启用语义检索。
+func connectWith(t *testing.T, repo *database.Repository, searcher *semantic.Searcher) *mcp.ClientSession {
+	t.Helper()
+
+	srv := httptest.NewServer(NewHandler(repo, searcher))
 	t.Cleanup(srv.Close)
 
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
@@ -348,7 +355,7 @@ func post(t *testing.T, h http.Handler, body string) *httptest.ResponseRecorder 
 
 func TestRejectsBatches(t *testing.T) {
 	_, repo := setupRepo(t)
-	h := NewHandler(repo)
+	h := NewHandler(repo, nil)
 
 	call := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"get_statistics","arguments":{}}}`
 	for name, body := range map[string]string{
@@ -366,14 +373,14 @@ func TestRejectsBatches(t *testing.T) {
 func TestRejectsOversizedBody(t *testing.T) {
 	_, repo := setupRepo(t)
 
-	w := post(t, NewHandler(repo), strings.Repeat(" ", maxBodyBytes+1))
+	w := post(t, NewHandler(repo, nil), strings.Repeat(" ", maxBodyBytes+1))
 	assert.Equal(t, http.StatusRequestEntityTooLarge, w.Code)
 }
 
 // 反代转发过来的请求 Host 是公网域名，SDK 默认的 DNS 重绑定保护会把它们 403。
 func TestAcceptsProxiedHost(t *testing.T) {
 	_, repo := setupRepo(t)
-	h := NewHandler(repo)
+	h := NewHandler(repo, nil)
 
 	body := `{"jsonrpc":"2.0","id":1,"method":"ping"}`
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
@@ -399,6 +406,6 @@ func TestGetIsMethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/mcp", nil)
 	req.Header.Set("Accept", "text/event-stream")
 	w := httptest.NewRecorder()
-	NewHandler(repo).ServeHTTP(w, req)
+	NewHandler(repo, nil).ServeHTTP(w, req)
 	assert.Equal(t, http.StatusMethodNotAllowed, w.Code)
 }

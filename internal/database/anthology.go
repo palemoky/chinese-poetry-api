@@ -32,8 +32,8 @@ func (c *anthologyCache) invalidate() {
 	c.ids = nil
 }
 
-// anthologyIDs 返回收在任一选本里的诗词 id（升序）。旧库补上的列全是 0，结果为空。
-func (r *Repository) anthologyIDs() ([]int64, error) {
+// AnthologyIDs 返回收在任一选本里的诗词 id（升序），供搜索给名篇加分。旧库补上的列全是 0，结果为空。
+func (r *Repository) AnthologyIDs() ([]int64, error) {
 	c := &r.db.anthologies
 	c.mu.Lock()
 	defer c.mu.Unlock()
