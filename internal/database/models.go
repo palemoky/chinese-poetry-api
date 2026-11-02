@@ -66,6 +66,14 @@ type Poem struct {
 	Dynasty     *Dynasty       `gorm:"foreignKey:DynastyID"                                      json:"dynasty,omitempty"`
 	CreatedAt   time.Time      `gorm:"autoCreateTime"                                            json:"created_at"`
 
+	// Anthology 记录这首诗收在哪些选本里，按位取 Anthology* 常量，0 表示都不在。
+	// 搜索用它把名篇排在前面，见 rank.go。
+	Anthology int `gorm:"not null;default:0" json:"-"`
+
+	// SimplifiedContent 仅在导入阶段使用、不入库：规整前的简体正文，
+	// 简繁两次导入得到的都相同，供匹配选本使用，两张表的选本标记因此一致。
+	SimplifiedContent []string `gorm:"-" json:"-"`
+
 	// FirstLine 仅在导入阶段使用、不入库：无副标题的词记下首句，
 	// 供同一作者同一词牌有多首时拼成「词牌·首句」区分标题。
 	FirstLine string `gorm:"-" json:"-"`

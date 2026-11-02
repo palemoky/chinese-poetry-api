@@ -64,6 +64,9 @@ type Processor struct {
 
 	// bios 是作者文件中的小传，导入时挂到对应作者上，见 SetAuthorBios。
 	bios []loader.AuthorBio
+
+	// anthologies 是选本中的诗词，去重后用来标记名篇，见 SetAnthologies。
+	anthologies []anthologyEntry
 }
 
 // SetAuthorBios 设置要随作者一起导入的诗人小传。
@@ -474,6 +477,11 @@ func (p *Processor) batchInserter(resultCh <-chan *database.Poem) error {
 	allPoems, removed := finalizePoems(allPoems)
 	logger.Info("Batch inserter starting", zap.Int("poems", len(allPoems)), zap.Int("duplicates_removed", removed))
 
+	// 去重之后再标记：简繁两次导入保留的诗与简体正文都相同，两表的标记因此一致
+	for bit, n := range markAnthologies(allPoems, p.anthologies) {
+		logger.Info("Anthology matched", zap.String("anthology", database.AnthologyNames[bit]), zap.Int("poems", n))
+	}
+
 	// 写入阶段单独用一个进度条容器
 	progress := mpb.New(
 		mpb.WithWidth(60),
@@ -657,6 +665,8 @@ func (p *Processor) processPoem(work PoemWork) (*database.Poem, error) {
 		ContentHash: hash,
 		FirstLine:   firstLine,
 		AuthorName:  authorName,
+
+		SimplifiedContent: hashSource,
 	}
 
 	return dbPoem, nil

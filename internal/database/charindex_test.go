@@ -3,6 +3,7 @@ package database
 import (
 	"encoding/json"
 	"math/rand/v2"
+	"slices"
 	"strconv"
 	"testing"
 
@@ -127,11 +128,11 @@ func TestCharIndexMatchesLikePath(t *testing.T) {
 		}
 	}
 
-	// 确认上面确实走了索引，而不是两次都退回了 LIKE
+	// 确认上面确实走了索引，而不是两次都退回了 LIKE。索引给出升序的命中集合，搜索结果则按相关度排序
 	ids, ok, err := repo.shortTermMatches("春风", "all")
 	require.NoError(t, err)
 	require.True(t, ok)
-	assert.Equal(t, want["all|春风"].ids, ids)
+	assert.Equal(t, slices.Sorted(slices.Values(want["all|春风"].ids)), ids)
 	assert.NotEmpty(t, ids)
 }
 
@@ -211,8 +212,8 @@ func referenceAllMode(t *testing.T, repo *Repository, query string) []int64 {
 	return ids
 }
 
-// "all" 模式拆成三条查询再合并后，结果必须与原先那条 OR 查询一致，
-// 无论走不走倒排索引。
+// "all" 模式拆成三条查询再合并后，命中集合必须与原先那条 OR 查询一致，
+// 无论走不走倒排索引。顺序由相关度决定，见 rank_test.go。
 func TestAllModeMatchesSingleQuerySemantics(t *testing.T) {
 	db := setupTestDB(t)
 	repo := NewRepository(db)
@@ -225,7 +226,7 @@ func TestAllModeMatchesSingleQuerySemantics(t *testing.T) {
 		for _, q := range queries {
 			want := referenceAllMode(t, repo, q)
 			got := searchAll(t, repo, q, "all")
-			assert.Equal(t, want, got.ids, "%s: q=%q", phase, q)
+			assert.Equal(t, want, slices.Sorted(slices.Values(got.ids)), "%s: q=%q", phase, q)
 			assert.EqualValues(t, len(want), got.total, "%s: q=%q", phase, q)
 		}
 	}

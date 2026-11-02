@@ -21,6 +21,8 @@ var (
 	workers    int
 	configPath string
 	minPoems   int64
+	// minAnthology 是收在选本里的诗词数下限，当前数据约 900 首
+	minAnthology int64
 )
 
 func main() {
@@ -40,6 +42,7 @@ func main() {
 	rootCmd.Flags().IntVarP(&workers, "workers", "w", 0, "Number of concurrent workers (0 = number of CPUs)")
 	rootCmd.Flags().StringVarP(&configPath, "config", "c", "", "Path to datas.json config file (default: <input>/loader/datas.json)")
 	rootCmd.PersistentFlags().Int64Var(&minPoems, "min-poems", 300000, "Fail verification when either variant has fewer poems")
+	rootCmd.PersistentFlags().Int64Var(&minAnthology, "min-anthology", 800, "Fail verification when fewer poems are tagged with an anthology")
 
 	rootCmd.AddCommand(&cobra.Command{
 		Use:   "verify <database>",
@@ -83,9 +86,15 @@ func run(cmd *cobra.Command, args []string) error {
 	}
 	logger.Info("Loaded author bios", zap.Int("count", len(bios)))
 
+	anthologies, err := jsonLoader.LoadAnthologies()
+	if err != nil {
+		return fmt.Errorf("failed to load anthologies: %w", err)
+	}
+	logger.Info("Loaded anthologies", zap.Int("poems", len(anthologies)))
+
 	// 生成同时包含简繁两套表的统一数据库
 	logger.Info("Processing unified database")
-	if err := processUnifiedDatabase(outputDB, poems, bios, workers); err != nil {
+	if err := processUnifiedDatabase(outputDB, poems, bios, anthologies, workers); err != nil {
 		return fmt.Errorf("failed to process database: %w", err)
 	}
 
@@ -109,7 +118,7 @@ func verifyDatabase(dbPath string) error {
 	}
 	defer func() { _ = db.Close() }()
 
-	report, err := db.VerifyRelease(minPoems)
+	report, err := db.VerifyRelease(minPoems, minAnthology)
 	if err != nil {
 		return fmt.Errorf("failed to verify database: %w", err)
 	}
@@ -159,7 +168,7 @@ func appendFile(path, content string) error {
 }
 
 // processUnifiedDatabase 重建数据库，并依次导入简体与繁体两套数据。
-func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []loader.AuthorBio, workers int) error {
+func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []loader.AuthorBio, anthologies []loader.AnthologyPoem, workers int) error {
 	// 删除已存在的数据库文件
 	if err := os.Remove(dbPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove existing database: %w", err)
@@ -183,6 +192,9 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []l
 	repoSimp := database.NewRepositoryWithLang(db, database.LangHans)
 	procSimp := processor.NewProcessor(repoSimp, workers, false)
 	procSimp.SetAuthorBios(bios)
+	if err := procSimp.SetAnthologies(anthologies); err != nil {
+		return err
+	}
 	if err := procSimp.Process(poems); err != nil {
 		return fmt.Errorf("failed to process simplified poems: %w", err)
 	}
@@ -192,6 +204,9 @@ func processUnifiedDatabase(dbPath string, poems []loader.PoemWithMeta, bios []l
 	repoTrad := database.NewRepositoryWithLang(db, database.LangHant)
 	procTrad := processor.NewProcessor(repoTrad, workers, true)
 	procTrad.SetAuthorBios(bios)
+	if err := procTrad.SetAnthologies(anthologies); err != nil {
+		return err
+	}
 	if err := procTrad.Process(poems); err != nil {
 		return fmt.Errorf("failed to process traditional poems: %w", err)
 	}

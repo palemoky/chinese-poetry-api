@@ -96,7 +96,7 @@ curl "http://localhost:1279/api/v1/poems?dynasty_id=1&type_id=11&type_id=12" # �
 # 游标翻页：把上一页 pagination.next_cursor 的值回传给 after。
 curl "http://localhost:1279/api/v1/poems?page_size=50&after=cG9lbTo0MjA"
 
-# 搜索诗词
+# 搜索诗词，结果按相关度排序
 curl "http://localhost:1279/api/v1/poems/search?q=静夜思"
 
 # 随机诗词
@@ -191,7 +191,7 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
 
 | 工具 | 说明 |
 |------|------|
-| `search_poems` | 按字面子串搜索标题、正文或作者 |
+| `search_poems` | 按字面子串搜索标题、正文或作者，结果按相关度排序 |
 | `list_poems` | 按作者、朝代、体裁筛选诗词 |
 | `random_poem` | 随机一首诗词，可限定条件或指定包含某字 |
 | `get_author` | 按姓名查询作者小传与作品数 |
@@ -207,6 +207,8 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
 |  `title`  |     标题搜索     |    `?q=静夜思&type=title`    |
 | `content` |     内容搜索     | `?q=床前明月光&type=content` |
 | `author`  |     作者搜索     |    `?q=李白&type=author`     |
+
+搜索按子串匹配，结果按相关度排序：标题与查询完全相同的排在最前，搜词牌名（如“声声慢”）时“声声慢·寻寻觅觅”也算完全相同；其次是标题包含、作者名、正文包含。收在《唐诗三百首》《千家诗》《宋词三百首》里的名篇另外加分，所以搜“声声慢”时李清照那首排在第一。分数相同时按 ID 排序，`content` 类型的结果都按 ID 排序。
 
 ## 数据集
 

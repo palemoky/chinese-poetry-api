@@ -430,57 +430,63 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 	if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
 		return nil, 0, err
 	} else if ok {
-		return r.pageOfIDs(ids, offset, pageSize)
+		return r.rankedPage(query, searchType, ids, offset, pageSize)
 	}
 
-	// "all" 不能像其他模式那样一条 SQL 搞定：标题、正文与作者名之间的 OR 跨了
-	// FTS 表与作者表，SQLite 无法把它下推给 FTS5，整条查询退化为全表扫描
-	// （实测 3 字查询 0.49s，而单搜正文仅 6ms）。拆成三条各自走索引的查询再合并。
-	if searchType != "title" && searchType != "content" && searchType != "author" {
-		ids, err := r.allModeMatches(query)
-		if err != nil {
-			return nil, 0, err
-		}
-		return r.pageOfIDs(ids, offset, pageSize)
+	if searchType == "content" {
+		// 只搜正文时所有命中同分，按 ID 顺序直接在 SQL 里分页，不必取出完整列表
+		return r.searchContent(query, offset, pageSize)
 	}
 
-	poemTable := r.poemsTable()
-	authorTable := r.authorsTable()
-	ftsTable := r.poemsFtsTable()
-	ftsJoin := "JOIN " + ftsTable + " ON " + ftsTable + ".rowid = " + poemTable + ".id"
+	// 排好的列表已在缓存里时，不必再求一遍命中集合
+	if ranked, hit := r.db.idLists.get(r.rankedKey(query, searchType)); hit {
+		return r.pageOfIDs(ranked, offset, pageSize)
+	}
 
-	authorJoin := "JOIN " + authorTable + " ON " + poemTable + ".author_id = " + authorTable + ".id"
-
-	// 每种搜索模式只在「附加哪些 join 与 where」上有区别，把这部分抽成一个函数，
-	// 计数与取数就能共用同一份条件，不必两处各写一遍、各自漏改。
-	var applyMatch func(*gorm.DB) *gorm.DB
+	var ids []int64
+	var err error
 	switch searchType {
 	case "title":
-		// 仅搜标题，走 FTS trigram 索引
-		applyMatch = func(q *gorm.DB) *gorm.DB {
-			cond, arg := substringMatch(ftsTable+".title", query)
-			return q.Joins(ftsJoin).Where(cond, arg)
-		}
-
-	case "content":
-		// 仅搜正文，走 FTS trigram 索引
-		applyMatch = func(q *gorm.DB) *gorm.DB {
-			cond, arg := substringMatch(ftsTable+".content_text", query)
-			return q.Joins(ftsJoin).Where(cond, arg)
-		}
-
+		ids, err = r.ftsColumnMatches("title", query)
 	case "author":
-		// 仅搜作者名。作者表很小，普通 LIKE 足够快
-		applyMatch = func(q *gorm.DB) *gorm.DB {
-			cond, arg := substringMatch(authorTable+".name", query)
-			return q.Joins(authorJoin).Where(cond, arg)
-		}
+		// 作者表很小，普通 LIKE 足够快
+		ids, err = r.poemIDsByAuthorName(query)
+	default:
+		// "all" 不能一条 SQL 搞定：标题、正文与作者名之间的 OR 跨了 FTS 表与作者表，
+		// SQLite 无法把它下推给 FTS5，整条查询退化为全表扫描
+		// （实测 3 字查询 0.49s，而单搜正文仅 6ms）。拆成三条各自走索引的查询再合并。
+		ids, err = r.allModeMatches(query)
+	}
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.rankedPage(query, searchType, ids, offset, pageSize)
+}
 
+// rankedPage 按相关度重排完整命中列表 ids（升序），再取其中一页。
+func (r *Repository) rankedPage(query, searchType string, ids []int64, offset, pageSize int) ([]Poem, int64, error) {
+	if searchType != "content" {
+		var err error
+		if ids, err = r.rankedMatches(query, searchType, ids); err != nil {
+			return nil, 0, err
+		}
+	}
+	return r.pageOfIDs(ids, offset, pageSize)
+}
+
+// searchContent 是只搜正文的长查询路径：走 FTS trigram 索引，按 ID 升序分页。
+func (r *Repository) searchContent(query string, offset, pageSize int) ([]Poem, int64, error) {
+	poemTable := r.poemsTable()
+	ftsTable := r.poemsFtsTable()
+	ftsJoin := "JOIN " + ftsTable + " ON " + ftsTable + ".rowid = " + poemTable + ".id"
+	applyMatch := func(q *gorm.DB) *gorm.DB {
+		cond, arg := substringMatch(ftsTable+".content_text", query)
+		return q.Joins(ftsJoin).Where(cond, arg)
 	}
 
 	// 计数与页码无关，且要把同一个 FTS join 再跑一遍，代价与取数相当，故走缓存。
 	// 键含用户输入的关键词，缓存的条目数上限见 countCacheMaxEntries。
-	key := newCountKey("search", r.lang).add(searchType).add(query).String()
+	key := newCountKey("search", r.lang).add("content").add(query).String()
 	total, err := r.db.counts.getOrLoad(key, func() (int64, error) {
 		var n int64
 		err := applyMatch(r.conn().Table(poemTable)).Count(&n).Error
