@@ -38,6 +38,7 @@
 - **docker**: 替换新数据库前清除残留的 WAL 文件 ([b4f5dc9](https://github.com/palemoky/chinese-poetry-api/commit/b4f5dc949d6263b81c423f1bdd7fbb410155bf0c))
 - **processor**: 作者姓名的异体写法视为同一作者 ([232acac](https://github.com/palemoky/chinese-poetry-api/commit/232acac93d196e018484808db978730aa9dc5f6c))
 - **graphql**: 作者列表正确加载每位作者的朝代 ([846b691](https://github.com/palemoky/chinese-poetry-api/commit/846b6916d8639aa46a23b8b5c5b7dec729286e85))
+- **config**: 配置了 `EMBEDDING_API_URL` 后不再丢失向量文件的默认路径，Docker 中能正常开启语义检索 ([1655471](https://github.com/palemoky/chinese-poetry-api/commit/16554713b415acfb0e558ee53eef671683e9dbfb))
 
 ### ⚡ 性能优化
 
