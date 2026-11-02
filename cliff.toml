@@ -4,7 +4,8 @@
 # 中文描述：在提交末尾加 `Changelog: <中文>` 尾注，生成时优先使用；没有则用英文标题
 #
 # 常用命令：
-#   make release                         # 发版：新版本插入 CHANGELOG.md 顶部（历史不会被覆盖），确认后提交并打 tag
+#   make release                         # 发版第一步：新版本插入 CHANGELOG.md 顶部，提交到 changelog 分支并开 PR
+#   make release-tag                     # 发版第二步：PR 合并后在 origin/main 上打 tag 并推送
 #   make changelog                       # 预览下个版本的内容
 #   git cliff --unreleased               # 预览尚未发布的变更
 #   git cliff --latest --strip header    # 只输出最新版本的变更
