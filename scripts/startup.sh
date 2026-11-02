@@ -166,5 +166,58 @@ else
     download_database || exit 1
 fi
 
+# Semantic search (optional) needs the vector file released with the database.
+# It is about 200MB, so only fetch it when an embedding API is configured.
+VECTORS_PATH="${VECTORS_PATH:-${DATA_DIR}/poetry-vectors.db}"
+VECTORS_ARCHIVE="poetry-vectors.db.zst"
+VECTORS_CHECKSUM_FILE="${VECTORS_PATH}.sha256"
+
+# Download the vector file matching the installed database. Failures only
+# disable semantic search; the server still starts.
+download_vectors() {
+    expected=$(checksum_of "${VECTORS_ARCHIVE}" "${CHECKSUM_FILE}")
+    if [ -z "$expected" ]; then
+        echo "No vector file in this release; semantic search stays off"
+        return 0
+    fi
+    if [ -f "$VECTORS_PATH" ] && [ "$(cat "$VECTORS_CHECKSUM_FILE" 2>/dev/null)" = "$expected" ]; then
+        echo "✓ Vector file is up to date"
+        return 0
+    fi
+    if ! command -v zstd >/dev/null 2>&1; then
+        echo "Warning: zstd is not installed, cannot unpack the vector file"
+        return 1
+    fi
+
+    tmp_archive="${VECTORS_PATH}.zst.tmp"
+    echo "Downloading ${VECTORS_ARCHIVE}..."
+    if ! curl -Lfo "${tmp_archive}" "${GITHUB_RELEASE_URL}/${VECTORS_ARCHIVE}"; then
+        echo "Warning: Failed to download the vector file"
+        rm -f "${tmp_archive}"
+        return 1
+    fi
+    actual=$(sha256sum "${tmp_archive}" | awk '{print $1}')
+    if [ "$actual" != "$expected" ]; then
+        echo "Warning: Vector file checksum mismatch"
+        rm -f "${tmp_archive}"
+        return 1
+    fi
+    if ! zstd -d --long=27 -q -c "${tmp_archive}" > "${VECTORS_PATH}.tmp"; then
+        echo "Warning: Failed to extract the vector file"
+        rm -f "${tmp_archive}" "${VECTORS_PATH}.tmp"
+        return 1
+    fi
+    mv -f "${VECTORS_PATH}.tmp" "${VECTORS_PATH}"
+    echo "$expected" > "${VECTORS_CHECKSUM_FILE}"
+    rm -f "${tmp_archive}"
+    echo "✓ Vector file ready: ${VECTORS_PATH}"
+}
+
+# The checksums file is only replaced after a verified database install, so the
+# vector file it points to always belongs to the database in place.
+if [ -n "${EMBEDDING_API_URL}" ] && [ -f "$CHECKSUM_FILE" ]; then
+    download_vectors || echo "Semantic search will stay off until the vector file is available"
+fi
+
 echo "Starting API server..."
 exec ./server

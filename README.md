@@ -230,7 +230,9 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
 
 启用需要两样东西，缺一样时服务照常运行，只是不提供这项功能：
 
-1. **向量文件** `poetry-vectors.db`：放在主库旁边（默认 `data/poetry-vectors.db`，可用 `VECTORS_PATH` 指定），必须与主库是同一次发布的，否则服务拒绝加载。目前还没有随数据发布，可以自己生成，在 Apple M 系列芯片上约需 2 小时，中断后可以续跑：
+1. **向量文件** `poetry-vectors.db`：随数据一起发布为 `poetry-vectors.db.zst`（约 200MB），放在主库旁边（默认 `data/poetry-vectors.db`，可用 `VECTORS_PATH` 指定）。它必须与主库来自同一次发布，否则服务拒绝加载。用 Docker 时不必手动下载：配置了 `EMBEDDING_API_URL` 后，容器启动时会下载与数据库配套的向量文件，并随数据库一起更新。
+
+   也可以自己生成，在 Apple M 系列芯片上约需 2 小时，中断后可以续跑：
 
    ```bash
    ollama pull bge-m3
@@ -251,6 +253,8 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
      --db data/poetry.db --vectors data/poetry-vectors.db \
      --api https://api.siliconflow.cn/v1 --model BAAI/bge-m3 --api-key-env EMBEDDING_API_KEY
    ```
+
+发布数据时，CI 会复用上一版的向量，只把改动过的诗交给硅基流动嵌入，需要在仓库中配置 `SILICONFLOW_API_KEY`；未配置时只发布数据库。
 
 启用后，服务启动时多花约 2 秒载入向量，常驻内存增加约 350MB。每次检索约 30ms，另加一次嵌入请求的耗时。REST 接口 `/api/v1/poems/semantic` 与 GraphQL 查询 `semanticSearchPoems(query, lang, limit)` 都不分页，用 `limit` 指定条数（默认 20，最多 50）。未启用时 REST 返回 503、GraphQL 返回错误；嵌入接口出错时 REST 返回 502。
 
