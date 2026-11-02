@@ -60,6 +60,28 @@ func TestLoadConfigFile(t *testing.T) {
 	assert.Equal(t, defaultTrustedProxies, cfg.Server.TrustedProxies)
 }
 
+// config.yaml 的 semantic 段全是注释，解析为 null。此前设了 EMBEDDING_API_URL 后
+// vectors_path 的默认值会丢失，Docker 里配置了嵌入接口也开不了语义检索。
+func TestLoadConfigFileKeepsDefaultsInNullSection(t *testing.T) {
+	t.Setenv("EMBEDDING_API_URL", "http://ollama:11434/v1")
+	cfg, err := Load("../../config.yaml")
+	require.NoError(t, err)
+	assert.Equal(t, SemanticConfig{
+		VectorsPath: "data/poetry-vectors.db", EmbeddingURL: "http://ollama:11434/v1",
+	}, cfg.Semantic)
+
+	// 嵌套的 null 也一样处理
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("server:\n  port: 9000\n  trusted_proxies:\nsemantic:\n"), 0o600))
+	t.Setenv("PORT", "")
+	t.Setenv("TRUSTED_PROXIES", "10.0.0.1")
+	cfg, err = Load(path)
+	require.NoError(t, err)
+	assert.Equal(t, 9000, cfg.Server.Port)
+	assert.Equal(t, []string{"10.0.0.1"}, cfg.Server.TrustedProxies)
+	assert.Equal(t, "data/poetry-vectors.db", cfg.Semantic.VectorsPath)
+}
+
 func TestLoadSemanticFromEnv(t *testing.T) {
 	cfg, err := Load("")
 	require.NoError(t, err)
