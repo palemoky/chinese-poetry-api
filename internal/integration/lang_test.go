@@ -158,6 +158,32 @@ func TestGraphQLLangSelectsVariant(t *testing.T) {
 		err := c.Post(`query { poems(lang: ZH_HANZ) { totalCount } }`, &resp)
 		require.Error(t, err)
 	})
+
+	// statistics 曾经忽略 lang，繁体请求里的朝代名也是简体
+	t.Run("statistics", func(t *testing.T) {
+		for lang, names := range map[string][2]string{"ZH_HANS": {"两汉", "兩漢"}, "ZH_HANT": {"兩漢", "两汉"}} {
+			want, other := names[0], names[1]
+			var resp struct {
+				Statistics struct {
+					TotalPoems     int
+					PoemsByDynasty []struct {
+						Dynasty struct{ Name string }
+						Count   int
+					}
+				}
+			}
+			require.NoError(t, c.Post(`query { statistics(lang: `+lang+`) {
+				totalPoems poemsByDynasty { dynasty { name } count }
+			} }`, &resp))
+			assert.Equal(t, 1, resp.Statistics.TotalPoems, "lang: %s", lang)
+			var got []string
+			for _, ds := range resp.Statistics.PoemsByDynasty {
+				got = append(got, ds.Dynasty.Name)
+			}
+			assert.Contains(t, got, want, "lang: %s", lang)
+			assert.NotContains(t, got, other, "lang: %s", lang)
+		}
+	})
 }
 
 // TestSearchPoemsCursors 覆盖 searchPoems 的 connection——它曾是手写构造的：
