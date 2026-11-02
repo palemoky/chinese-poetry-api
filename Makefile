@@ -1,4 +1,4 @@
-.PHONY: help changelog build build-processor build-server clean test run-server run-processor process-data docker-build docker-run graphql-gen deps tidy fmt gofumpt lint install dev
+.PHONY: help changelog release release-tag build build-processor build-server clean test run-server run-processor process-data docker-build docker-run graphql-gen deps tidy fmt gofumpt lint install dev
 
 # 默认目标
 .DEFAULT_GOAL := help
@@ -70,7 +70,8 @@ help:
 	@echo "  make info               - 显示系统信息"
 	@echo ""
 	@echo "$(GREEN)发布命令:$(NC)"
-	@echo "  make release            - 更新 CHANGELOG，创建并推送版本标签"
+	@echo "  make release            - 生成 CHANGELOG，推送 changelog 分支并开 PR"
+	@echo "  make release-tag        - release PR 合并后打 tag 并推送（可选 VERSION=vX.Y.Z）"
 
 ## info: 显示系统信息
 info:
@@ -310,91 +311,10 @@ db-stats:
 		echo "请先运行: make process-data"; \
 	fi
 
-## release: 创建并推送版本标签
-release:  ## Update CHANGELOG, create and push version tag
-	@if ! command -v git-cliff >/dev/null; then \
-		echo "$(RED)Error: git-cliff not found, install it with: brew install git-cliff$(NC)"; \
-		exit 1; \
-	fi; \
-	if [ -n "$$(git status --porcelain)" ]; then \
-		echo "$(RED)Error: Working directory has uncommitted changes$(NC)"; \
-		echo "$(YELLOW)Please commit or stash your changes before releasing$(NC)"; \
-		exit 1; \
-	fi; \
-	LATEST_TAG=$$(git describe --tags --abbrev=0 2>/dev/null || echo "none"); \
-	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
-	echo "$(BLUE)         Release New Version$(NC)"; \
-	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
-	echo "$(CYAN)Current latest tag: $(GREEN)$$LATEST_TAG$(NC)"; \
-	echo "$(BLUE)════════════════════════════════════════$(NC)"; \
-	printf "$(YELLOW)Enter new version: $(NC)"; \
-	read -r VERSION; \
-	if [ -z "$$VERSION" ]; then \
-		echo "$(RED)Error: Version cannot be empty$(NC)"; \
-		exit 1; \
-	fi; \
-	if ! echo "$$VERSION" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$$'; then \
-		echo "$(RED)Error: Invalid version format '$$VERSION'$(NC)"; \
-		echo "$(YELLOW)Expected format: v1.0.0$(NC)"; \
-		exit 1; \
-	fi; \
-	if git tag | grep -q "^$$VERSION$$"; then \
-		echo "$(RED)Error: Tag $$VERSION already exists$(NC)"; \
-		exit 1; \
-	fi; \
-	echo ""; \
-	echo "$(YELLOW)About to create and push tag: $(GREEN)$$VERSION$(NC)"; \
-	printf "$(YELLOW)Continue? [y/N] $(NC)"; \
-	read -r CONFIRM; \
-	if [ "$$CONFIRM" != "y" ] && [ "$$CONFIRM" != "Y" ]; then \
-		echo "$(YELLOW)Aborted$(NC)"; \
-		exit 1; \
-	fi; \
-	if [ "$$LATEST_TAG" != "none" ]; then \
-		NEW_VER=$$(echo $$VERSION | sed 's/^v//'); \
-		CUR_VER=$$(echo $$LATEST_TAG | sed 's/^v//'); \
-		NEW_MAJOR=$$(echo $$NEW_VER | cut -d. -f1); \
-		NEW_MINOR=$$(echo $$NEW_VER | cut -d. -f2); \
-		NEW_PATCH=$$(echo $$NEW_VER | cut -d. -f3); \
-		CUR_MAJOR=$$(echo $$CUR_VER | cut -d. -f1); \
-		CUR_MINOR=$$(echo $$CUR_VER | cut -d. -f2); \
-		CUR_PATCH=$$(echo $$CUR_VER | cut -d. -f3); \
-		if [ $$NEW_MAJOR -lt $$CUR_MAJOR ] || \
-		   ([ $$NEW_MAJOR -eq $$CUR_MAJOR ] && [ $$NEW_MINOR -lt $$CUR_MINOR ]) || \
-		   ([ $$NEW_MAJOR -eq $$CUR_MAJOR ] && [ $$NEW_MINOR -eq $$CUR_MINOR ] && [ $$NEW_PATCH -le $$CUR_PATCH ]); then \
-			echo "$(RED)Error: New version $$VERSION must be greater than $$LATEST_TAG$(NC)"; \
-			exit 1; \
-		fi; \
-	fi; \
-	echo "$(BLUE)Updating CHANGELOG.md...$(NC)"; \
-	git cliff --unreleased --tag $$VERSION --prepend CHANGELOG.md 2>/dev/null || exit 1; \
-	if git diff --quiet CHANGELOG.md; then \
-		echo "$(YELLOW)⚠ No user-facing changes since $$LATEST_TAG, CHANGELOG.md unchanged$(NC)"; \
-	else \
-		git --no-pager diff --stat CHANGELOG.md; \
-		echo "$(YELLOW)CHANGELOG.md updated. Review/edit it now (e.g. translate English entries), then press Enter to continue, or Ctrl-C to abort.$(NC)"; \
-		read -r _; \
-		git add CHANGELOG.md; \
-		git commit -m "docs(changelog): release $$VERSION" || exit 1; \
-		echo "$(BLUE)Pushing changelog commit...$(NC)"; \
-		git push origin HEAD || exit 1; \
-		echo "$(GREEN)✓ CHANGELOG.md committed$(NC)"; \
-	fi; \
-	if git config user.signingkey >/dev/null 2>&1 && command -v gpg >/dev/null 2>&1; then \
-		echo "$(BLUE)Creating GPG signed tag $$VERSION...$(NC)"; \
-		if git tag -s $$VERSION -m "Release $$VERSION" 2>/dev/null; then \
-			echo "$(GREEN)✓ Signed tag $$VERSION created (Verified ✓)$(NC)"; \
-		else \
-			echo "$(YELLOW)⚠ GPG signing failed, using regular tag...$(NC)"; \
-			git tag -a $$VERSION -m "Release $$VERSION"; \
-			echo "$(GREEN)✓ Tag $$VERSION created$(NC)"; \
-		fi \
-	else \
-		echo "$(BLUE)Creating tag $$VERSION...$(NC)"; \
-		git tag -a $$VERSION -m "Release $$VERSION"; \
-		echo "$(GREEN)✓ Tag $$VERSION created$(NC)"; \
-		echo "$(YELLOW)💡 Tip: Configure GPG key to show Verified badge$(NC)"; \
-	fi; \
-	echo "$(BLUE)Pushing tag to remote...$(NC)"; \
-	git push origin $$VERSION; \
-	echo "$(GREEN)✓ Release $$VERSION completed$(NC)"
+## release: 生成 CHANGELOG 并在 changelog 分支上开 PR（main 受保护，不能直接推送）
+release:
+	@./scripts/release.sh prepare
+
+## release-tag: release PR 合并后，在 origin/main 上打 tag 并推送（版本号默认取 CHANGELOG 顶部）
+release-tag:
+	@./scripts/release.sh tag $(VERSION)
