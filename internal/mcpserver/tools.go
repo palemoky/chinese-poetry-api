@@ -80,6 +80,7 @@ type PoemsOutput struct {
 type SearchPoemsInput struct {
 	Query      string `json:"query" jsonschema:"Literal text to find, e.g. 明月 or 静夜思"`
 	SearchType string `json:"search_type,omitempty" jsonschema:"Field to search: all (default), title, content or author"`
+	Dynasty    string `json:"dynasty,omitempty" jsonschema:"Only return poems of this dynasty, e.g. 唐"`
 	Lang       string `json:"lang,omitempty" jsonschema:"Script: zh-Hans (default, simplified) or zh-Hant (traditional)"`
 	Page       int    `json:"page,omitempty" jsonschema:"Page number starting at 1"`
 	PageSize   int    `json:"page_size,omitempty" jsonschema:"Results per page, default 10, at most 50"`
@@ -253,7 +254,12 @@ func (t *tools) searchPoems(ctx context.Context, in SearchPoemsInput) (PoemsOutp
 		return PoemsOutput{}, err
 	}
 
-	poems, total, err := repo.SearchPoems(query, searchType, page, pageSize)
+	dynastyID, err := resolveDynasty(repo, in.Dynasty)
+	if err != nil {
+		return PoemsOutput{}, err
+	}
+
+	poems, total, err := repo.SearchPoemsInDynasty(query, searchType, dynastyID, page, pageSize)
 	if err != nil {
 		return PoemsOutput{}, err
 	}

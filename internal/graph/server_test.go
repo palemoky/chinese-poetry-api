@@ -44,7 +44,7 @@ func TestServerAllowsOrdinaryPagedQuery(t *testing.T) {
 	}
 	err := c.Post(`{ poems(pageSize: 100) {
 	  totalCount
-	  edges { node { id title content author { name } dynasty { name } } }
+	  edges { node { title content author { name } dynasty { name } } }
 	} }`, &resp)
 	require.NoError(t, err)
 	assert.Positive(t, resp.Poems.TotalCount)

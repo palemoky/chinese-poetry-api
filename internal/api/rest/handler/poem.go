@@ -96,8 +96,10 @@ func (h *PoemHandler) ListPoems(c *gin.Context) {
 var searchTypes = []string{"all", "title", "content", "author"}
 
 // SearchPoems 按关键词搜索诗词。
+// 可按朝代筛选：?q=月&dynasty=唐 或 ?q=月&dynasty_id=6，排序与不筛选时一致。
+// 这里的 type 是搜索范围（all/title/content/author），不是体裁。
 func (h *PoemHandler) SearchPoems(c *gin.Context) {
-	if !checkQueryParams(c, queryLang, queryPage, queryPageSize, queryQuery, queryType) {
+	if !checkQueryParams(c, queryLang, queryPage, queryPageSize, queryQuery, queryType, queryDynastyID, queryDynasty) {
 		return
 	}
 
@@ -125,7 +127,12 @@ func (h *PoemHandler) SearchPoems(c *gin.Context) {
 		return
 	}
 
-	poems, total, err := repo.SearchPoems(query, searchType, pagination.Page, pagination.PageSize)
+	dynastyID, ok := parseDynastyFilter(c, repo)
+	if !ok {
+		return
+	}
+
+	poems, total, err := repo.SearchPoemsInDynasty(query, searchType, dynastyID, pagination.Page, pagination.PageSize)
 	if err != nil {
 		respondError(c, http.StatusInternalServerError, "search failed")
 		return
@@ -159,22 +166,11 @@ type poemFilters struct {
 func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, bool) {
 	var filters poemFilters
 
-	// 朝代过滤：按 ID 或名称
-	dynastyID, ok := parseInt64Query(c, queryDynastyID)
+	dynastyID, ok := parseDynastyFilter(c, repo)
 	if !ok {
 		return poemFilters{}, false
 	}
-	switch {
-	case dynastyID != nil:
-		filters.dynastyID = dynastyID
-	case c.Query(queryDynasty) != "":
-		dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
-		if err != nil {
-			respondError(c, http.StatusNotFound, "dynasty not found")
-			return poemFilters{}, false
-		}
-		filters.dynastyID = &dynasty.ID
-	}
+	filters.dynastyID = dynastyID
 
 	// 作者过滤：按 ID 或名称。
 	// 同名作者不止一位时（唐代张潮与清代张潮），按名称查找会参考已解析的朝代，
@@ -219,6 +215,24 @@ func parsePoemFilters(c *gin.Context, repo *database.Repository) (poemFilters, b
 	}
 
 	return filters, true
+}
+
+// parseDynastyFilter 解析按 ID（dynasty_id）或名称（dynasty）给出的朝代过滤，两者都给时以 ID 为准。
+// 未给出时返回 nil；ID 格式错误返回 400、名称查不到返回 404，此时直接写响应并返回 false。
+func parseDynastyFilter(c *gin.Context, repo *database.Repository) (*int64, bool) {
+	dynastyID, ok := parseInt64Query(c, queryDynastyID)
+	if !ok {
+		return nil, false
+	}
+	if dynastyID != nil || c.Query(queryDynasty) == "" {
+		return dynastyID, true
+	}
+	dynasty, err := repo.GetDynastyByName(c.Query(queryDynasty))
+	if err != nil {
+		respondError(c, http.StatusNotFound, "dynasty not found")
+		return nil, false
+	}
+	return &dynasty.ID, true
 }
 
 // RandomPoem 按可选条件随机返回一首诗词。

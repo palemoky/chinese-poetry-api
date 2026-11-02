@@ -87,7 +87,6 @@ type ComplexityRoot struct {
 		Author  func(childComplexity int) int
 		Content func(childComplexity int) int
 		Dynasty func(childComplexity int) int
-		ID      func(childComplexity int) int
 		Title   func(childComplexity int) int
 		Type    func(childComplexity int) int
 	}
@@ -117,11 +116,10 @@ type ComplexityRoot struct {
 		Author              func(childComplexity int, id string, lang *database.Lang) int
 		Authors             func(childComplexity int, lang *database.Lang, page *int, pageSize *int, dynastyID *string) int
 		Dynasties           func(childComplexity int, lang *database.Lang) int
-		Poem                func(childComplexity int, id string, lang *database.Lang) int
 		PoemTypes           func(childComplexity int, lang *database.Lang) int
 		Poems               func(childComplexity int, lang *database.Lang, page *int, pageSize *int, after *string, dynastyID *string, authorID *string, typeID *string) int
 		RandomPoem          func(childComplexity int, lang *database.Lang, dynastyID *string, typeID *string) int
-		SearchPoems         func(childComplexity int, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) int
+		SearchPoems         func(childComplexity int, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int, dynastyID *string) int
 		SemanticSearchPoems func(childComplexity int, query string, lang *database.Lang, limit *int) int
 		Statistics          func(childComplexity int, lang *database.Lang) int
 	}
@@ -162,9 +160,8 @@ type PoetryTypeResolver interface {
 	PoemCount(ctx context.Context, obj *database.PoetryType) (int, error)
 }
 type QueryResolver interface {
-	Poem(ctx context.Context, id string, lang *database.Lang) (*database.Poem, error)
 	Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, after *string, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error)
-	SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error)
+	SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int, dynastyID *string) (*database.PoemConnection, error)
 	SemanticSearchPoems(ctx context.Context, query string, lang *database.Lang, limit *int) ([]*database.Poem, error)
 	RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error)
 	Author(ctx context.Context, id string, lang *database.Lang) (*database.Author, error)
@@ -369,12 +366,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 		}
 
 		return e.ComplexityRoot.Poem.Dynasty(childComplexity), true
-	case "Poem.id":
-		if e.ComplexityRoot.Poem.ID == nil {
-			break
-		}
-
-		return e.ComplexityRoot.Poem.ID(childComplexity), true
 	case "Poem.title":
 		if e.ComplexityRoot.Poem.Title == nil {
 			break
@@ -497,17 +488,6 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 
 		return e.ComplexityRoot.Query.Dynasties(childComplexity, args["lang"].(*database.Lang)), true
 
-	case "Query.poem":
-		if e.ComplexityRoot.Query.Poem == nil {
-			break
-		}
-
-		args, err := ec.field_Query_poem_args(ctx, rawArgs)
-		if err != nil {
-			return 0, false
-		}
-
-		return e.ComplexityRoot.Query.Poem(childComplexity, args["id"].(string), args["lang"].(*database.Lang)), true
 	case "Query.poemTypes":
 		if e.ComplexityRoot.Query.PoemTypes == nil {
 			break
@@ -551,7 +531,7 @@ func (e *executableSchema) Complexity(ctx context.Context, typeName, field strin
 			return 0, false
 		}
 
-		return e.ComplexityRoot.Query.SearchPoems(childComplexity, args["query"].(string), args["lang"].(*database.Lang), args["searchType"].(*model.SearchType), args["page"].(*int), args["pageSize"].(*int)), true
+		return e.ComplexityRoot.Query.SearchPoems(childComplexity, args["query"].(string), args["lang"].(*database.Lang), args["searchType"].(*model.SearchType), args["page"].(*int), args["pageSize"].(*int), args["dynastyId"].(*string)), true
 	case "Query.semanticSearchPoems":
 		if e.ComplexityRoot.Query.SemanticSearchPoems == nil {
 			break
@@ -699,9 +679,6 @@ enum Lang {
 }
 
 type Query {
-  "Get a single poem by ID"
-  poem(id: ID!, lang: Lang = ZH_HANS): Poem
-
   """
   Get a list of poems with pagination and filters.
 
@@ -724,13 +701,14 @@ type Query {
     typeId: ID
   ): PoemConnection!
 
-  "Search poems by query"
+  "Search poems by query, optionally within one dynasty. Results keep the same relevance order either way."
   searchPoems(
     query: String!
     lang: Lang = ZH_HANS
     searchType: SearchType = ALL
     page: Int = 1
     pageSize: Int = 20
+    dynastyId: ID
   ): PoemConnection!
 
   """
@@ -772,8 +750,11 @@ enum SearchType {
 }
 
 
+"""
+A poem. It has no ID: poem IDs are assigned on import and may change with every data release, so a
+stored ID could point to another poem later.
+"""
 type Poem {
-  id: ID!
   title: String!
   content: [String!]!
   author: Author
@@ -951,8 +932,6 @@ func (ec *executionContext) childFields_PageInfo(ctx context.Context, field grap
 
 func (ec *executionContext) childFields_Poem(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
 	switch field.Name {
-	case "id":
-		return ec.fieldContext_Poem_id(ctx, field)
 	case "title":
 		return ec.fieldContext_Poem_title(ctx, field)
 	case "content":
@@ -1275,28 +1254,6 @@ func (ec *executionContext) field_Query_poemTypes_args(ctx context.Context, rawA
 	return args, nil
 }
 
-func (ec *executionContext) field_Query_poem_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
-	var err error
-	args := map[string]any{}
-	arg0, err := graphql.ProcessArgField(ctx, rawArgs, "id",
-		func(ctx context.Context, v any) (string, error) {
-			return ec.unmarshalNID2string(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["id"] = arg0
-	arg1, err := graphql.ProcessArgField(ctx, rawArgs, "lang",
-		func(ctx context.Context, v any) (*database.Lang, error) {
-			return ec.unmarshalOLang2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐLang(ctx, v)
-		})
-	if err != nil {
-		return nil, err
-	}
-	args["lang"] = arg1
-	return args, nil
-}
-
 func (ec *executionContext) field_Query_poems_args(ctx context.Context, rawArgs map[string]any) (map[string]any, error) {
 	var err error
 	args := map[string]any{}
@@ -1432,6 +1389,14 @@ func (ec *executionContext) field_Query_searchPoems_args(ctx context.Context, ra
 		return nil, err
 	}
 	args["pageSize"] = arg4
+	arg5, err := graphql.ProcessArgField(ctx, rawArgs, "dynastyId",
+		func(ctx context.Context, v any) (*string, error) {
+			return ec.unmarshalOID2ᚖstring(ctx, v)
+		})
+	if err != nil {
+		return nil, err
+	}
+	args["dynastyId"] = arg5
 	return args, nil
 }
 
@@ -2171,29 +2136,6 @@ func (ec *executionContext) fieldContext_PageInfo_endCursor(_ context.Context, f
 	return graphql.NewScalarFieldContext("PageInfo", field, false, false, "String")
 }
 
-func (ec *executionContext) _Poem_id(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Poem_id(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			return obj.ID, nil
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v int64) graphql.Marshaler {
-			return ec.marshalNID2int64(ctx, selections, v)
-		},
-		true,
-		true,
-	)
-}
-func (ec *executionContext) fieldContext_Poem_id(_ context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	return graphql.NewScalarFieldContext("Poem", field, false, false, "ID")
-}
-
 func (ec *executionContext) _Poem_title(ctx context.Context, field graphql.CollectedField, obj *database.Poem) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2639,50 +2581,6 @@ func (ec *executionContext) fieldContext_PoetryType_poemCount(_ context.Context,
 	return graphql.NewScalarFieldContext("PoetryType", field, true, true, "Int")
 }
 
-func (ec *executionContext) _Query_poem(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
-	return graphql.ResolveField(
-		ctx,
-		ec.OperationContext,
-		field,
-		func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.fieldContext_Query_poem(ctx, field)
-		},
-		func(ctx context.Context) (any, error) {
-			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().Poem(ctx, fc.Args["id"].(string), fc.Args["lang"].(*database.Lang))
-		},
-		nil,
-		func(ctx context.Context, selections ast.SelectionSet, v *database.Poem) graphql.Marshaler {
-			return ec.marshalOPoem2ᚖgithubᚗcomᚋpalemokyᚋchineseᚑpoetryᚑapiᚋinternalᚋdatabaseᚐPoem(ctx, selections, v)
-		},
-		true,
-		false,
-	)
-}
-func (ec *executionContext) fieldContext_Query_poem(ctx context.Context, field graphql.CollectedField) (fc *graphql.FieldContext, err error) {
-	fc = &graphql.FieldContext{
-		Object:     "Query",
-		Field:      field,
-		IsMethod:   true,
-		IsResolver: true,
-		Child: func(ctx context.Context, field graphql.CollectedField) (*graphql.FieldContext, error) {
-			return ec.childFields_Poem(ctx, field)
-		},
-	}
-	defer func() {
-		if r := recover(); r != nil {
-			err = ec.Recover(ctx, r)
-			ec.Error(ctx, err)
-		}
-	}()
-	ctx = graphql.WithFieldContext(ctx, fc)
-	if fc.Args, err = ec.field_Query_poem_args(ctx, field.ArgumentMap(ec.Variables)); err != nil {
-		ec.Error(ctx, err)
-		return fc, err
-	}
-	return fc, nil
-}
-
 func (ec *executionContext) _Query_poems(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	return graphql.ResolveField(
 		ctx,
@@ -2737,7 +2635,7 @@ func (ec *executionContext) _Query_searchPoems(ctx context.Context, field graphq
 		},
 		func(ctx context.Context) (any, error) {
 			fc := graphql.GetFieldContext(ctx)
-			return ec.Resolvers.Query().SearchPoems(ctx, fc.Args["query"].(string), fc.Args["lang"].(*database.Lang), fc.Args["searchType"].(*model.SearchType), fc.Args["page"].(*int), fc.Args["pageSize"].(*int))
+			return ec.Resolvers.Query().SearchPoems(ctx, fc.Args["query"].(string), fc.Args["lang"].(*database.Lang), fc.Args["searchType"].(*model.SearchType), fc.Args["page"].(*int), fc.Args["pageSize"].(*int), fc.Args["dynastyId"].(*string))
 		},
 		nil,
 		func(ctx context.Context, selections ast.SelectionSet, v *database.PoemConnection) graphql.Marshaler {
@@ -4728,11 +4626,6 @@ func (ec *executionContext) _Poem(ctx context.Context, sel ast.SelectionSet, obj
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Poem")
-		case "id":
-			out.Values[i] = ec._Poem_id(ctx, field, obj)
-			if out.Values[i] == graphql.Null {
-				atomic.AddUint32(&out.Invalids, 1)
-			}
 		case "title":
 			out.Values[i] = ec._Poem_title(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
@@ -4940,12 +4833,6 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Query")
-		case "poem":
-			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
-				true, false,
-				func(ctx context.Context) graphql.Marshaler {
-					return ec._Query_poem(ctx, field)
-				})
 		case "poems":
 			out.ResolveRootConcurrently(innerCtx, ec.OperationContext, i,
 				true, true,

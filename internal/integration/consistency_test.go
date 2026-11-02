@@ -120,7 +120,6 @@ func TestSearchConsistency(t *testing.T) {
 
 			var restResult struct {
 				Data []struct {
-					ID    int64  `json:"id"`
 					Title string `json:"title"`
 				} `json:"data"`
 				Pagination struct {
@@ -135,7 +134,6 @@ func TestSearchConsistency(t *testing.T) {
 				SearchPoems struct {
 					Edges []struct {
 						Node struct {
-							ID    int64
 							Title string
 						}
 					}
@@ -154,7 +152,7 @@ func TestSearchConsistency(t *testing.T) {
 			}
 
 			query := `query { searchPoems(query: "` + tt.query + `", searchType: ` + searchTypeGQL + `) {
-				edges { node { id title } }
+				edges { node { title } }
 				totalCount
 			} }`
 			err = graphqlClient.Post(query, &graphqlResult)
@@ -167,10 +165,8 @@ func TestSearchConsistency(t *testing.T) {
 			assert.Equal(t, len(restResult.Data), len(graphqlResult.SearchPoems.Edges),
 				"Number of results should match")
 
-			// 返回的 ID 集合也应完全相同
+			// 返回的诗词及顺序也应完全相同
 			for i := range restResult.Data {
-				assert.Equal(t, restResult.Data[i].ID, graphqlResult.SearchPoems.Edges[i].Node.ID,
-					"Poem ID should match at position %d", i)
 				assert.Equal(t, restResult.Data[i].Title, graphqlResult.SearchPoems.Edges[i].Node.Title,
 					"Poem title should match at position %d", i)
 			}
@@ -206,17 +202,14 @@ func TestRandomConsistency(t *testing.T) {
 				require.Equal(t, http.StatusOK, restResp.Code)
 
 				var restResult struct {
-					ID    int64  `json:"id"`
 					Title string `json:"title"`
 				}
 				err := json.Unmarshal(restResp.Body.Bytes(), &restResult)
 				require.NoError(t, err)
-				assert.NotZero(t, restResult.ID, "REST should return a poem")
 
 				// GraphQL 接口
 				var graphqlResult struct {
 					RandomPoem struct {
-						ID    int64
 						Title string
 					}
 				}
@@ -225,13 +218,11 @@ func TestRandomConsistency(t *testing.T) {
 				if tt.gqlFilter != "" {
 					query += "(" + tt.gqlFilter + ")"
 				}
-				query += ` { id title } }`
+				query += ` { title } }`
 
 				err = graphqlClient.Post(query, &graphqlResult)
 				require.NoError(t, err)
-				assert.NotZero(t, graphqlResult.RandomPoem.ID, "GraphQL should return a poem")
-
-				// 两者应从同一份数据中取词。结果随机，无法比对具体 ID，但可以校验返回结构是否正确
+				// 两者应从同一份数据中取词。结果随机，无法比对具体是哪首，但都应返回诗词
 				assert.NotEmpty(t, restResult.Title)
 				assert.NotEmpty(t, graphqlResult.RandomPoem.Title)
 			}
@@ -244,14 +235,14 @@ func TestListOrderConsistency(t *testing.T) {
 	restRouter, graphqlClient, repo := setupTestEnv(t)
 	createTestData(t, repo)
 
-	restIDs := func(page int) []int64 {
+	restTitles := func(page int) []string {
 		req := httptest.NewRequest(http.MethodGet, "/api/v1/poems?page="+strconv.Itoa(page)+"&page_size=1", nil)
 		resp := httptest.NewRecorder()
 		restRouter.ServeHTTP(resp, req)
 
 		var result struct {
 			Data []struct {
-				ID int64 `json:"id"`
+				Title string `json:"title"`
 			} `json:"data"`
 			Pagination struct {
 				Total int `json:"total"`
@@ -260,44 +251,44 @@ func TestListOrderConsistency(t *testing.T) {
 		require.NoError(t, json.Unmarshal(resp.Body.Bytes(), &result))
 		assert.Equal(t, 2, result.Pagination.Total, "REST must report the full corpus size, not the page size")
 
-		ids := make([]int64, len(result.Data))
+		titles := make([]string, len(result.Data))
 		for i, d := range result.Data {
-			ids[i] = d.ID
+			titles[i] = d.Title
 		}
-		return ids
+		return titles
 	}
 
-	graphqlIDs := func(page int) []int64 {
+	graphqlTitles := func(page int) []string {
 		var result struct {
 			Poems struct {
 				Edges []struct {
 					Node struct {
-						ID int64
+						Title string
 					}
 				}
 				TotalCount int
 			}
 		}
 		query := `query { poems(page: ` + strconv.Itoa(page) + `, pageSize: 1) {
-			edges { node { id } }
+			edges { node { title } }
 			totalCount
 		} }`
 		require.NoError(t, graphqlClient.Post(query, &result))
 		assert.Equal(t, 2, result.Poems.TotalCount)
 
-		ids := make([]int64, len(result.Poems.Edges))
+		titles := make([]string, len(result.Poems.Edges))
 		for i, e := range result.Poems.Edges {
-			ids[i] = e.Node.ID
+			titles[i] = e.Node.Title
 		}
-		return ids
+		return titles
 	}
 
-	// id 升序即诗词导入语料时的顺序
-	assert.Equal(t, []int64{1001}, restIDs(1))
-	assert.Equal(t, []int64{1002}, restIDs(2))
+	// 按 id 升序，即诗词导入语料时的顺序：静夜思（1001）在将进酒（1002）之前
+	assert.Equal(t, []string{"静夜思"}, restTitles(1))
+	assert.Equal(t, []string{"将进酒"}, restTitles(2))
 
 	for page := 1; page <= 2; page++ {
-		assert.Equal(t, restIDs(page), graphqlIDs(page), "page %d must be the same poems in both APIs", page)
+		assert.Equal(t, restTitles(page), graphqlTitles(page), "page %d must be the same poems in both APIs", page)
 	}
 }
 
@@ -313,7 +304,7 @@ func TestPaginationConsistency(t *testing.T) {
 
 	var restResult struct {
 		Data []struct {
-			ID int64 `json:"id"`
+			Title string `json:"title"`
 		} `json:"data"`
 		Pagination struct {
 			Page     int `json:"page"`
@@ -329,7 +320,7 @@ func TestPaginationConsistency(t *testing.T) {
 		SearchPoems struct {
 			Edges []struct {
 				Node struct {
-					ID int64
+					Title string
 				}
 			}
 			PageInfo struct {
@@ -341,7 +332,7 @@ func TestPaginationConsistency(t *testing.T) {
 	}
 
 	query := `query { searchPoems(query: "李白", page: 1, pageSize: 1) {
-		edges { node { id } }
+		edges { node { title } }
 		pageInfo { hasNextPage hasPreviousPage }
 		totalCount
 	} }`

@@ -9,9 +9,6 @@ enum Lang {
 }
 
 type Query {
-  "Get a single poem by ID"
-  poem(id: ID!, lang: Lang = ZH_HANS): Poem
-
   """
   Get a list of poems with pagination and filters.
 
@@ -34,13 +31,14 @@ type Query {
     typeId: ID
   ): PoemConnection!
 
-  "Search poems by query"
+  "Search poems by query, optionally within one dynasty. Results keep the same relevance order either way."
   searchPoems(
     query: String!
     lang: Lang = ZH_HANS
     searchType: SearchType = ALL
     page: Int = 1
     pageSize: Int = 20
+    dynastyId: ID
   ): PoemConnection!
 
   """
@@ -82,8 +80,11 @@ enum SearchType {
 }
 
 
+"""
+A poem. It has no ID: poem IDs are assigned on import and may change with every data release, so a
+stored ID could point to another poem later.
+"""
 type Poem {
-  id: ID!
   title: String!
   content: [String!]!
   author: Author
