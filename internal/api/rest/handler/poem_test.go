@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 
@@ -506,4 +507,31 @@ func TestPoemsFilterByHomonymAuthor(t *testing.T) {
 	assert.Equal(t, []string{"幽梦影一", "幽梦影二"}, titles("/poems?author=张潮"), "defaults to the author with more poems")
 	assert.Equal(t, []string{"唐诗一"}, titles("/poems?author=张潮&dynasty=唐"))
 	assert.Equal(t, []string{"幽梦影一", "幽梦影二"}, titles("/poems?author=张潮&dynasty_id="+strconv.FormatInt(qing, 10)))
+}
+
+// 诗词 ID 每次数据发布都可能变化，响应里不再包含（作者、朝代、体裁的 ID 保留）。
+func TestPoemResponsesHaveNoID(t *testing.T) {
+	router, repo := setupPoemTestRouter(t)
+	h := NewPoemHandler(repo)
+	router.GET("/poems", h.ListPoems)
+	router.GET("/poems/search", h.SearchPoems)
+	router.GET("/poems/random", h.RandomPoem)
+	createTestPoem(t, repo, 1, "静夜思", "床前明月光")
+
+	for _, path := range []string{"/poems", "/poems/search?q=" + url.QueryEscape("静夜思"), "/poems/random"} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		require.Equal(t, http.StatusOK, w.Code, path)
+
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		poem := resp
+		if data, ok := resp["data"].([]any); ok {
+			require.Len(t, data, 1, path)
+			poem = data[0].(map[string]any)
+		}
+		assert.Equal(t, "静夜思", poem["title"], path)
+		assert.NotContains(t, poem, "id", path)
+		assert.Contains(t, poem["author"], "id", "%s: author IDs are kept", path)
+	}
 }

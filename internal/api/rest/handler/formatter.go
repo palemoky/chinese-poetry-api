@@ -84,6 +84,9 @@ func formatPoetryTypeWithStats(t *database.PoetryTypeWithStats) map[string]any {
 }
 
 // formatPoem 把诗词整理成 API 响应结构，关联对象以嵌套形式呈现。
+//
+// 不含诗词 ID：ID 在导入时按顺序分配，每次数据发布都可能变化，
+// 客户端存下来下次就可能指向另一首诗，不如不给。
 func formatPoem(poem *database.Poem) map[string]any {
 	var typeData map[string]any
 	if poem.Type != nil {
@@ -111,7 +114,6 @@ func formatPoem(poem *database.Poem) map[string]any {
 	}
 
 	return map[string]any{
-		"id":      poem.ID,
 		"type":    typeData,
 		"title":   poem.Title,
 		"content": poem.Content,

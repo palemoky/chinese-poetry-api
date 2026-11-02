@@ -80,13 +80,13 @@ func TestGraphQLLangSelectsVariant(t *testing.T) {
 		}
 	})
 
-	t.Run("poem by id", func(t *testing.T) {
+	t.Run("randomPoem", func(t *testing.T) {
 		for lang, want := range map[string]string{"ZH_HANS": "简体标题", "ZH_HANT": "繁體標題"} {
 			var resp struct {
-				Poem struct{ Title string }
+				RandomPoem struct{ Title string }
 			}
-			require.NoError(t, c.Post(`query { poem(id: "1", lang: `+lang+`) { title } }`, &resp))
-			assert.Equal(t, want, resp.Poem.Title)
+			require.NoError(t, c.Post(`query { randomPoem(lang: `+lang+`) { title } }`, &resp))
+			assert.Equal(t, want, resp.RandomPoem.Title)
 		}
 	})
 
@@ -120,7 +120,7 @@ func TestGraphQLLangSelectsVariant(t *testing.T) {
 						}
 					}
 				}
-				Poem struct {
+				RandomPoem struct {
 					Author struct {
 						Poems struct {
 							Edges []struct {
@@ -132,13 +132,13 @@ func TestGraphQLLangSelectsVariant(t *testing.T) {
 			}
 			require.NoError(t, c.Post(`query {
 				authors(lang: `+lang+`) { edges { node { poems { edges { node { title } } } } } }
-				poem(id: "1", lang: `+lang+`) { author { poems { edges { node { title } } } } }
+				randomPoem(lang: `+lang+`) { author { poems { edges { node { title } } } } }
 			}`, &resp))
 			require.Len(t, resp.Authors.Edges, 1)
 			require.Len(t, resp.Authors.Edges[0].Node.Poems.Edges, 1)
 			assert.Equal(t, want, resp.Authors.Edges[0].Node.Poems.Edges[0].Node.Title, "authors(lang: %s)", lang)
-			require.Len(t, resp.Poem.Author.Poems.Edges, 1)
-			assert.Equal(t, want, resp.Poem.Author.Poems.Edges[0].Node.Title, "poem(lang: %s)", lang)
+			require.Len(t, resp.RandomPoem.Author.Poems.Edges, 1)
+			assert.Equal(t, want, resp.RandomPoem.Author.Poems.Edges[0].Node.Title, "randomPoem(lang: %s)", lang)
 		}
 	})
 
