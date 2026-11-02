@@ -558,6 +558,7 @@ func TestSearchPoemsByDynasty(t *testing.T) {
 
 	code, _ = search("?q=" + url.QueryEscape("月") + "&dynasty_id=abc")
 	assert.Equal(t, http.StatusBadRequest, code)
+}
 
 // 诗词 ID 每次数据发布都可能变化，响应里不再包含（作者、朝代、体裁的 ID 保留）。
 func TestPoemResponsesHaveNoID(t *testing.T) {
