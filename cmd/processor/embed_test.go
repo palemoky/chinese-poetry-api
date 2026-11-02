@@ -173,3 +173,38 @@ func TestCheckEmbeddings(t *testing.T) {
 	err := runCheckEmbeddings(context.Background(), checkOptions{db: db, vectors: out, api: other.URL, sample: 3})
 	assert.ErrorContains(t, err, "does not produce the vectors")
 }
+
+// 同一个模型在不同接口上叫法不同：文件记录统一的名字，复用照常生效
+func TestEmbedAPIModelNameIsSeparateFromRecordedModel(t *testing.T) {
+	dir := t.TempDir()
+	var gotModels []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Model string
+			Input []string
+		}
+		require.NoError(t, json.NewDecoder(r.Body).Decode(&req))
+		gotModels = append(gotModels, req.Model)
+		data := make([]map[string]any, len(req.Input))
+		for i := range req.Input {
+			data[i] = map[string]any{"index": i, "embedding": []float32{1, 0, 0}}
+		}
+		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{"data": data}))
+	}))
+	defer srv.Close()
+
+	v1 := filepath.Join(dir, "v1.db")
+	buildPoetryDB(t, v1, map[int64]string{1: "床前明月光"})
+	out1 := filepath.Join(dir, "vectors-v1.db")
+	require.NoError(t, runEmbed(context.Background(), embedOptions{db: v1, out: out1, api: srv.URL, model: "bge-m3", batch: 8}))
+
+	v2 := filepath.Join(dir, "v2.db")
+	buildPoetryDB(t, v2, map[int64]string{1: "床前明月光", 2: "春眠不觉晓"})
+	out2 := filepath.Join(dir, "vectors-v2.db")
+	require.NoError(t, runEmbed(context.Background(), embedOptions{
+		db: v2, out: out2, reuse: out1, api: srv.URL, model: "bge-m3", apiModel: "Pro/BAAI/bge-m3", batch: 8,
+	}))
+
+	assert.Equal(t, []string{"bge-m3", "Pro/BAAI/bge-m3"}, gotModels, "only the new poem is embedded, under the API's name")
+	assert.Equal(t, "bge-m3", loadFor(t, v2, out2).Meta.Model)
+}

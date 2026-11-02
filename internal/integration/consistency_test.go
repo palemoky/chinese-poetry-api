@@ -43,7 +43,7 @@ func setupTestEnv(t *testing.T) (*gin.Engine, *client.Client, *database.Reposito
 	require.NoError(t, err)
 
 	// 初始化 GraphQL 客户端
-	resolver := graph.NewResolver(db, repo)
+	resolver := graph.NewResolver(db, repo, nil)
 	srv := graph.NewServer(resolver, graph.ServerOptions{ComplexityLimit: 5000, Introspection: true})
 	graphqlClient := client.New(srv)
 

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/palemoky/chinese-poetry-api/internal/database"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 )
 
 // 本文件不会被自动重新生成。
@@ -14,13 +15,19 @@ import (
 type Resolver struct {
 	DB   *database.DB
 	Repo *database.Repository
+	// Searcher 为 nil 表示服务没有启用语义检索。
+	Searcher *semantic.Searcher
 }
 
-// NewResolver 创建 GraphQL 根 resolver。
-func NewResolver(db *database.DB, repo *database.Repository) *Resolver {
+// defaultSemanticLimit 是 semanticSearchPoems 默认返回的诗词数，与 REST 接口一致。
+const defaultSemanticLimit = 20
+
+// NewResolver 创建 GraphQL 根 resolver。searcher 为 nil 时语义检索查询返回错误。
+func NewResolver(db *database.DB, repo *database.Repository, searcher *semantic.Searcher) *Resolver {
 	return &Resolver{
-		DB:   db,
-		Repo: repo,
+		DB:       db,
+		Repo:     repo,
+		Searcher: searcher,
 	}
 }
 

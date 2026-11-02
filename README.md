@@ -167,6 +167,16 @@ query {
   }
 }
 
+# 按意思检索（需启用语义检索）
+query {
+  semanticSearchPoems(query: "夜里船停在苏州城外，听见寺庙的钟声", limit: 5) {
+    title
+    author {
+      name
+    }
+  }
+}
+
 # 统计信息
 query {
   statistics {
@@ -234,15 +244,15 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
    EMBEDDING_API_URL=http://localhost:11434/v1   # 容器内访问宿主机用 http://host.docker.internal:11434/v1
    ```
 
-   改用云服务时，用 `EMBEDDING_MODEL` 指定它对这个模型的叫法（如 `BAAI/bge-m3`），用 `EMBEDDING_API_KEY` 传密钥。不同服务部署的模型未必完全一致，启用前先确认它产生的向量与向量文件相同：
+   改用云服务时，用 `EMBEDDING_MODEL` 指定它对这个模型的叫法，用 `EMBEDDING_API_KEY` 传密钥。例如[硅基流动](https://siliconflow.cn)：接口 `https://api.siliconflow.cn/v1`，模型 `BAAI/bge-m3`（免费）或 `Pro/BAAI/bge-m3`（付费）。不同服务部署的模型未必完全一致，启用前先确认它产生的向量与向量文件相同：
 
    ```bash
    EMBEDDING_API_KEY=... go run -tags sqlite_fts5 ./cmd/processor check-embeddings \
      --db data/poetry.db --vectors data/poetry-vectors.db \
-     --api https://api.example.com/v1 --model BAAI/bge-m3 --api-key-env EMBEDDING_API_KEY
+     --api https://api.siliconflow.cn/v1 --model BAAI/bge-m3 --api-key-env EMBEDDING_API_KEY
    ```
 
-启用后，服务启动时多花约 2 秒载入向量，常驻内存增加约 350MB。每次检索约 30ms，另加一次嵌入请求的耗时。REST 接口 `/api/v1/poems/semantic` 不分页，用 `limit` 指定条数（默认 20，最多 50）。未启用时返回 503，嵌入接口出错时返回 502。
+启用后，服务启动时多花约 2 秒载入向量，常驻内存增加约 350MB。每次检索约 30ms，另加一次嵌入请求的耗时。REST 接口 `/api/v1/poems/semantic` 与 GraphQL 查询 `semanticSearchPoems(query, lang, limit)` 都不分页，用 `limit` 指定条数（默认 20，最多 50）。未启用时 REST 返回 503、GraphQL 返回错误；嵌入接口出错时 REST 返回 502。
 
 ## 数据集
 

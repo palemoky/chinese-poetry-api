@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -23,6 +24,7 @@ type embedOptions struct {
 	reuse     string
 	api       string
 	model     string
+	apiModel  string
 	apiKeyEnv string
 	batch     int
 }
@@ -53,7 +55,8 @@ where it stopped when started again with the same --output.`,
 	cmd.Flags().StringVarP(&o.out, "output", "o", "poetry-vectors.db", "Vector file to create or resume")
 	cmd.Flags().StringVar(&o.reuse, "reuse", "", "Vector file of the previous release to copy unchanged poems from")
 	cmd.Flags().StringVar(&o.api, "api", "http://localhost:11434/v1", "Base URL of an OpenAI-compatible embeddings API")
-	cmd.Flags().StringVar(&o.model, "model", "bge-m3", "Embedding model; it must be the model queries are embedded with")
+	cmd.Flags().StringVar(&o.model, "model", "bge-m3", "Embedding model recorded in the file; reuse requires the same name, and queries must use the same model")
+	cmd.Flags().StringVar(&o.apiModel, "api-model", "", "Name of that model at --api if it differs, e.g. Pro/BAAI/bge-m3; defaults to --model")
 	cmd.Flags().StringVar(&o.apiKeyEnv, "api-key-env", "", "Name of the environment variable holding the API key, if the API needs one")
 	cmd.Flags().IntVar(&o.batch, "batch", 64, "Poems per embedding request")
 	return cmd
@@ -73,7 +76,7 @@ func runEmbed(ctx context.Context, o embedOptions) error {
 		ctx:    ctx,
 		opts:   o,
 		docs:   docs,
-		client: embedding.New(o.api, o.model, apiKey),
+		client: newEmbedClient(o.api, cmp.Or(o.apiModel, o.model), apiKey),
 		start:  time.Now(),
 		want: vectors.Meta{
 			FormatVersion: vectors.FormatVersion,
@@ -110,6 +113,15 @@ func runEmbed(ctx context.Context, o embedOptions) error {
 		return err
 	}
 	return r.finish()
+}
+
+// newEmbedClient 返回生成向量文件用的客户端。全量生成要跑几个小时，云服务按分钟限流，
+// 这里比服务端查询有耐心得多：遇到限流最多等十来分钟，而不是几秒后就退出。
+func newEmbedClient(api, model, apiKey string) *embedding.Client {
+	c := embedding.New(api, model, apiKey)
+	c.Retries = 10
+	c.MaxBackoff = 2 * time.Minute
+	return c
 }
 
 func checkEmbedOptions(o embedOptions) (apiKey string, err error) {

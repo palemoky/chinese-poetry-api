@@ -162,6 +162,11 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *dat
 	return buildPoemConnection(poems, pag, int(total)), nil
 }
 
+// SemanticSearchPoems is the resolver for the semanticSearchPoems field.
+func (r *queryResolver) SemanticSearchPoems(ctx context.Context, query string, lang *database.Lang, limit *int) ([]*database.Poem, error) {
+	return r.semanticSearch(ctx, query, parseLang(lang), limit)
+}
+
 // RandomPoem is the resolver for the randomPoem field.
 func (r *queryResolver) RandomPoem(ctx context.Context, lang *database.Lang, dynastyID *string, typeID *string) (*database.Poem, error) {
 	// 解析过滤 ID。格式错误的 ID 一律报错，而不是丢弃该过滤条件：

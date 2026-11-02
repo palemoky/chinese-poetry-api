@@ -118,7 +118,7 @@ func main() {
 	searcher := openSemantic(cfg.Semantic, db)
 
 	// 创建 GraphQL resolver
-	resolver := graph.NewResolver(db, repo)
+	resolver := graph.NewResolver(db, repo, searcher)
 
 	// 初始化 Gin 路由
 	router, err := rest.SetupRouter(cfg, db, repo, searcher)

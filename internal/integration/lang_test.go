@@ -31,7 +31,7 @@ func setupLangTestEnv(t *testing.T) (*client.Client, *database.Repository) {
 	require.NoError(t, db.Migrate())
 
 	repo := database.NewRepository(db)
-	resolver := graph.NewResolver(db, repo)
+	resolver := graph.NewResolver(db, repo, nil)
 	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: resolver}))
 
 	return client.New(srv), repo
