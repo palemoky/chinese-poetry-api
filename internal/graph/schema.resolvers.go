@@ -70,17 +70,6 @@ func (r *poetryTypeResolver) PoemCount(ctx context.Context, obj *database.Poetry
 	return r.repo(ctx, database.LangHans).CountPoemsByType(obj.ID)
 }
 
-// Poem is the resolver for the poem field.
-func (r *queryResolver) Poem(ctx context.Context, id string, lang *database.Lang) (*database.Poem, error) {
-	repo := r.repo(ctx, parseLang(lang))
-
-	poem, err := repo.GetPoemByID(id)
-	if err != nil {
-		return nil, err
-	}
-	return poem, nil
-}
-
 // Poems is the resolver for the poems field.
 func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *int, pageSize *int, after *string, dynastyID *string, authorID *string, typeID *string) (*database.PoemConnection, error) {
 	pag, err := parsePaginationWithCursor(page, pageSize, after)

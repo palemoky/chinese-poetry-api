@@ -110,17 +110,8 @@ POST {{host}}/graphql
 Content-Type: application/json
 
 {
-  "query": "query($q: String!) { searchPoems(query: $q, searchType: ALL, page: 1, pageSize: 10) { totalCount edges { node { id title author { name } dynasty { name } } } } }",
+  "query": "query($q: String!) { searchPoems(query: $q, searchType: ALL, page: 1, pageSize: 10) { totalCount edges { node { title author { name } dynasty { name } } } } }",
   "variables": { "q": "静夜思" }
-}
-
-### Get a single poem by ID
-POST {{host}}/graphql
-Content-Type: application/json
-
-{
-  "query": "query($id: ID!) { poem(id: $id) { id title content author { name } dynasty { name } type { name } } }",
-  "variables": { "id": "1" }
 }
 
 ### List poems with filters
@@ -128,7 +119,7 @@ POST {{host}}/graphql
 Content-Type: application/json
 
 {
-  "query": "query { poems(page: 1, pageSize: 10, dynastyId: 6) { totalCount pageInfo { hasNextPage } edges { node { id title } } } }"
+  "query": "query { poems(page: 1, pageSize: 10, dynastyId: 6) { totalCount pageInfo { hasNextPage } edges { node { title } } } }"
 }
 
 ### Random poem (GraphQL)
@@ -136,7 +127,7 @@ POST {{host}}/graphql
 Content-Type: application/json
 
 {
-  "query": "query { randomPoem { id title author { name } } }"
+  "query": "query { randomPoem { title author { name } } }"
 }
 
 ### Statistics
