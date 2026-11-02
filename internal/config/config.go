@@ -18,6 +18,7 @@ type Config struct {
 	RateLimit RateLimitConfig `mapstructure:"rate_limit"`
 	GraphQL   GraphQLConfig   `mapstructure:"graphql"`
 	Search    SearchConfig    `mapstructure:"search"`
+	Semantic  SemanticConfig  `mapstructure:"semantic"`
 }
 
 // ServerConfig 是服务端配置。
@@ -73,6 +74,17 @@ type GraphQLConfig struct {
 type SearchConfig struct {
 	MaxResults      int `mapstructure:"max_results"`
 	DefaultPageSize int `mapstructure:"default_page_size"`
+}
+
+// SemanticConfig 是语义检索的配置。向量文件与嵌入接口都有时才启用。
+// 嵌入接口的密钥只从环境变量 EMBEDDING_API_KEY 读取，不放进配置文件。
+type SemanticConfig struct {
+	// VectorsPath 是向量文件 poetry-vectors.db 的路径。
+	VectorsPath string `mapstructure:"vectors_path"`
+	// EmbeddingURL 是 OpenAI 兼容的嵌入接口地址，如 http://localhost:11434/v1。
+	EmbeddingURL string `mapstructure:"embedding_url"`
+	// EmbeddingModel 是查询所用的模型名，为空时取向量文件记录的模型。
+	EmbeddingModel string `mapstructure:"embedding_model"`
 }
 
 // Load 从配置文件与环境变量中加载配置。
@@ -131,6 +143,8 @@ func setDefaults(v *viper.Viper) {
 	// 数据库连接池，0 表示自动推算（在 Load 中依据 runtime.NumCPU 确定）
 	v.SetDefault("database.max_open_conns", 0)
 	v.SetDefault("database.max_idle_conns", 0)
+	// 与主库放在同一个卷里
+	v.SetDefault("semantic.vectors_path", "data/poetry-vectors.db")
 }
 
 func bindEnvVars(v *viper.Viper) {
@@ -166,6 +180,17 @@ func bindEnvVars(v *viper.Viper) {
 		if b, err := strconv.Atoi(burst); err == nil {
 			v.Set("rate_limit.burst", b)
 		}
+	}
+
+	// 语义检索
+	if path := os.Getenv("VECTORS_PATH"); path != "" {
+		v.Set("semantic.vectors_path", path)
+	}
+	if url := os.Getenv("EMBEDDING_API_URL"); url != "" {
+		v.Set("semantic.embedding_url", url)
+	}
+	if model := os.Getenv("EMBEDDING_MODEL"); model != "" {
+		v.Set("semantic.embedding_model", model)
 	}
 
 	// 数据库连接池

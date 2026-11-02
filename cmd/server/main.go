@@ -20,6 +20,7 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/graph"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
 	"github.com/palemoky/chinese-poetry-api/internal/mcpserver"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 )
 
 // HTTP 服务的超时设置。不设超时时，慢速发送请求头或请求体的连接会一直占着，
@@ -56,6 +57,33 @@ func playgroundHandler() gin.HandlerFunc {
 	}
 }
 
+// openSemantic 载入语义检索，不可用时返回 nil 并记录原因。
+func openSemantic(cfg config.SemanticConfig, db *database.DB) *semantic.Searcher {
+	start := time.Now()
+	searcher, warning, err := semantic.Open(context.Background(), semantic.Config{
+		VectorsPath:    cfg.VectorsPath,
+		EmbeddingURL:   cfg.EmbeddingURL,
+		EmbeddingModel: cfg.EmbeddingModel,
+		APIKey:         os.Getenv("EMBEDDING_API_KEY"),
+	}, db)
+	switch {
+	case semantic.IsDisabled(err):
+		logger.Info("Semantic search off", zap.Error(err))
+		return nil
+	case err != nil:
+		logger.Warn("Semantic search disabled because of a configuration error", zap.Error(err))
+		return nil
+	}
+	if warning != "" {
+		logger.Warn(warning)
+	}
+	logger.Info("Semantic search enabled",
+		zap.Int("vectors", searcher.Size()),
+		zap.String("embedding_api", cfg.EmbeddingURL),
+		zap.Duration("load_time", time.Since(start).Round(time.Millisecond)))
+	return searcher
+}
+
 func main() {
 	// 初始化日志
 	debug := os.Getenv("GIN_MODE") != "release"
@@ -86,11 +114,14 @@ func main() {
 	// 创建仓储
 	repo := database.NewRepository(db)
 
+	// 语义检索是可选的：没配置、缺文件或配置有误都只关掉这项功能，其余接口照常服务
+	searcher := openSemantic(cfg.Semantic, db)
+
 	// 创建 GraphQL resolver
-	resolver := graph.NewResolver(db, repo)
+	resolver := graph.NewResolver(db, repo, searcher)
 
 	// 初始化 Gin 路由
-	router, err := rest.SetupRouter(cfg, db, repo)
+	router, err := rest.SetupRouter(cfg, db, repo, searcher)
 	if err != nil {
 		logger.Fatal("Failed to set up router", zap.Error(err))
 	}
@@ -104,7 +135,7 @@ func main() {
 
 	// 注册 MCP 路由。无状态模式只用 POST，但 GET、DELETE 也要交给 SDK 回 405：
 	// 客户端靠它判断服务端不提供事件流，404 会被当成连接失败
-	router.Match([]string{http.MethodPost, http.MethodGet, http.MethodDelete}, "/mcp", gin.WrapH(mcpserver.NewHandler(repo)))
+	router.Match([]string{http.MethodPost, http.MethodGet, http.MethodDelete}, "/mcp", gin.WrapH(mcpserver.NewHandler(repo, searcher)))
 
 	// 构造 HTTP 服务
 	srv := &http.Server{

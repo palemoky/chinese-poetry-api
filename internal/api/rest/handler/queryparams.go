@@ -22,6 +22,7 @@ const (
 	queryTypeID    = "type_id"
 	queryDynastyID = "dynasty_id"
 	queryDynasty   = "dynasty"
+	queryLimit     = "limit"
 
 	// queryType 在 /poems 与 /poems/random 上表示体裁过滤，
 	// 在 /poems/search 上表示搜索模式——同一个名字，两种互不相干的含义。

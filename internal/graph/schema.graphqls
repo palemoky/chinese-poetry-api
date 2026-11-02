@@ -43,6 +43,13 @@ type Query {
     pageSize: Int = 20
   ): PoemConnection!
 
+  """
+  Find poems by meaning from a description in any language: a theme, a scene, a feeling or a
+  half-remembered line. Returns up to limit poems (default 20, at most 50) ranked by combined meaning
+  and literal match. Fails when the server has not enabled semantic search.
+  """
+  semanticSearchPoems(query: String!, lang: Lang = ZH_HANS, limit: Int = 20): [Poem!]!
+
   "Get a random poem"
   randomPoem(lang: Lang = ZH_HANS, dynastyId: ID, typeId: ID): Poem
 

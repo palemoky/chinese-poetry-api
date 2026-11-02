@@ -14,6 +14,7 @@ import (
 	"github.com/palemoky/chinese-poetry-api/internal/config"
 	"github.com/palemoky/chinese-poetry-api/internal/database"
 	"github.com/palemoky/chinese-poetry-api/internal/logger"
+	"github.com/palemoky/chinese-poetry-api/internal/semantic"
 )
 
 // cacheMaxAge 是可缓存接口的 max-age。数据只在发布时更新，过期后凭 ETag 校验，
@@ -43,8 +44,8 @@ const gzipMinLength = 1024
 // HEAD 的响应体由 net/http 丢弃，响应头与 GET 一致。
 var readMethods = []string{http.MethodGet, http.MethodHead}
 
-// SetupRouter 初始化 Gin 路由并注册全部接口。
-func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository) (*gin.Engine, error) {
+// SetupRouter 初始化 Gin 路由并注册全部接口。searcher 为 nil 时语义检索接口返回 503。
+func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository, searcher *semantic.Searcher) (*gin.Engine, error) {
 	// 设置 Gin 运行模式
 	gin.SetMode(cfg.Server.Mode)
 
@@ -91,6 +92,7 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository)
 		// 诗词相关
 		cached.Match(readMethods, "/poems", poemHandler.ListPoems)
 		cached.Match(readMethods, "/poems/search", poemHandler.SearchPoems)
+		cached.Match(readMethods, "/poems/semantic", handler.SemanticSearchHandler(repo, searcher))
 
 		// 作者相关
 		authorHandler := handler.NewAuthorHandler(repo)

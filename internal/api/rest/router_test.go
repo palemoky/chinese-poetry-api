@@ -31,7 +31,7 @@ func newLimitedRouter(t *testing.T, trustedProxies []string) *gin.Engine {
 		cfg.Server.TrustedProxies = trustedProxies
 	}
 
-	router, err := SetupRouter(cfg, nil, nil)
+	router, err := SetupRouter(cfg, nil, nil, nil)
 	require.NoError(t, err)
 	router.GET("/ping", func(c *gin.Context) { c.Status(http.StatusOK) })
 	return router
@@ -83,7 +83,7 @@ func TestRouterCachePolicies(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
 
 	db, repo := testutil.SetupTestDB(t)
-	router, err := SetupRouter(cfg, db, repo)
+	router, err := SetupRouter(cfg, db, repo, nil)
 	require.NoError(t, err)
 
 	serve := func(path, ifNoneMatch string) *httptest.ResponseRecorder {
@@ -123,7 +123,7 @@ func TestRouterAnswersHead(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
 
 	db, repo := testutil.SetupTestDB(t)
-	router, err := SetupRouter(cfg, db, repo)
+	router, err := SetupRouter(cfg, db, repo, nil)
 	require.NoError(t, err)
 
 	for path, cacheControl := range map[string]string{
@@ -152,7 +152,7 @@ func TestRouterCompressesLargeResponses(t *testing.T) {
 	require.NoError(t, os.WriteFile(cfg.Database.Path, []byte("data"), 0o600))
 
 	db, repo := testutil.SetupTestDB(t)
-	router, err := SetupRouter(cfg, db, repo)
+	router, err := SetupRouter(cfg, db, repo, nil)
 	require.NoError(t, err)
 
 	serveIf := func(path, acceptEncoding, ifNoneMatch string) *httptest.ResponseRecorder {

@@ -127,7 +127,7 @@ func TestOpenForServingAddsAnthologyColumn(t *testing.T) {
 	t.Cleanup(func() { _ = db.Close() })
 
 	repo := NewRepository(db)
-	ids, err := repo.anthologyIDs()
+	ids, err := repo.AnthologyIDs()
 	require.NoError(t, err)
 	assert.Empty(t, ids)
 

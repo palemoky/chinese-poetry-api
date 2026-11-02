@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -73,4 +74,32 @@ func TestEmbedRejectsMalformedResponses(t *testing.T) {
 			assert.Error(t, err)
 		})
 	}
+}
+
+func TestEmbedHonorsRetryAfter(t *testing.T) {
+	var calls atomic.Int32
+	var first time.Time
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if calls.Add(1) == 1 {
+			first = time.Now()
+			w.Header().Set("Retry-After", "2")
+			http.Error(w, "TPM limit reached", http.StatusTooManyRequests)
+			return
+		}
+		assert.GreaterOrEqual(t, time.Since(first), 2*time.Second, "waited as long as the server asked")
+		_, _ = w.Write([]byte(`{"data":[{"index":0,"embedding":[1]}]}`))
+	}))
+	defer srv.Close()
+
+	_, err := New(srv.URL, "m", "").Embed(context.Background(), []string{"a"})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, calls.Load())
+}
+
+func TestBackoffIsCapped(t *testing.T) {
+	c := &Client{MaxBackoff: 5 * time.Second}
+	assert.Equal(t, time.Second, c.backoff(1))
+	assert.Equal(t, 4*time.Second, c.backoff(3))
+	assert.Equal(t, 5*time.Second, c.backoff(10))
+	assert.Equal(t, 5*time.Second, c.backoff(100), "no overflow on long runs")
 }

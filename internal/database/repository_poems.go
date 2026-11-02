@@ -309,7 +309,7 @@ func (r *Repository) GetRandomPoemByChar(char string) (*Poem, error) {
 		if err != nil {
 			return nil, err
 		}
-		poems, err := r.poemsByIDs(ids[i.Int64() : i.Int64()+1])
+		poems, err := r.PoemsByIDs(ids[i.Int64() : i.Int64()+1])
 		if err != nil {
 			return nil, err
 		}
@@ -425,22 +425,46 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 
 	offset := (page - 1) * pageSize
 
+	if searchType == "content" {
+		// 只搜正文时所有命中同分，保持 ID 顺序。1～2 字的查询走倒排索引，
+		// 其余直接在 SQL 里分页，不必取出完整列表
+		if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
+			return nil, 0, err
+		} else if ok {
+			return r.pageOfIDs(ids, offset, pageSize)
+		}
+		return r.searchContent(query, offset, pageSize)
+	}
+
+	ranked, err := r.rankedIDs(query, searchType)
+	if err != nil {
+		return nil, 0, err
+	}
+	return r.pageOfIDs(ranked, offset, pageSize)
+}
+
+// SearchPoemIDs 返回 "all" 模式下按相关度排序的前 limit 个命中 id，供语义检索与关键词结果融合。
+func (r *Repository) SearchPoemIDs(query string, limit int) ([]int64, error) {
+	ranked, err := r.rankedIDs(query, "all")
+	if err != nil {
+		return nil, err
+	}
+	return ranked[:min(limit, len(ranked))], nil
+}
+
+// rankedIDs 返回 searchType（"content" 以外）下按相关度排好的完整命中列表。
+func (r *Repository) rankedIDs(query, searchType string) ([]int64, error) {
 	// 1～2 字的查询用不上 trigram 索引，改走单字倒排索引；不适用时（如索引失效）
 	// 继续走下面的原有路径，两者结果一致。
 	if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
-		return nil, 0, err
+		return nil, err
 	} else if ok {
-		return r.rankedPage(query, searchType, ids, offset, pageSize)
-	}
-
-	if searchType == "content" {
-		// 只搜正文时所有命中同分，按 ID 顺序直接在 SQL 里分页，不必取出完整列表
-		return r.searchContent(query, offset, pageSize)
+		return r.rankedMatches(query, searchType, ids)
 	}
 
 	// 排好的列表已在缓存里时，不必再求一遍命中集合
 	if ranked, hit := r.db.idLists.get(r.rankedKey(query, searchType)); hit {
-		return r.pageOfIDs(ranked, offset, pageSize)
+		return ranked, nil
 	}
 
 	var ids []int64
@@ -458,20 +482,9 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 		ids, err = r.allModeMatches(query)
 	}
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return r.rankedPage(query, searchType, ids, offset, pageSize)
-}
-
-// rankedPage 按相关度重排完整命中列表 ids（升序），再取其中一页。
-func (r *Repository) rankedPage(query, searchType string, ids []int64, offset, pageSize int) ([]Poem, int64, error) {
-	if searchType != "content" {
-		var err error
-		if ids, err = r.rankedMatches(query, searchType, ids); err != nil {
-			return nil, 0, err
-		}
-	}
-	return r.pageOfIDs(ids, offset, pageSize)
+	return r.rankedMatches(query, searchType, ids)
 }
 
 // searchContent 是只搜正文的长查询路径：走 FTS trigram 索引，按 ID 升序分页。

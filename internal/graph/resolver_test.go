@@ -29,7 +29,7 @@ func setupTestResolver(t *testing.T) (*Resolver, *database.Repository) {
 
 	repo := database.NewRepository(db)
 
-	resolver := NewResolver(db, repo)
+	resolver := NewResolver(db, repo, nil)
 	return resolver, repo
 }
 

@@ -65,7 +65,7 @@ func (r *Repository) rankedMatches(query, searchType string, ids []int64) ([]int
 		}
 	}
 
-	anthology, err := r.anthologyIDs()
+	anthology, err := r.AnthologyIDs()
 	if err != nil {
 		return nil, err
 	}
