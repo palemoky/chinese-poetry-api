@@ -33,13 +33,14 @@ func (r *VerifyReport) Passed() bool {
 	return true
 }
 
-// VerifyRelease 检查导入完成的数据库能否发布，minPoems 是诗词总数的下限。
+// VerifyRelease 检查导入完成的数据库能否发布，minPoems 是诗词总数的下限，
+// minAnthology 是收在选本里的诗词数的下限。
 //
 // 这些都是曾经出过错、肉眼又很难从统计数字上看出来的地方：
 // 简繁两表的诗词与作者 ID 必须一一对应（API 用同一个 ID 在两表间切换），
 // 关联不能缺失，FTS、倒排索引与物化计数必须与诗词表一致。
 // 朝代分布无法自动判定对错，随报告一并列出供人工核对。
-func (db *DB) VerifyRelease(minPoems int64) (*VerifyReport, error) {
+func (db *DB) VerifyRelease(minPoems, minAnthology int64) (*VerifyReport, error) {
 	report := &VerifyReport{}
 	add := func(name string, passed bool, format string, args ...any) {
 		report.Checks = append(report.Checks, Check{Name: name, Passed: passed, Detail: fmt.Sprintf(format, args...)})
@@ -80,6 +81,20 @@ func (db *DB) VerifyRelease(minPoems int64) (*VerifyReport, error) {
 		return nil, err
 	}
 	add("poem relations aligned", misaligned == 0, "%d poems differ in author, dynasty or type between variants", misaligned)
+
+	// 选本标记：两表必须一致，且数量不能明显少于以往，否则说明选本文件或匹配出了问题
+	anthologyMisaligned, err := count(fmt.Sprintf(`SELECT COUNT(*) FROM %s h JOIN %s t ON t.id = h.id
+		WHERE h.anthology != t.anthology`, hans, hant))
+	if err != nil {
+		return nil, err
+	}
+	add("anthology tags aligned", anthologyMisaligned == 0, "%d poems tagged differently between variants", anthologyMisaligned)
+
+	anthologyCount, err := count("SELECT COUNT(*) FROM " + hans + " WHERE anthology != 0")
+	if err != nil {
+		return nil, err
+	}
+	add("anthology poems", anthologyCount >= minAnthology, "%d poems in an anthology, minimum %d", anthologyCount, minAnthology)
 
 	authorsMisaligned, err := count(fmt.Sprintf(`SELECT
 		(SELECT COUNT(*) FROM %[1]s h LEFT JOIN %[2]s t ON t.id = h.id WHERE t.id IS NULL OR h.dynasty_id IS NOT t.dynasty_id) +

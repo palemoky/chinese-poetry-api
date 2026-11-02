@@ -111,6 +111,32 @@ func TestOpenForServingMigratesOldDatabase(t *testing.T) {
 	assert.Error(t, err, "serving connections must still be read-only")
 }
 
+// 早于选本标记的发布库没有 anthology 列：迁移补上后全为 0，搜索照常工作。
+func TestOpenForServingAddsAnthologyColumn(t *testing.T) {
+	path := buildReleasedDB(t)
+
+	old, err := Open(path, 1, 1)
+	require.NoError(t, err)
+	for _, lang := range []Lang{LangHans, LangHant} {
+		require.NoError(t, old.Exec("ALTER TABLE "+PoemsTable(lang)+" DROP COLUMN anthology").Error)
+	}
+	require.NoError(t, old.Close())
+
+	db, err := OpenForServing(path, 2, 1)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	repo := NewRepository(db)
+	ids, err := repo.anthologyIDs()
+	require.NoError(t, err)
+	assert.Empty(t, ids)
+
+	poems, total, err := repo.SearchPoems("静夜思", "all", 1, 10)
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, total)
+	assert.Len(t, poems, 1)
+}
+
 func TestOpenForServingFailsOnMissingFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "missing.db")
 	_, err := OpenForServing(path, 1, 1)

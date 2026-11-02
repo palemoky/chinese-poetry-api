@@ -24,6 +24,9 @@ type DB struct {
 
 	// idLists 缓存短查询经倒排索引求出的完整命中列表，理由同上。
 	idLists idListCache
+
+	// anthologies 缓存收在选本里的诗词 id，理由同上。
+	anthologies anthologyCache
 }
 
 // Open 以读写方式打开 SQLite 数据库连接，供数据导入使用。
@@ -308,12 +311,19 @@ func (db *DB) migrateTablesForLang(lang Lang) error {
 		author_id INTEGER,
 		dynasty_id INTEGER,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		anthology INTEGER NOT NULL DEFAULT 0,
 		FOREIGN KEY (type_id) REFERENCES %s(id),
 		FOREIGN KEY (author_id) REFERENCES %s(id),
 		FOREIGN KEY (dynasty_id) REFERENCES %s(id)
 	)`, poemTable, poetryTypeTable, authorTable, dynastyTable)
 	if err := db.Exec(poemSQL).Error; err != nil {
 		return fmt.Errorf("failed to create %s: %w", poemTable, err)
+	}
+
+	// 早于选本标记的库里没有这一列，补上后全为 0，搜索照常工作，只是不给名篇加分。
+	// 列放在最后，与新建的表一致
+	if err := db.addColumnIfMissing(poemTable, "anthology", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
 	}
 
 	// 诗词表索引
@@ -423,20 +433,24 @@ func (db *DB) RefreshPoemCounter(lang Lang) error {
 // 列补上时取值全为默认的 0，需要由 RefreshAuthorPoemCounts 回填；
 // Migrate 会在建表完成后统一调用一次，因此这里只管加列。
 func (db *DB) addAuthorPoemCountColumn(authorTable string) error {
+	return db.addColumnIfMissing(authorTable, "poem_count", "INTEGER NOT NULL DEFAULT 0")
+}
+
+// addColumnIfMissing 在表里没有 column 时按 definition 补上。
+// CREATE TABLE IF NOT EXISTS 对已存在的表是空操作，随版本新增的列只能这样补。
+func (db *DB) addColumnIfMissing(table, column, definition string) error {
 	var columnCount int64
 	if err := db.Raw(fmt.Sprintf(
-		`SELECT count(*) FROM pragma_table_info(%q) WHERE name = 'poem_count'`, authorTable,
-	)).Scan(&columnCount).Error; err != nil {
-		return fmt.Errorf("failed to inspect columns of %s: %w", authorTable, err)
+		`SELECT count(*) FROM pragma_table_info(%q) WHERE name = ?`, table,
+	), column).Scan(&columnCount).Error; err != nil {
+		return fmt.Errorf("failed to inspect columns of %s: %w", table, err)
 	}
 	if columnCount > 0 {
 		return nil
 	}
 
-	if err := db.Exec(fmt.Sprintf(
-		"ALTER TABLE %s ADD COLUMN poem_count INTEGER NOT NULL DEFAULT 0", authorTable,
-	)).Error; err != nil {
-		return fmt.Errorf("failed to add poem_count to %s: %w", authorTable, err)
+	if err := db.Exec(fmt.Sprintf("ALTER TABLE %s ADD COLUMN %s %s", table, column, definition)).Error; err != nil {
+		return fmt.Errorf("failed to add %s to %s: %w", column, table, err)
 	}
 	return nil
 }

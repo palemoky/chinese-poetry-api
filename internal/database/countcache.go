@@ -102,6 +102,7 @@ func (db *DB) InvalidateCountCache() {
 func (db *DB) invalidateCaches() {
 	db.counts.invalidate()
 	db.idLists.invalidate()
+	db.anthologies.invalidate()
 }
 
 // countKeyBuilder 拼装计数缓存的键。

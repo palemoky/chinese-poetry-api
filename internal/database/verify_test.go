@@ -22,6 +22,7 @@ func buildBothVariants(t *testing.T) *DB {
 		require.NoError(t, repo.InsertPoem(&Poem{
 			ID: 1, Title: "静夜思", Content: datatypes.JSON(`["床前明月光"]`),
 			AuthorID: &authorID, DynastyID: &dynastyID, TypeID: ptr(int64(12)),
+			Anthology: AnthologyTangShi300,
 		}))
 	}
 	require.NoError(t, db.BuildCharIndexes())
@@ -42,7 +43,7 @@ func failedChecks(r *VerifyReport) []string {
 func TestVerifyReleasePasses(t *testing.T) {
 	db := buildBothVariants(t)
 
-	report, err := db.VerifyRelease(1)
+	report, err := db.VerifyRelease(1, 1)
 	require.NoError(t, err)
 	assert.Empty(t, failedChecks(report))
 	assert.True(t, report.Passed())
@@ -51,9 +52,23 @@ func TestVerifyReleasePasses(t *testing.T) {
 
 func TestVerifyReleaseCatchesProblems(t *testing.T) {
 	t.Run("too few poems", func(t *testing.T) {
-		report, err := buildBothVariants(t).VerifyRelease(2)
+		report, err := buildBothVariants(t).VerifyRelease(2, 1)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"poem count"}, failedChecks(report))
+	})
+
+	t.Run("too few anthology poems", func(t *testing.T) {
+		report, err := buildBothVariants(t).VerifyRelease(1, 2)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"anthology poems"}, failedChecks(report))
+	})
+
+	t.Run("anthology tags out of step", func(t *testing.T) {
+		db := buildBothVariants(t)
+		require.NoError(t, db.Exec("UPDATE "+PoemsTable(LangHant)+" SET anthology = 0").Error)
+		report, err := db.VerifyRelease(1, 1)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"anthology tags aligned"}, failedChecks(report))
 	})
 
 	t.Run("variants out of step", func(t *testing.T) {
@@ -66,7 +81,7 @@ func TestVerifyReleaseCatchesProblems(t *testing.T) {
 		require.NoError(t, err)
 		require.NoError(t, db.Exec("UPDATE "+PoemsTable(LangHant)+" SET author_id = 2").Error)
 
-		report, err := db.VerifyRelease(1)
+		report, err := db.VerifyRelease(1, 1)
 		require.NoError(t, err)
 		// 原作者 1 在繁体表里没了作品，也会被查出来
 		assert.Equal(t, []string{"poem relations aligned", "author ids aligned", "zh-Hant author poem counts"}, failedChecks(report))
@@ -75,7 +90,7 @@ func TestVerifyReleaseCatchesProblems(t *testing.T) {
 
 	t.Run("unfinished import", func(t *testing.T) {
 		db := setupFullTestDB(t)
-		report, err := db.VerifyRelease(0)
+		report, err := db.VerifyRelease(0, 0)
 		require.NoError(t, err)
 		assert.Equal(t, []string{"import finalized"}, failedChecks(report))
 	})

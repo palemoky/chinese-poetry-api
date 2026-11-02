@@ -6,14 +6,17 @@ import (
 )
 
 // 搜索结果的相关度分数。命中集合不变，只决定先后：标题与查询完全相同的
-// 最可能是用户要找的那首，其次是标题包含查询、作者名、正文。
-// 权重来自 eval/semantic 的关键词排序评测，同分时保持 ID 升序。
+// 最可能是用户要找的那首，其次是标题包含查询、作者名、正文；收在选本里的名篇再加分，
+// 足以越过“标题包含”，但越不过“标题完全相同”。
+// 权重来自 eval/semantic 的关键词排序评测（那里是 4、2、2、1、1 与 1.5，这里整体乘 2），
+// 同分时保持 ID 升序。
 const (
-	scoreTitleExact  = 4
-	scoreTitlePart   = 2
-	scoreAuthorExact = 2
-	scoreAuthorPart  = 1
-	scoreContent     = 1
+	scoreTitleExact  = 8
+	scoreTitlePart   = 4
+	scoreAuthorExact = 4
+	scoreAuthorPart  = 2
+	scoreContent     = 2
+	scoreAnthology   = 3
 )
 
 // titleSeparators 是标题中“词牌·首句”“宫调・曲牌”之类的分隔符。
@@ -62,8 +65,16 @@ func (r *Repository) rankedMatches(query, searchType string, ids []int64) ([]int
 		}
 	}
 
+	anthology, err := r.anthologyIDs()
+	if err != nil {
+		return nil, err
+	}
+
 	ranked := rankByScore(ids, func(id int64) int {
 		score := 0
+		if sortedContains(anthology, id) {
+			score += scoreAnthology
+		}
 		switch {
 		case sortedContains(exactTitle, id):
 			score += scoreTitleExact
