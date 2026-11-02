@@ -103,7 +103,9 @@ def line_run(q8, vectors, owners, query_ids):
 
 def evaluate_set(name, queries, gold, runs, rows):
     for label, run in runs.items():
-        scored = [ev.score(run[q["id"]], gold[q["id"]]) for q in queries if gold[q["id"]]]
+        if any(q["id"] not in run for q in queries):
+            continue
+        scored =[ev.score(run[q["id"]], gold[q["id"]]) for q in queries if gold[q["id"]]]
         hits = sum(s[0] for s in scored)
         mrr = sum(s[2] for s in scored) / len(scored)
         rows.setdefault(label, {})[name] = {"hits": int(hits), "n": len(scored), "mrr": round(mrr, 3)}
