@@ -53,6 +53,8 @@ func main() {
 		},
 	})
 
+	rootCmd.AddCommand(embedCommand())
+
 	if err := rootCmd.Execute(); err != nil {
 		logger.Fatal("Command execution failed", zap.Error(err))
 	}
