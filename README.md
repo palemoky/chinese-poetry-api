@@ -108,6 +108,7 @@ curl "http://localhost:1279/api/v1/poems/random"
 # 随机诗词（带过滤）
 curl "http://localhost:1279/api/v1/poems/random?author=李白"
 curl "http://localhost:1279/api/v1/poems/random?type=五言绝句"
+curl "http://localhost:1279/api/v1/poems/random?type=唐诗&dynasty=唐" # 「唐诗」等分类名涵盖整个分类（五言绝句、七言律诗等），不限朝代
 curl "http://localhost:1279/api/v1/poems/random?char=春" # 飞花令等单字场景
 curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句"
 curl "http://localhost:1279/api/v1/poems/random?author=李白&type=五言绝句&dynasty=唐"

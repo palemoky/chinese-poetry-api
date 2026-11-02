@@ -3,6 +3,7 @@ package database
 import (
 	"crypto/rand"
 	"math/big"
+	"slices"
 	"strings"
 
 	"gorm.io/gorm"
@@ -184,6 +185,11 @@ func (r *Repository) ListPoemsAfter(limit int, after *int64, dynastyID, authorID
 // listPoems 是 OFFSET 与游标两种分页方式的共同实现：两者只在如何定位起点上有区别，
 // 过滤条件、计数与排序必须完全一致，否则同一份数据在两种翻页方式下会呈现出不同的顺序。
 func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, authorID *int64, typeIDs []int64) ([]Poem, int, error) {
+	typeIDs, err := r.expandCategoryTypes(typeIDs)
+	if err != nil {
+		return nil, 0, err
+	}
+
 	applyFilters := func(q *gorm.DB) *gorm.DB {
 		if dynastyID != nil {
 			q = q.Where("dynasty_id = ?", *dynastyID)
@@ -203,7 +209,6 @@ func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, autho
 	// 无过滤时读物化计数器：COUNT(*) 要扫完一整棵索引，是唯一一个代价随表大小
 	// 增长的计数。带过滤时走的是索引区间扫描，代价随命中数增长，交给 TTL 缓存即可。
 	var totalCount int64
-	var err error
 	if dynastyID == nil && authorID == nil && len(typeIDs) == 0 {
 		var n int
 		n, err = r.CountPoems()
@@ -249,6 +254,11 @@ func (r *Repository) listPoems(limit, offset int, after *int64, dynastyID, autho
 // 采用「先 COUNT 再随机 OFFSET」的方式，保证结果在过滤集合内均匀分布。
 // 过滤集合为空时返回 gorm.ErrRecordNotFound，其余错误原样返回。
 func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) (*Poem, error) {
+	typeIDs, err := r.expandCategoryTypes(typeIDs)
+	if err != nil {
+		return nil, err
+	}
+
 	applyFilters := func(q *gorm.DB) *gorm.DB {
 		if dynastyID != nil {
 			q = q.Where("dynasty_id = ?", *dynastyID)
@@ -265,7 +275,6 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 	// 计数与 listPoems 共用同一套来源与缓存键：无过滤读计数器，带过滤走 TTL 缓存。
 	// 随机接口是被反复刷新的那一类，每次都现数一遍很不划算。
 	var count int64
-	var err error
 	if dynastyID == nil && authorID == nil && len(typeIDs) == 0 {
 		var n int
 		n, err = r.CountPoems()
@@ -289,6 +298,38 @@ func (r *Repository) GetRandomPoem(dynastyID, authorID *int64, typeIDs []int64) 
 	return r.pickRandomPoem(count, func() *gorm.DB {
 		return applyFilters(r.conn().Table(r.poemsTable())).Order("id ASC")
 	})
+}
+
+// expandCategoryTypes 把 typeIDs 中代表整个分类的体裁展开为该分类下的全部体裁，返回升序去重的 ID。
+//
+// 「唐诗」既是一个体裁，也是五言绝句、七言律诗等体裁所属的分类。按格律能判定的诗都归入
+// 具体的体裁，「唐诗」体裁本身没有作品，按它过滤因此什么也查不到（#120）。
+// 名称与所属分类相同的体裁视为分类本身，按它过滤即按整个分类过滤。
+// 体裁表只有十几行，这条查询的代价可以忽略。
+func (r *Repository) expandCategoryTypes(typeIDs []int64) ([]int64, error) {
+	if len(typeIDs) == 0 {
+		return typeIDs, nil
+	}
+	table := r.poetryTypesTable()
+	var ids []int64
+	err := r.conn().Table(table).
+		Where("id IN ?", typeIDs).
+		Or("category IN (?)", r.conn().Table(table).
+			Select("category").
+			Where("id IN ? AND name = category", typeIDs)).
+		Order("id").
+		Pluck("id", &ids).Error
+	if err != nil {
+		return nil, err
+	}
+	// 不存在的 ID 查不到行，原样保留，使其照旧匹配不到任何诗词
+	for _, id := range typeIDs {
+		if !slices.Contains(ids, id) {
+			ids = append(ids, id)
+		}
+	}
+	slices.Sort(ids)
+	return slices.Compact(ids), nil
 }
 
 // GetRandomPoemByChar 随机返回一首正文包含指定汉字的诗词（用于飞花令等玩法）。
