@@ -11,6 +11,14 @@ services:
       # Optional: Override database connection pool (default: auto-detect based on CPU cores)
       # - DB_MAX_OPEN_CONNS=20
       # - DB_MAX_IDLE_CONNS=10
+      # Optional: semantic search. Setting an embedding API also makes the container
+      # download the vector file (~200MB) released with the database.
+      # Local Ollama on the host (after `ollama pull bge-m3`); on Linux also add
+      # `extra_hosts: ["host.docker.internal:host-gateway"]` to this service:
+      # - EMBEDDING_API_URL=http://host.docker.internal:11434/v1
+      # Or SiliconFlow, with EMBEDDING_API_KEY set in .env:
+      # - EMBEDDING_API_URL=https://api.siliconflow.cn/v1
+      # - EMBEDDING_MODEL=Pro/BAAI/bge-m3
     volumes:
       - poetry-data:/app/data
 

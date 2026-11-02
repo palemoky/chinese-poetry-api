@@ -55,6 +55,47 @@ jobs:
           echo "authors=$AUTHORS" >> $GITHUB_OUTPUT
           echo "dynasties=$DYNASTIES" >> $GITHUB_OUTPUT
 
+      # 语义检索用的向量文件，可选。上一版的向量按文本复用，只有改动过的诗调用硅基流动嵌入，
+      # 通常几秒钟、花费不到一分钱；上一版没有向量文件时才全量嵌入（约 2,000–3,000 万 token）。
+      # 任何一步失败都只跳过向量文件，不影响数据库的发布。
+      - name: Build vector file
+        id: vectors
+        continue-on-error: true
+        env:
+          SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$SILICONFLOW_API_KEY" ]; then
+            echo "::warning::未配置 SILICONFLOW_API_KEY，本次不发布向量文件"
+            exit 0
+          fi
+
+          # 不带 tag 时下载的是最新 release；推送 tag 触发时新 release 尚未创建，最新的就是上一版
+          REUSE=""
+          if gh release download --pattern poetry-vectors.db.zst --dir prev; then
+            zstd -d --long=27 -q prev/poetry-vectors.db.zst -o prev/poetry-vectors.db
+            REUSE="--reuse prev/poetry-vectors.db"
+          else
+            echo "::warning::上一版没有向量文件，将全量嵌入"
+          fi
+
+          # 文件里记录 bge-m3，与本地 Ollama 生成的向量一致，可以互相复用
+          ./processor embed --db poetry.db -o poetry-vectors.db $REUSE \
+            --api https://api.siliconflow.cn/v1 --model bge-m3 --api-model Pro/BAAI/bge-m3 \
+            --api-key-env SILICONFLOW_API_KEY
+
+          # 复用来的向量与新嵌入的必须出自同一个模型。服务商换了模型时这里会失败，
+          # 此时应删掉 --reuse 全量重建，而不是发布一份新旧混杂的文件
+          ./processor check-embeddings --db poetry.db --vectors poetry-vectors.db \
+            --api https://api.siliconflow.cn/v1 --model Pro/BAAI/bge-m3 \
+            --api-key-env SILICONFLOW_API_KEY --sample 32
+
+          echo "built=true" >> $GITHUB_OUTPUT
+
+      - name: Warn about missing vector file
+        if: steps.vectors.outcome == 'failure'
+        run: echo "::warning::向量文件生成失败，本次只发布数据库，详见 Build vector file 步骤"
+
       # zstd 比 gzip -9 小约 16%（509MB → 426MB），解压也快得多，新镜像优先下载它。
       # .gz 继续发布：旧镜像的启动脚本只认 poetry.db.gz，停发会让它们无法更新数据。
       # --long=27 的窗口是 128MB，解压时须带同样的参数（或更大的 --memory）。
@@ -62,8 +103,13 @@ jobs:
         run: |
           zstd -19 --long=27 -T0 -q poetry.db -o poetry.db.zst
           gzip -9 poetry.db
-          sha256sum poetry.db.gz poetry.db.zst > checksums.txt
-          ls -l poetry.db.gz poetry.db.zst
+          FILES="poetry.db.gz poetry.db.zst"
+          if [ "${{ steps.vectors.outputs.built }}" = "true" ]; then
+            zstd -19 --long=27 -T0 -q poetry-vectors.db -o poetry-vectors.db.zst
+            FILES="$FILES poetry-vectors.db.zst"
+          fi
+          sha256sum $FILES > checksums.txt
+          ls -l $FILES
 
       # CHANGELOG.md 是唯一来源（含人工润色），这里截取本版本至上一个 x.y.0 之间的内容；
       # 只有 x.y.0 会发布 Release，中间的补丁版本一并列出
@@ -93,9 +139,12 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          # 没有生成向量文件时跳过它，而不是让整个发布失败
+          fail_on_unmatched_files: false
           files: |
             poetry.db.zst
             poetry.db.gz
+            poetry-vectors.db.zst
             checksums.txt
           body: |
             ${{ steps.changelog.outputs.content }}
@@ -116,6 +165,7 @@ jobs:
             |------|------|
             | `poetry.db.zst` | 统一数据库（包含简体和繁体表），zstd 压缩，解压：`zstd -d --long=27 poetry.db.zst` |
             | `poetry.db.gz` | 同一数据库的 gzip 压缩版，内容相同、体积更大 |
+            | `poetry-vectors.db.zst` | 语义检索用的向量文件（可选），须与同一版本的数据库一起使用，解压：`zstd -d --long=27 poetry-vectors.db.zst` |
             | `checksums.txt` | SHA256 校验和 |
 
             ### 🌏 多语言支持
