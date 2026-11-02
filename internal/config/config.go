@@ -96,9 +96,8 @@ func Load(configPath string) (*Config, error) {
 
 	// 指定了配置文件则读取
 	if configPath != "" {
-		v.SetConfigFile(configPath)
-		if err := v.ReadInConfig(); err != nil {
-			return nil, fmt.Errorf("failed to read config file: %w", err)
+		if err := readConfigFile(v, configPath); err != nil {
+			return nil, err
 		}
 	}
 
@@ -119,6 +118,36 @@ func Load(configPath string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// readConfigFile 读取配置文件并合并进 v，合并前去掉值为 null 的键。
+// 一个段的子项全部注释掉时（如 config.yaml 里的 semantic:），这个段解析为 null。
+// viper 遇到 null 段时，只要再对其中的键调用 Set（环境变量就是这样写入的），
+// Unmarshal 就会丢掉这一段其余键的默认值：设了 EMBEDDING_API_URL 后
+// semantic.vectors_path 变成空串，语义检索因找不到向量文件而关闭。
+func readConfigFile(v *viper.Viper, path string) error {
+	file := viper.New()
+	file.SetConfigFile(path)
+	if err := file.ReadInConfig(); err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+	if err := v.MergeConfigMap(dropNulls(file.AllSettings())); err != nil {
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+	return nil
+}
+
+// dropNulls 递归去掉 m 中值为 nil 的键。
+func dropNulls(m map[string]any) map[string]any {
+	for k, val := range m {
+		switch val := val.(type) {
+		case nil:
+			delete(m, k)
+		case map[string]any:
+			m[k] = dropNulls(val)
+		}
+	}
+	return m
 }
 
 func setDefaults(v *viper.Viper) {
