@@ -1,6 +1,7 @@
 package database
 
 import (
+	"cmp"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -399,12 +400,10 @@ func (r *Repository) allModeMatches(query string) ([]int64, error) {
 		return ids, nil
 	}
 
-	ftsTable := r.poemsFtsTable()
 	var ids []int64
 	for _, column := range []string{"title", "content_text"} {
-		cond, arg := substringMatch(column, query)
-		var matched []int64
-		if err := r.conn().Table(ftsTable).Where(cond, arg).Order("rowid").Pluck("rowid", &matched).Error; err != nil {
+		matched, err := r.ftsColumnMatches(column, query)
+		if err != nil {
 			return nil, err
 		}
 		ids = unionSorted(ids, matched)
@@ -420,7 +419,7 @@ func (r *Repository) allModeMatches(query string) ([]int64, error) {
 	return ids, nil
 }
 
-// pageOfIDs 取升序 id 列表中的一页诗词，并以列表长度作为总数。
+// pageOfIDs 按列表顺序取 id 列表中的一页诗词，并以列表长度作为总数。
 func (r *Repository) pageOfIDs(ids []int64, offset, pageSize int) ([]Poem, int64, error) {
 	start := min(offset, len(ids))
 	end := min(offset+pageSize, len(ids))
@@ -431,16 +430,23 @@ func (r *Repository) pageOfIDs(ids []int64, offset, pageSize int) ([]Poem, int64
 	return poems, int64(len(ids)), nil
 }
 
-// poemsByIDs 按 id 升序取出一批诗词并补齐关联数据。
+// poemsByIDs 按 ids 的顺序取出一批诗词并补齐关联数据，不存在的 id 跳过。
 func (r *Repository) poemsByIDs(ids []int64) ([]Poem, error) {
 	poems := []Poem{}
 	if len(ids) == 0 {
 		return poems, nil
 	}
-	err := r.conn().Table(r.poemsTable()).Where("id IN ?", ids).Order("id ASC").Find(&poems).Error
+	err := r.conn().Table(r.poemsTable()).Where("id IN ?", ids).Find(&poems).Error
 	if err != nil {
 		return nil, err
 	}
+
+	order := make(map[int64]int, len(ids))
+	for i, id := range ids {
+		order[id] = i
+	}
+	slices.SortFunc(poems, func(a, b Poem) int { return cmp.Compare(order[a.ID], order[b.ID]) })
+
 	if err := r.loadPoemRelations(poems); err != nil {
 		return nil, err
 	}

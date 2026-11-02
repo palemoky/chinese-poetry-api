@@ -168,8 +168,9 @@ func registerTools(s *mcp.Server, repo *database.Repository) {
 	t := &tools{repo: repo}
 
 	addTool(s, &mcp.Tool{
-		Name:        "search_poems",
-		Description: "Find poems containing a literal substring in their title, content or author name. Does not match by meaning.",
+		Name: "search_poems",
+		Description: "Find poems containing a literal substring in their title, content or author name. Does not match by meaning. " +
+			"Results are ordered by relevance: exact title (or the tune name before a separator) first, then title, author name and content matches.",
 	}, t.searchPoems)
 	addTool(s, &mcp.Tool{
 		Name:        "list_poems",
