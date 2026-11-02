@@ -2,6 +2,62 @@
 
 本项目所有值得关注的变更都记录在此文件中，由 [git-cliff](https://git-cliff.org) 根据提交记录生成并人工整理。
 
+## [0.7.0](https://github.com/palemoky/chinese-poetry-api/releases/tag/v0.7.0) - 2026-11-02
+
+### ✨ 新功能
+
+- **authors**: 同名诗人按朝代区分，导入诗人生平简介 ([a445ae4](https://github.com/palemoky/chinese-poetry-api/commit/a445ae482980f0473fd8f2dfef32c4dc6f2ece38))
+- **api**: REST 响应支持浏览器与 CDN 缓存 ([82aa83d](https://github.com/palemoky/chinese-poetry-api/commit/82aa83dfd329762ecf1f610b5049aab174651906))
+- **api**: 只读 REST 路由支持 HEAD 请求 ([5b72dca](https://github.com/palemoky/chinese-poetry-api/commit/5b72dcae93b9e3ddc38dd52ccd948ad1f2b17d6d))
+- **processor**: 数据库发布前须先通过校验 ([b9bf7c0](https://github.com/palemoky/chinese-poetry-api/commit/b9bf7c0e2b2c8c96623d4130c2e7afecc4ae6ecf))
+- **mcp**: 新增 MCP 端点 ([dc5e665](https://github.com/palemoky/chinese-poetry-api/commit/dc5e66522f58536d12da47ee8b7d8bd6a555fb5a))
+- **search**: 关键词搜索结果按相关度排序 ([3e96cc4](https://github.com/palemoky/chinese-poetry-api/commit/3e96cc427d456732331a0f86e5afe0e938b40705))
+- **eval**: 新增语义搜索评测集及基线 ([e4a996e](https://github.com/palemoky/chinese-poetry-api/commit/e4a996ec27cc92e2fb6df82fcb7b263825a49764))
+- **eval**: 在全量语料上评测 bge-m3 向量及混合检索 ([d5f813f](https://github.com/palemoky/chinese-poetry-api/commit/d5f813f7a4ee2e7cc8a7a242d4c9807edfb12b09))
+- **data**: 标记选本收录的诗词，并在搜索中提升其排名 ([cbc885f](https://github.com/palemoky/chinese-poetry-api/commit/cbc885f5a97d999d6ef88b2bee83d2724698149b))
+- **vectors**: 新增向量文件格式及数据处理的 embed 命令 ([e3a60ce](https://github.com/palemoky/chinese-poetry-api/commit/e3a60ceee0f2e9074aa18c1b3843d8691a1ea1b8))
+- **eval**: 评测知名度先验与重排序 ([e037bb1](https://github.com/palemoky/chinese-poetry-api/commit/e037bb1400a417410acc7ad6e99f824314ad3389))
+- **eval**: 评测关键词相关度排序与客户端模型重排序 ([dc51ebe](https://github.com/palemoky/chinese-poetry-api/commit/dc51ebeaea583496e0ef5a593a68a6c882d7d04e))
+- **semantic**: 通过 REST 与 MCP 提供语义搜索 ([359072a](https://github.com/palemoky/chinese-poetry-api/commit/359072a3f9dab7dca4c352e670757ae6bc917463))
+- **semantic**: 新增 GraphQL `semanticSearchPoems` 查询，触发限流时耐心等待重试 ([4d7cb58](https://github.com/palemoky/chinese-poetry-api/commit/4d7cb58e5376aa6a0b687ec1fc570577e14b8ec9))
+- **release**: 每次数据发布时一并发布向量文件 ([1a3edaf](https://github.com/palemoky/chinese-poetry-api/commit/1a3edafbbe8e722e22fe13aca3a45b2836966ae6))
+
+### 🐛 问题修复
+
+- **processor**: 入库前按作者+规整正文去重，同名词牌以首句区分标题 ([b8f2f9b](https://github.com/palemoky/chinese-poetry-api/commit/b8f2f9b955c99371580232c95f992db9c3e40a1b))
+- **database**: 诗词唯一索引加入 author_id，保留不同作者的同文作品 ([4cbbe8d](https://github.com/palemoky/chinese-poetry-api/commit/4cbbe8d7c1a5bb9eded453128b52a50ace846410))
+- **database**: 恢复合并时丢失的 err 赋值 ([5db21ba](https://github.com/palemoky/chinese-poetry-api/commit/5db21bafdb61bc844fc04a91ad252895fc71b205))
+- **server**: 加固 HTTP、GraphQL 与代理处理，防范滥用 ([03ae017](https://github.com/palemoky/chinese-poetry-api/commit/03ae017f72a0f62e4a89290dcf8cc363c8c858b9))
+- **api**: 请求日志改用 zap 输出，发送合法的 CORS 响应头 ([3656457](https://github.com/palemoky/chinese-poetry-api/commit/3656457cca39bc9cdf9e07f395081010f6bf8cbb))
+- **database**: 以只读模式提供服务前，先通过临时可写连接执行迁移 ([f828e9e](https://github.com/palemoky/chinese-poetry-api/commit/f828e9e52943280b5fb006d7d015159262d86c6c))
+- **loader**: 《全唐诗》中的宋人作品归入宋朝，数据集按稳定顺序加载 ([26979ab](https://github.com/palemoky/chinese-poetry-api/commit/26979ab6e395bf459daaecbf980e4a16919cc0f7))
+- **processor**: 简繁体版本的作者 ID 保持一致，繁体源数据不再重复转换 ([1a322e0](https://github.com/palemoky/chinese-poetry-api/commit/1a322e09918276917599d095eef40c25fc04aa58))
+- **graphql**: `Author.poems` 跟随外层查询的 `lang` 参数 ([44a2969](https://github.com/palemoky/chinese-poetry-api/commit/44a296937383282e044ca88a16d21d94762124ca))
+- **server**: GraphQL 请求体上限设为 64 KB ([3e2efa1](https://github.com/palemoky/chinese-poetry-api/commit/3e2efa1c65cc10f55fd4e03f3578f4c15a82f4ce))
+- **config**: 正确读取配置文件中的 `database.path` 及 `DB_PATH` 环境变量 ([476edf5](https://github.com/palemoky/chinese-poetry-api/commit/476edf563ed7398d9b9b31c2f71760d53a5604fc))
+- **docker**: 替换新数据库前清除残留的 WAL 文件 ([b4f5dc9](https://github.com/palemoky/chinese-poetry-api/commit/b4f5dc949d6263b81c423f1bdd7fbb410155bf0c))
+- **processor**: 作者姓名的异体写法视为同一作者 ([232acac](https://github.com/palemoky/chinese-poetry-api/commit/232acac93d196e018484808db978730aa9dc5f6c))
+- **graphql**: 作者列表正确加载每位作者的朝代 ([846b691](https://github.com/palemoky/chinese-poetry-api/commit/846b6916d8639aa46a23b8b5c5b7dec729286e85))
+
+### ⚡ 性能优化
+
+- **pagination**: 新增游标分页，热点计数预先物化 ([92934c5](https://github.com/palemoky/chinese-poetry-api/commit/92934c5be6dbf79ce5497c9aa5483933b4978698))
+- **database**: API 以只读方式打开数据库，弃用共享缓存 ([6fde29c](https://github.com/palemoky/chinese-poetry-api/commit/6fde29ca66f0dc2744d3918c6ae354a9f39979f2))
+- **database**: 搜索词按字面匹配，精简随机诗词查询 ([718b998](https://github.com/palemoky/chinese-poetry-api/commit/718b998c3a7d4710cf710359ce0a095f2c94d3c8))
+- **search**: 1～2 字的查询改用单字倒排索引 ([8f38c34](https://github.com/palemoky/chinese-poetry-api/commit/8f38c34dd07526a3196731f9712404f88e461a97))
+- **search**: 「all」模式拆分为走索引的多个查询，作者匹配改用 IN 批量获取 ([bc0373a](https://github.com/palemoky/chinese-poetry-api/commit/bc0373ab2ec463c8f4ca3d1f0a41ba5f91db0382))
+- **api**: 请求结束时取消数据库查询 ([357e588](https://github.com/palemoky/chinese-poetry-api/commit/357e58895ddaaeb11ea10f66f6f8f6f7d44f7192))
+- **data**: 发布的数据库移除仅导入时使用的索引和字段 ([35b7d97](https://github.com/palemoky/chinese-poetry-api/commit/35b7d9753e9137427857d7a2a7d30873b8d8ecf5))
+- **api**: 大于 1 KB 的响应启用 gzip 压缩 ([e42934d](https://github.com/palemoky/chinese-poetry-api/commit/e42934d1c1aba2979530ad651197479abd01448a))
+
+### ♻️ 重构
+
+- **processor**: 拆分 `runEmbed` 以满足 gocyclo 圈复杂度检查 ([19b473d](https://github.com/palemoky/chinese-poetry-api/commit/19b473db5a27937d9b75a1c2e1b4c68aae724401))
+
+### 📝 文档
+
+- **readme**: 按 fork 后的数据更新数据集统计数字 ([c43da5a](https://github.com/palemoky/chinese-poetry-api/commit/c43da5a778c511f0b5596b4345f8292160186ce7))
+
 ## [0.6.1](https://github.com/palemoky/chinese-poetry-api/releases/tag/v0.6.1) - 2026-08-02
 
 ### ✨ 新功能
