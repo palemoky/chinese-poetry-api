@@ -34,13 +34,14 @@ type Query {
     typeId: ID
   ): PoemConnection!
 
-  "Search poems by query"
+  "Search poems by query, optionally within one dynasty. Results keep the same relevance order either way."
   searchPoems(
     query: String!
     lang: Lang = ZH_HANS
     searchType: SearchType = ALL
     page: Int = 1
     pageSize: Int = 20
+    dynastyId: ID
   ): PoemConnection!
 
   """

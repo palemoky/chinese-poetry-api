@@ -128,7 +128,7 @@ func (r *queryResolver) Poems(ctx context.Context, lang *database.Lang, page *in
 }
 
 // SearchPoems is the resolver for the searchPoems field.
-func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int) (*database.PoemConnection, error) {
+func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *database.Lang, searchType *model.SearchType, page *int, pageSize *int, dynastyID *string) (*database.PoemConnection, error) {
 	// 统一走公共的解析函数，而非直接读取参数——
 	// 后者正是本 resolver 曾经绕过 pageSize 上限的原因。
 	pag, err := parsePagination(page, pageSize)
@@ -149,9 +149,14 @@ func (r *queryResolver) SearchPoems(ctx context.Context, query string, lang *dat
 		}
 	}
 
+	dynastyIDInt, err := parseOptionalID(dynastyID)
+	if err != nil {
+		return nil, err
+	}
+
 	langVal := parseLang(lang)
 	repo := r.repo(ctx, langVal)
-	poems, total, err := repo.SearchPoems(query, st, pag.Page, pag.PageSize)
+	poems, total, err := repo.SearchPoemsInDynasty(query, st, dynastyIDInt, pag.Page, pag.PageSize)
 	if err != nil {
 		return nil, err
 	}

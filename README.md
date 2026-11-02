@@ -99,6 +99,9 @@ curl "http://localhost:1279/api/v1/poems?page_size=50&after=cG9lbTo0MjA"
 # 搜索诗词，结果按相关度排序
 curl "http://localhost:1279/api/v1/poems/search?q=静夜思"
 
+# 在某个朝代内搜索（也可用 dynasty_id），排序与不限朝代时一致
+curl "http://localhost:1279/api/v1/poems/search?q=月&dynasty=唐"
+
 # 按意思检索（需启用语义检索，见下文）
 curl "http://localhost:1279/api/v1/poems/semantic?q=下雪天一个老人独自在小船上钓鱼&limit=10"
 
@@ -204,7 +207,7 @@ claude mcp add --transport http poetry http://localhost:1279/mcp
 
 | 工具 | 说明 |
 |------|------|
-| `search_poems` | 按字面子串搜索标题、正文或作者，结果按相关度排序 |
+| `search_poems` | 按字面子串搜索标题、正文或作者，可限定朝代，结果按相关度排序 |
 | `list_poems` | 按作者、朝代、体裁筛选诗词 |
 | `random_poem` | 随机一首诗词，可限定条件或指定包含某字 |
 | `get_author` | 按姓名查询作者小传与作品数 |

@@ -127,6 +127,7 @@ func TestSearchPoems(t *testing.T) {
 	_, repo := setupRepo(t)
 	seedPoem(t, repo, 1, "静夜思", "李白", "唐", "床前明月光，", "疑是地上霜。")
 	seedPoem(t, repo, 2, "春晓", "孟浩然", "唐", "春眠不觉晓，", "处处闻啼鸟。")
+	seedPoem(t, repo, 3, "春日", "朱熹", "宋", "胜日寻芳泗水滨，", "无边光景一时新。")
 	session := connect(t, repo)
 
 	t.Run("matches and keeps paragraphs", func(t *testing.T) {
@@ -148,6 +149,16 @@ func TestSearchPoems(t *testing.T) {
 		assert.NotContains(t, text, `_id"`)
 	})
 
+	t.Run("filters by dynasty", func(t *testing.T) {
+		out := callInto[PoemsOutput](t, session, "search_poems", map[string]any{"query": "春", "dynasty": "宋"})
+		require.Len(t, out.Poems, 1)
+		assert.Equal(t, "春日", out.Poems[0].Title)
+
+		out = callInto[PoemsOutput](t, session, "search_poems", map[string]any{"query": "春", "dynasty": "唐"})
+		require.Len(t, out.Poems, 1)
+		assert.Equal(t, "春晓", out.Poems[0].Title)
+	})
+
 	t.Run("no match is an empty list, not an error", func(t *testing.T) {
 		text, isError := call(t, session, "search_poems", map[string]any{"query": "不存在的内容"})
 		assert.False(t, isError)
@@ -159,6 +170,7 @@ func TestSearchPoems(t *testing.T) {
 		"bad search_type": {"query": "明月", "search_type": "meaning"},
 		"bad lang":        {"query": "明月", "lang": "en"},
 		"page too large":  {"query": "明月", "page_size": maxPageSize + 1},
+		"unknown dynasty": {"query": "明月", "dynasty": "大明"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, isError := call(t, session, "search_poems", args)
