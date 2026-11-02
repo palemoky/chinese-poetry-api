@@ -2,6 +2,18 @@
 
 本项目所有值得关注的变更都记录在此文件中，由 [git-cliff](https://git-cliff.org) 根据提交记录生成并人工整理。
 
+## [0.8.0](https://github.com/palemoky/chinese-poetry-api/releases/tag/v0.8.0) - 2026-11-03
+
+### ✨ 新功能
+
+- **search**: 关键词搜索支持按朝代筛选，REST 用 `dynasty` 或 `dynasty_id`，GraphQL 用 `dynastyId`，MCP 用 `dynasty` ([bcc55d7](https://github.com/palemoky/chinese-poetry-api/commit/bcc55d7cf0e66776722f69a3dc748714d26140b4))
+- **api**: [**破坏性变更**] 不再返回诗词 ID，GraphQL 移除 `Poem.id` 字段与 `poem(id:)` 查询：诗词 ID 每次数据发布都可能变化 ([17c2714](https://github.com/palemoky/chinese-poetry-api/commit/17c27140b9b2d29df2d43428e82cf534f10053b3))
+
+### 🐛 问题修复
+
+- **api**: 按「唐诗」等分类名过滤体裁时涵盖整个分类，`type=唐诗` 不再查不到诗词 ([8ecab9a](https://github.com/palemoky/chinese-poetry-api/commit/8ecab9a01ca4238f6a89574d7519fa5f638a4057))
+- **graphql**: `statistics` 按 `lang` 参数返回对应简繁写法的朝代名 ([36a7617](https://github.com/palemoky/chinese-poetry-api/commit/36a76170f7bcac66c0e56421e80afb60a1c7ec5b))
+
 ## [0.7.0](https://github.com/palemoky/chinese-poetry-api/releases/tag/v0.7.0) - 2026-11-02
 
 ### ✨ 新功能
