@@ -509,6 +509,57 @@ func TestPoemsFilterByHomonymAuthor(t *testing.T) {
 	assert.Equal(t, []string{"幽梦影一", "幽梦影二"}, titles("/poems?author=张潮&dynasty_id="+strconv.FormatInt(qing, 10)))
 }
 
+// 搜索接口可按朝代筛选（#65），参数与 /poems 一致：dynasty 按名称，dynasty_id 按 ID。
+func TestSearchPoemsByDynasty(t *testing.T) {
+	router, repo := setupPoemTestRouter(t)
+	router.GET("/poems/search", NewPoemHandler(repo).SearchPoems)
+
+	createTestPoem(t, repo, 1, "月夜", "露从今夜白")
+	songID, err := repo.GetOrCreateDynasty("宋")
+	require.NoError(t, err)
+	authorID, err := repo.GetOrCreateAuthor("苏轼", songID)
+	require.NoError(t, err)
+	require.NoError(t, repo.InsertPoem(&database.Poem{
+		ID: 2, Title: "水调歌头·明月几时有", Content: datatypes.JSON(`["明月几时有"]`),
+		AuthorID: &authorID, DynastyID: &songID,
+	}))
+
+	search := func(query string) (int, map[string]any) {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/poems/search"+query, nil))
+		var resp map[string]any
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
+		return w.Code, resp
+	}
+	dynastiesOf := func(resp map[string]any) []string {
+		var names []string
+		for _, p := range resp["data"].([]any) {
+			names = append(names, p.(map[string]any)["dynasty"].(map[string]any)["name"].(string))
+		}
+		return names
+	}
+
+	code, resp := search("?q=" + url.QueryEscape("月"))
+	require.Equal(t, http.StatusOK, code)
+	assert.ElementsMatch(t, []string{"唐", "宋"}, dynastiesOf(resp))
+
+	code, resp = search("?q=" + url.QueryEscape("月") + "&dynasty=" + url.QueryEscape("宋"))
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, []string{"宋"}, dynastiesOf(resp))
+	assert.Equal(t, float64(1), resp["pagination"].(map[string]any)["total"])
+
+	code, resp = search("?q=" + url.QueryEscape("月") + "&dynasty_id=" + strconv.FormatInt(songID, 10) + "&type=content")
+	require.Equal(t, http.StatusOK, code)
+	assert.Equal(t, []string{"宋"}, dynastiesOf(resp))
+
+	code, resp = search("?q=" + url.QueryEscape("月") + "&dynasty=" + url.QueryEscape("不存在"))
+	assert.Equal(t, http.StatusNotFound, code)
+	assert.Equal(t, "dynasty not found", resp["error"])
+
+	code, _ = search("?q=" + url.QueryEscape("月") + "&dynasty_id=abc")
+	assert.Equal(t, http.StatusBadRequest, code)
+}
+
 // 诗词 ID 每次数据发布都可能变化，响应里不再包含（作者、朝代、体裁的 ID 保留）。
 func TestPoemResponsesHaveNoID(t *testing.T) {
 	router, repo := setupPoemTestRouter(t)

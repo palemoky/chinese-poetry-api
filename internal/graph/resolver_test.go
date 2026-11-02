@@ -154,6 +154,25 @@ func TestSearchPoemsQuery(t *testing.T) {
 		err := c.Post(`query { searchPoems(query: "李白", searchType: AUTHOR) { totalCount } }`, &resp)
 		require.NoError(t, err)
 	})
+
+	t.Run("search within a dynasty", func(t *testing.T) {
+		var resp struct {
+			SearchPoems struct{ TotalCount int }
+		}
+		require.NoError(t, c.Post(`query { searchPoems(query: "静夜思") { totalCount } }`, &resp))
+		all := resp.SearchPoems.TotalCount
+		require.Positive(t, all)
+
+		tang, err := repo.GetDynastyByName("唐")
+		require.NoError(t, err)
+		require.NoError(t, c.Post(fmt.Sprintf(`query { searchPoems(query: "静夜思", dynastyId: "%d") { totalCount } }`, tang.ID), &resp))
+		assert.Equal(t, all, resp.SearchPoems.TotalCount)
+
+		require.NoError(t, c.Post(`query { searchPoems(query: "静夜思", dynastyId: "999999") { totalCount } }`, &resp))
+		assert.Zero(t, resp.SearchPoems.TotalCount)
+
+		assert.Error(t, c.Post(`query { searchPoems(query: "静夜思", dynastyId: "abc") { totalCount } }`, &resp))
+	})
 }
 
 func TestAuthorsQuery(t *testing.T) {

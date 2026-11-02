@@ -3,6 +3,7 @@ package database
 import (
 	"crypto/rand"
 	"math/big"
+	"slices"
 	"strings"
 
 	"gorm.io/gorm"
@@ -416,6 +417,12 @@ func (r *Repository) ListAuthorPoems(authorID int64, limit, offset int) ([]Poem,
 // 单字、双字中文查询。
 // searchType 可取："all"、"title"、"content"、"author"。
 func (r *Repository) SearchPoems(query string, searchType string, page, pageSize int) ([]Poem, int64, error) {
+	return r.SearchPoemsInDynasty(query, searchType, nil, page, pageSize)
+}
+
+// SearchPoemsInDynasty 与 SearchPoems 相同，dynastyID 不为 nil 时只返回该朝代的诗词，
+// 排序与不限朝代时一致。
+func (r *Repository) SearchPoemsInDynasty(query string, searchType string, dynastyID *int64, page, pageSize int) ([]Poem, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -431,16 +438,63 @@ func (r *Repository) SearchPoems(query string, searchType string, page, pageSize
 		if ids, ok, err := r.shortTermMatches(query, searchType); err != nil {
 			return nil, 0, err
 		} else if ok {
+			ids, err = r.inDynasty(ids, dynastyID, searchType, query)
+			if err != nil {
+				return nil, 0, err
+			}
 			return r.pageOfIDs(ids, offset, pageSize)
 		}
-		return r.searchContent(query, offset, pageSize)
+		return r.searchContent(query, dynastyID, offset, pageSize)
 	}
 
 	ranked, err := r.rankedIDs(query, searchType)
 	if err != nil {
 		return nil, 0, err
 	}
+	ranked, err = r.inDynasty(ranked, dynastyID, searchType, query)
+	if err != nil {
+		return nil, 0, err
+	}
 	return r.pageOfIDs(ranked, offset, pageSize)
+}
+
+// dynastyFilterChunk 是 inDynasty 每条查询带的 ID 个数，低于 SQLite 默认的 32766 个参数上限。
+const dynastyFilterChunk = 10000
+
+// inDynasty 保持顺序地筛出 ids 中属于 dynastyID 的诗词，dynastyID 为 nil 时原样返回。
+// ids 须是 searchType 下 query 的完整命中列表，结果按这三者与朝代进 idLists 缓存：
+// 常用字的命中多达数万首，每翻一页都重筛一遍很浪费。
+func (r *Repository) inDynasty(ids []int64, dynastyID *int64, searchType, query string) ([]int64, error) {
+	if dynastyID == nil || len(ids) == 0 {
+		return ids, nil
+	}
+	cacheKey := newCountKey("in-dynasty", r.lang).addID(*dynastyID).add(searchType).add(query).String()
+	if filtered, hit := r.db.idLists.get(cacheKey); hit {
+		return filtered, nil
+	}
+
+	keep := make(map[int64]bool)
+	for chunk := range slices.Chunk(ids, dynastyFilterChunk) {
+		var matched []int64
+		err := r.conn().Table(r.poemsTable()).
+			Where("dynasty_id = ? AND id IN ?", *dynastyID, chunk).
+			Pluck("id", &matched).Error
+		if err != nil {
+			return nil, err
+		}
+		for _, id := range matched {
+			keep[id] = true
+		}
+	}
+	filtered := make([]int64, 0, len(keep))
+	for _, id := range ids {
+		if keep[id] {
+			filtered = append(filtered, id)
+		}
+	}
+
+	r.db.idLists.set(cacheKey, filtered)
+	return filtered, nil
 }
 
 // SearchPoemIDs 返回 "all" 模式下按相关度排序的前 limit 个命中 id，供语义检索与关键词结果融合。
@@ -488,18 +542,22 @@ func (r *Repository) rankedIDs(query, searchType string) ([]int64, error) {
 }
 
 // searchContent 是只搜正文的长查询路径：走 FTS trigram 索引，按 ID 升序分页。
-func (r *Repository) searchContent(query string, offset, pageSize int) ([]Poem, int64, error) {
+func (r *Repository) searchContent(query string, dynastyID *int64, offset, pageSize int) ([]Poem, int64, error) {
 	poemTable := r.poemsTable()
 	ftsTable := r.poemsFtsTable()
 	ftsJoin := "JOIN " + ftsTable + " ON " + ftsTable + ".rowid = " + poemTable + ".id"
 	applyMatch := func(q *gorm.DB) *gorm.DB {
 		cond, arg := substringMatch(ftsTable+".content_text", query)
-		return q.Joins(ftsJoin).Where(cond, arg)
+		q = q.Joins(ftsJoin).Where(cond, arg)
+		if dynastyID != nil {
+			q = q.Where(poemTable+".dynasty_id = ?", *dynastyID)
+		}
+		return q
 	}
 
 	// 计数与页码无关，且要把同一个 FTS join 再跑一遍，代价与取数相当，故走缓存。
 	// 键含用户输入的关键词，缓存的条目数上限见 countCacheMaxEntries。
-	key := newCountKey("search", r.lang).add("content").add(query).String()
+	key := newCountKey("search", r.lang).add("content").add(query).addOptionalID(dynastyID).String()
 	total, err := r.db.counts.getOrLoad(key, func() (int64, error) {
 		var n int64
 		err := applyMatch(r.conn().Table(poemTable)).Count(&n).Error
