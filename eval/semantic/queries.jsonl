@@ -1,0 +1,64 @@
+{"id":"theme-01","category":"theme","query":"思念故乡的诗","keywords":["故乡","思归","乡愁"],"gold":[["李白","床前看月光"],["王维","独在异乡为异客"],["贺知章","少小离家老大回"],["杜甫","露从今夜白"],["王安石","春风自绿江南岸"]]}
+{"id":"theme-02","category":"theme","query":"边塞将士出征打仗的诗","keywords":["边塞","征战","将军"],"gold":[["王昌龄","秦时明月汉时关"],["王翰","葡萄美酒夜光杯"],["王之涣","黄河远上白云间"],["范仲淹","塞下秋来风景异"],["卢纶","月黑鴈飞高"]]}
+{"id":"theme-03","category":"theme","query":"送别朋友的诗","keywords":["送别","离别","故人"],"gold":[["王维","渭城朝雨浥轻尘"],["李白","故人西辞黄鹤楼"],["王勃","海内存知己"],["高适","十里黄云白日曛"],["李白","桃花潭水深千尺"]]}
+{"id":"theme-04","category":"theme","query":"悼念亡妻","keywords":["悼亡","亡妻","生死"],"gold":[["苏轼","十年生死两茫茫"],["元稹","曾经沧海难为水"],["元稹","昔日戏言身后意"],["纳兰性德","谁念西风独自凉"]]}
+{"id":"theme-05","category":"theme","query":"忧国忧民、报国之志","keywords":["报国","国破","山河"],"gold":[["杜甫","国破山河在"],["陆游","死去元知万事空"],["文天祥","人生自古谁无死"],["杜甫","安得广厦千万间"],["岳飞","怒发冲冠"]]}
+{"id":"theme-06","category":"theme","query":"隐居田园的闲适生活","keywords":["田园","归隐","东篱"],"gold":[["孟浩然","故人具鸡黍"],["王维","空山新雨后"]]}
+{"id":"theme-07","category":"theme","query":"怀才不遇的苦闷","keywords":["怀才","不遇","知音"],"gold":[["李白","长风破浪会有时"],["陈子昂","前不见古人"],["李白","天生我材必有用"]]}
+{"id":"theme-08","category":"theme","query":"咏梅花的诗","keywords":["梅花","寒梅","暗香"],"gold":[["王安石","墙角数枝梅"],["林逋","众芳摇落独暄妍"],["陆游","零落成泥碾作尘"],["卢梅坡","梅须逊雪三分白"]]}
+{"id":"theme-09","category":"theme","query":"亡国之痛","keywords":["故国","亡国","兴亡"],"gold":[["李煜","春花秋月何时了"],["李煜","帘外雨潺潺"],["杜牧","烟笼寒水月笼沙"],["刘禹锡","朱雀桥边野草花"],["姜夔","淮左名都"]]}
+{"id":"theme-10","category":"theme","query":"中秋赏月","keywords":["中秋","明月","婵娟"],"gold":[["苏轼","明月几时有"],["张九龄","海上生明月"],["王建","中庭地白树栖鸦"],["苏轼","暮云收尽溢清寒"]]}
+{"id":"theme-11","category":"theme","query":"女子思念远方丈夫的闺怨诗","keywords":["闺怨","思妇","闺中"],"gold":[["王昌龄","闺中少妇不曾愁"],["温庭筠","梳洗罢"],["金昌绪","打起黄莺儿"],["李清照","寻寻觅觅"]]}
+{"id":"theme-12","category":"theme","query":"劝人珍惜时光、努力学习","keywords":["光阴","少年","勤学"],"gold":[["不详","花开堪折直须折"],["岳飞","怒发冲冠"]]}
+{"id":"scene-01","category":"scene","query":"朋友坐船走远了，诗人还站在江边一直望着","keywords":["送别","孤帆","江边"],"gold":[["李白","故人西辞黄鹤楼"]]}
+{"id":"scene-02","category":"scene","query":"下雪天一个老人独自在小船上钓鱼","keywords":["独钓","孤舟","寒江"],"gold":[["柳宗元","千山鸟飞绝"]]}
+{"id":"scene-03","category":"scene","query":"春天早上睡过了头，听到鸟叫，想起昨夜的风雨","keywords":["春眠","啼鸟","风雨"],"gold":[["孟浩然","春眠不觉晓"]]}
+{"id":"scene-04","category":"scene","query":"清明节下着雨，路上的人很伤心，想找个地方喝酒","keywords":["清明","酒家","行人"],"gold":[["杜牧","清明时节雨纷纷"]]}
+{"id":"scene-05","category":"scene","query":"夜里船停在苏州城外，听见寺庙的钟声","keywords":["夜泊","钟声","姑苏"],"gold":[["张继","月落乌啼霜满天"]]}
+{"id":"scene-06","category":"scene","query":"去山里拜访隐士，小童说师父采药去了","keywords":["寻隐者","童子","采药"],"gold":[["贾岛","松下问童子"]]}
+{"id":"scene-07","category":"scene","query":"农民在正午的烈日下锄地，汗水滴进土里","keywords":["锄禾","农夫","粒粒"],"gold":[["李绅","锄禾日当午"]]}
+{"id":"scene-08","category":"scene","query":"老人回到家乡，孩子们不认识他，笑着问他从哪里来","keywords":["还乡","儿童","乡音"],"gold":[["贺知章","少小离家老大回"]]}
+{"id":"scene-09","category":"scene","query":"重阳节兄弟们登高，只少了我一个人","keywords":["重阳","登高","兄弟"],"gold":[["王维","独在异乡为异客"]]}
+{"id":"scene-10","category":"scene","query":"卖炭老人希望天气更冷，炭却被宫里的人抢走了","keywords":["卖炭","宫使","炭"],"gold":[["白居易","满面尘灰烟火色"]]}
+{"id":"scene-11","category":"scene","query":"被贬的诗人在江边听一个女子弹琵琶，听得泪湿衣衫","keywords":["琵琶","迁谪","青衫"],"gold":[["白居易","浔阳江头夜送客"]]}
+{"id":"scene-12","category":"scene","query":"战乱中诗人望着月亮，想象妻子在远方独自看月","keywords":["望月","妻子","闺中"],"gold":[["杜甫","今夜鄜州月"]]}
+{"id":"scene-13","category":"scene","query":"喝醉了划船回家，误入荷花深处，惊起一群鸥鹭","keywords":["藕花","沉醉","鸥鹭"],"gold":[["李清照","常记溪亭日暮"]]}
+{"id":"scene-14","category":"scene","query":"风雨之夜老人躺在床上，还梦见骑马过冰河去打仗","keywords":["铁马","冰河","僵卧"],"gold":[["陆游","僵卧孤村不自哀"]]}
+{"id":"memory-01","category":"memory","query":"想看得更远，就要再爬上一层楼","keywords":["登楼","千里","更上"],"gold":[["王之涣","白日依山尽"]]}
+{"id":"memory-02","category":"memory","query":"走到无路可走的时候，忽然又看到一个村子","keywords":["无路","又一村","柳暗花明"],"gold":[["陆游","山重水复疑无路"]]}
+{"id":"memory-03","category":"memory","query":"看不清山的全貌，是因为自己就在山里面","keywords":["庐山","真面目","此山中"],"gold":[["苏轼","横看成岭侧成峰"]]}
+{"id":"memory-04","category":"memory","query":"池塘的水这么清，是因为有活水不断流进来","keywords":["方塘","活水","清如许"],"gold":[["朱熹","半亩方塘一鉴开"]]}
+{"id":"memory-05","category":"memory","query":"两个人感情长久的话，不必天天待在一起","keywords":["两情","长久","朝暮"],"gold":[["秦观","纤云弄巧"]]}
+{"id":"memory-06","category":"memory","query":"在人群里找了她千百遍，一回头发现她在灯火稀少的地方","keywords":["众里寻他","灯火阑珊","蓦然回首"],"gold":[["辛弃疾","东风夜放花千树"]]}
+{"id":"memory-07","category":"memory","query":"人和人如果永远像刚认识时那样该多好","keywords":["初见","故人心","人生若只"],"gold":[["纳兰性德","人生若只如初见"]]}
+{"id":"memory-08","category":"memory","query":"春蚕到死才停止吐丝，蜡烛烧完才不再流泪","keywords":["春蚕","蜡炬","丝方尽"],"gold":[["李商隐","相见时难别亦难"]]}
+{"id":"memory-09","category":"memory","query":"别担心前面没有朋友，天下谁都认识你","keywords":["知己","莫愁","天下"],"gold":[["高适","十里黄云白日曛"]]}
+{"id":"memory-10","category":"memory","query":"早上出发，船走得飞快，一天就过了千里，两岸猿猴叫个不停","keywords":["轻舟","猿声","千里"],"gold":[["李白","朝辞白帝彩云间"]]}
+{"id":"memory-11","category":"memory","query":"老马趴在马槽边，心里还想着跑一千里","keywords":["老骥","伏枥","千里"],"gold":[["曹操","神龟虽寿"]]}
+{"id":"memory-12","category":"memory","query":"春天江水变暖，鸭子最先知道","keywords":["鸭先知","春江","桃花"],"gold":[["苏轼","竹外桃花三两枝"]]}
+{"id":"imagery-01","category":"imagery","query":"豪放洒脱、及时行乐的饮酒诗","keywords":["饮酒","尽欢","金樽"],"gold":[["李白","君不见黄河之水天上来"],["李白","花间一壶酒"]]}
+{"id":"imagery-02","category":"imagery","query":"描写庐山瀑布的壮观","keywords":["瀑布","庐山","飞流"],"gold":[["李白","日照香炉生紫烟"]]}
+{"id":"imagery-03","category":"imagery","query":"西湖的风景","keywords":["西湖","荷花","湖上"],"gold":[["苏轼","水光潋滟晴方好"],["白居易","孤山寺北贾亭西"],["杨万里","毕竟西湖六月中"]]}
+{"id":"imagery-04","category":"imagery","query":"秋天傍晚，漂泊在外的孤独旅人","keywords":["断肠人","天涯","夕阳"],"gold":[["马致远","枯藤老树昏鸦"]]}
+{"id":"imagery-05","category":"imagery","query":"长江滚滚东流，感叹历史上的英雄都已消逝","keywords":["大江东去","英雄","淘尽"],"gold":[["苏轼","大江东去"]]}
+{"id":"imagery-06","category":"imagery","query":"春天江边的月夜，感慨宇宙和人生的长诗","keywords":["春江","花月夜","江月"],"gold":[["张若虚","春江潮水连海平"]]}
+{"id":"imagery-07","category":"imagery","query":"女子替父从军的故事","keywords":["从军","木兰","替爷"],"gold":[["","唧唧复唧唧"]]}
+{"id":"imagery-08","category":"imagery","query":"山中空寂安静、富有禅意的小诗","keywords":["空山","幽","禅"],"gold":[["王维","空山不见人"],["王维","人闲桂花落"],["王维","独坐幽篁里"]]}
+{"id":"imagery-09","category":"imagery","query":"春雨在夜里悄悄滋润万物","keywords":["春雨","润物","好雨"],"gold":[["杜甫","好雨知时节"]]}
+{"id":"imagery-10","category":"imagery","query":"一反常态，认为秋天比春天更好","keywords":["悲秋","秋日","胜春朝"],"gold":[["刘禹锡","自古逢秋悲寂寥"]]}
+{"id":"imagery-11","category":"imagery","query":"把春风比作剪刀的咏柳诗","keywords":["咏柳","春风","剪刀"],"gold":[["贺知章","碧玉妆成一树高"]]}
+{"id":"imagery-12","category":"imagery","query":"借骏马抒发建功立业的渴望","keywords":["骏马","金络脑","燕山"],"gold":[["李贺","大漠沙如雪"]]}
+{"id":"english-01","category":"english","query":"a homesick poet looking at the moon at night","keywords":["思故乡","明月","望月"],"gold":[["李白","床前看月光"]]}
+{"id":"english-02","category":"english","query":"an old fisherman alone on a boat in the snow","keywords":["独钓","寒江","渔翁"],"gold":[["柳宗元","千山鸟飞绝"]]}
+{"id":"english-03","category":"english","query":"mourning a dead wife ten years after her death","keywords":["悼亡","亡妻","十年"],"gold":[["苏轼","十年生死两茫茫"]]}
+{"id":"english-04","category":"english","query":"the hardship of farmers and how every grain of rice is earned by toil","keywords":["农夫","粒粒皆辛苦","锄禾"],"gold":[["李绅","锄禾日当午"]]}
+{"id":"english-05","category":"english","query":"saying goodbye to a friend at a tower by the river","keywords":["送别","黄鹤楼","故人"],"gold":[["李白","故人西辞黄鹤楼"]]}
+{"id":"english-06","category":"english","query":"drinking alone with the moon and my own shadow","keywords":["独酌","对影","邀明月"],"gold":[["李白","花间一壶酒"]]}
+{"id":"literal-01","category":"literal","query":"床前明月光","keywords":["床前明月光"],"gold":[["李白","床前看月光"]]}
+{"id":"literal-02","category":"literal","query":"春风又绿江南岸","keywords":["春风又绿江南岸"],"gold":[["王安石","春风自绿江南岸"]]}
+{"id":"literal-03","category":"literal","query":"念奴娇 赤壁怀古","keywords":["赤壁怀古"],"gold":[["苏轼","大江东去"]]}
+{"id":"literal-04","category":"literal","query":"声声慢","keywords":["声声慢"],"gold":[["李清照","寻寻觅觅"]]}
+{"id":"literal-05","category":"literal","query":"海内存知己","keywords":["海内存知己"],"gold":[["王勃","海内存知己"]]}
+{"id":"literal-06","category":"literal","query":"人闲桂花落","keywords":["人闲桂花落"],"gold":[["王维","人闲桂花落"]]}
+{"id":"literal-07","category":"literal","query":"锦瑟","keywords":["锦瑟"],"gold":[["李商隐","锦瑟无端五十弦"]]}
+{"id":"literal-08","category":"literal","query":"静夜思","keywords":["静夜思"],"gold":[["李白","床前看月光"]]}
