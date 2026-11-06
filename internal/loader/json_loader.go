@@ -297,15 +297,13 @@ func inferDynasty(key, name string) string {
 		return dynasty
 	}
 
-	// 映射表中没有则尝试从名称推断
-	if contains([]string{"唐"}, name) {
-		return "唐"
-	}
-	if contains([]string{"宋"}, name) {
-		return "宋"
-	}
-	if contains([]string{"元"}, name) {
-		return "元"
+	// 映射表中没有则从名称推断，如「全唐诗补编」归唐。
+	// 此前这里比较的是整个名称是否等于「唐」，名称稍长一点就推断不出来。
+	// 目前的数据集都在映射表里，这里只为新加入的数据集兜底。
+	for _, dynasty := range []string{"唐", "宋", "元"} {
+		if strings.Contains(name, dynasty) {
+			return dynasty
+		}
 	}
 
 	return "其他"
