@@ -45,7 +45,10 @@ make help          # 查看所有可用命令
 make build         # 构建项目
 make process-data  # 处理数据
 make run-server    # 启动服务
+make test          # 运行测试
 ```
+
+搜索依赖 SQLite 的 FTS5 扩展，需要带 `sqlite_fts5` 构建标签编译。Makefile 已经带上了；直接用 `go` 命令时要自己加，例如 `go test -tags sqlite_fts5 ./...`，否则会报 `no such module: fts5`。
 
 ### 克隆仓库
 
