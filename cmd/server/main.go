@@ -84,6 +84,40 @@ func openSemantic(cfg config.SemanticConfig, db *database.DB) *semantic.Searcher
 	return searcher
 }
 
+// newRouter 组装全部接口：REST、GraphQL（及可选的 Playground）与 MCP。
+func newRouter(cfg *config.Config, db *database.DB, repo *database.Repository, searcher *semantic.Searcher) (*gin.Engine, error) {
+	router, err := rest.SetupRouter(cfg, db, repo, searcher)
+	if err != nil {
+		return nil, err
+	}
+
+	// 注册 GraphQL 相关路由
+	resolver := graph.NewResolver(db, repo, searcher)
+	router.POST("/graphql", middleware.BodyLimit(maxGraphQLBodyBytes), graphqlHandler(resolver, cfg.GraphQL))
+	if cfg.GraphQL.Playground {
+		router.GET("/playground", playgroundHandler())
+		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))
+	}
+
+	// 注册 MCP 路由。无状态模式只用 POST，但 GET、DELETE 也要交给 SDK 回 405：
+	// 客户端靠它判断服务端不提供事件流，404 会被当成连接失败
+	router.Match([]string{http.MethodPost, http.MethodGet, http.MethodDelete}, "/mcp", gin.WrapH(mcpserver.NewHandler(repo, searcher)))
+
+	return router, nil
+}
+
+// newHTTPServer 构造带超时设置的 HTTP 服务。
+func newHTTPServer(port int, handler http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              fmt.Sprintf(":%d", port),
+		Handler:           handler,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
+	}
+}
+
 func main() {
 	// 初始化日志
 	debug := os.Getenv("GIN_MODE") != "release"
@@ -117,35 +151,11 @@ func main() {
 	// 语义检索是可选的：没配置、缺文件或配置有误都只关掉这项功能，其余接口照常服务
 	searcher := openSemantic(cfg.Semantic, db)
 
-	// 创建 GraphQL resolver
-	resolver := graph.NewResolver(db, repo, searcher)
-
-	// 初始化 Gin 路由
-	router, err := rest.SetupRouter(cfg, db, repo, searcher)
+	router, err := newRouter(cfg, db, repo, searcher)
 	if err != nil {
 		logger.Fatal("Failed to set up router", zap.Error(err))
 	}
-
-	// 注册 GraphQL 相关路由
-	router.POST("/graphql", middleware.BodyLimit(maxGraphQLBodyBytes), graphqlHandler(resolver, cfg.GraphQL))
-	if cfg.GraphQL.Playground {
-		router.GET("/playground", playgroundHandler())
-		logger.Info("GraphQL Playground enabled", zap.String("path", "/playground"))
-	}
-
-	// 注册 MCP 路由。无状态模式只用 POST，但 GET、DELETE 也要交给 SDK 回 405：
-	// 客户端靠它判断服务端不提供事件流，404 会被当成连接失败
-	router.Match([]string{http.MethodPost, http.MethodGet, http.MethodDelete}, "/mcp", gin.WrapH(mcpserver.NewHandler(repo, searcher)))
-
-	// 构造 HTTP 服务
-	srv := &http.Server{
-		Addr:              fmt.Sprintf(":%d", cfg.Server.Port),
-		Handler:           router,
-		ReadHeaderTimeout: readHeaderTimeout,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       idleTimeout,
-	}
+	srv := newHTTPServer(cfg.Server.Port, router)
 
 	// 在独立协程中启动服务
 	go func() {
