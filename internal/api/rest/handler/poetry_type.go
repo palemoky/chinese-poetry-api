@@ -33,7 +33,7 @@ func (h *PoetryTypeHandler) ListPoetryTypes(c *gin.Context) {
 
 	types, err := repo.GetPoetryTypesWithStats()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to fetch poetry types")
+		respondError(c, http.StatusInternalServerError, "failed to fetch poetry types")
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *PoetryTypeHandler) GetPoetryType(c *gin.Context) {
 
 	poetryType, err := repo.GetPoetryTypeByID(id)
 	if err != nil {
-		respondError(c, http.StatusNotFound, "Poetry type not found")
+		respondError(c, http.StatusNotFound, "poetry type not found")
 		return
 	}
 

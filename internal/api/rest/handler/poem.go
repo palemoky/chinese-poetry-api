@@ -276,7 +276,7 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 			return
 		}
 
-		c.JSON(http.StatusOK, formatPoem(poem))
+		respondOK(c, formatPoem(poem))
 		return
 	}
 
@@ -295,5 +295,5 @@ func (h *PoemHandler) RandomPoem(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, formatPoem(poem))
+	respondOK(c, formatPoem(poem))
 }

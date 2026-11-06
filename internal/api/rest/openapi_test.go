@@ -124,10 +124,10 @@ func TestOpenAPIQueryParamsMatchHandlers(t *testing.T) {
 			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, target, nil))
 			require.Equal(t, http.StatusBadRequest, w.Code, w.Body.String())
 
-			var body struct{ Error string }
+			var body struct{ Message string }
 			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &body))
-			m := supportedParams.FindStringSubmatch(body.Error)
-			require.NotNil(t, m, "unexpected error: %s", body.Error)
+			m := supportedParams.FindStringSubmatch(body.Message)
+			require.NotNil(t, m, "unexpected error: %s", body.Message)
 
 			var accepted []string
 			if m[1] != "" {

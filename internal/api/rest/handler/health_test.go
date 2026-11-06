@@ -91,9 +91,21 @@ func TestStatsHandler(t *testing.T) {
 			name:           "get statistics",
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp, "total_poems")
-				assert.Contains(t, resp, "total_authors")
-				assert.Contains(t, resp, "total_dynasties")
+				data, ok := resp["data"].(map[string]any)
+				require.True(t, ok, "stats must be wrapped in data")
+				assert.Contains(t, data, "total_poems")
+				assert.Contains(t, data, "total_authors")
+				assert.Contains(t, data, "total_dynasties")
+
+				// 朝代与体裁的格式与列表接口相同，不带 created_at
+				for _, key := range []string{"poems_by_dynasty", "poems_by_type"} {
+					items, ok := data[key].([]any)
+					require.True(t, ok, key)
+					require.NotEmpty(t, items, key)
+					for _, item := range items {
+						assert.NotContains(t, item, "created_at", key)
+					}
+				}
 			},
 		},
 	}

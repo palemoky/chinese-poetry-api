@@ -295,7 +295,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "query parameter 'q' is required", resp["error"])
+				assert.Equal(t, "query parameter 'q' is required", resp["message"])
 			},
 		},
 		{
@@ -303,7 +303,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=test&page_size=200",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp["error"], "page_size")
+				assert.Contains(t, resp["message"], "page_size")
 			},
 		},
 		{
@@ -313,7 +313,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=李白&type=titel",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp["error"], "titel")
+				assert.Contains(t, resp["message"], "titel")
 			},
 		},
 		{
@@ -321,7 +321,7 @@ func TestSearchPoems(t *testing.T) {
 			query:          "?q=李白&searchType=author",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp["error"], "searchType")
+				assert.Contains(t, resp["message"], "searchType")
 			},
 		},
 	}
@@ -364,7 +364,8 @@ func TestRandomPoem(t *testing.T) {
 			setupData:      false,
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "no poems found matching the criteria", resp["error"])
+				assert.Equal(t, "not found", resp["error"])
+				assert.Equal(t, "no poems found matching the criteria", resp["message"])
 			},
 		},
 		{
@@ -373,15 +374,16 @@ func TestRandomPoem(t *testing.T) {
 			setupData:      true,
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.NotEmpty(t, resp["title"])
-				assert.NotEmpty(t, resp["content"])
+				poem := resp["data"].(map[string]any)
+				assert.NotEmpty(t, poem["title"])
+				assert.NotEmpty(t, poem["content"])
 
-				assert.NotNil(t, resp["author"])
-				author := resp["author"].(map[string]any)
+				assert.NotNil(t, poem["author"])
+				author := poem["author"].(map[string]any)
 				assert.Equal(t, "李白", author["name"])
 
-				assert.NotNil(t, resp["dynasty"])
-				dynasty := resp["dynasty"].(map[string]any)
+				assert.NotNil(t, poem["dynasty"])
+				dynasty := poem["dynasty"].(map[string]any)
 				assert.Equal(t, "唐", dynasty["name"])
 			},
 		},
@@ -391,8 +393,9 @@ func TestRandomPoem(t *testing.T) {
 			setupData:      true,
 			expectedStatus: http.StatusOK,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.NotEmpty(t, resp["title"])
-				author := resp["author"].(map[string]any)
+				poem := resp["data"].(map[string]any)
+				assert.NotEmpty(t, poem["title"])
+				author := poem["author"].(map[string]any)
 				assert.Equal(t, "李白", author["name"])
 			},
 		},
@@ -402,7 +405,7 @@ func TestRandomPoem(t *testing.T) {
 			setupData:      true,
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "author not found", resp["error"])
+				assert.Equal(t, "author not found", resp["message"])
 			},
 		},
 	}
@@ -554,7 +557,7 @@ func TestSearchPoemsByDynasty(t *testing.T) {
 
 	code, resp = search("?q=" + url.QueryEscape("月") + "&dynasty=" + url.QueryEscape("不存在"))
 	assert.Equal(t, http.StatusNotFound, code)
-	assert.Equal(t, "dynasty not found", resp["error"])
+	assert.Equal(t, "dynasty not found", resp["message"])
 
 	code, _ = search("?q=" + url.QueryEscape("月") + "&dynasty_id=abc")
 	assert.Equal(t, http.StatusBadRequest, code)
@@ -576,8 +579,10 @@ func TestPoemResponsesHaveNoID(t *testing.T) {
 
 		var resp map[string]any
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &resp))
-		poem := resp
-		if data, ok := resp["data"].([]any); ok {
+		// 列表接口的 data 是数组，随机诗词的 data 是单首
+		poem, ok := resp["data"].(map[string]any)
+		if !ok {
+			data := resp["data"].([]any)
 			require.Len(t, data, 1, path)
 			poem = data[0].(map[string]any)
 		}

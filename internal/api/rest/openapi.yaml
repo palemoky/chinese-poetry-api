@@ -13,6 +13,9 @@ info:
     - **缓存**：除 `/health` 与 `/poems/random` 外，响应都带 `Cache-Control` 与 `ETag`，
       数据只在发布时更新，可用 `If-None-Match` 做条件请求（命中返回 304）。
     - **限流**：服务按客户端 IP 限流，超出时返回 429。
+    - **响应格式**：成功时结果放在 `data` 中，分页接口另有 `pagination`；
+      出错时返回 `{"error": ..., "message": ...}`，`error` 是状态码的简短说明（如 `not found`），
+      同一状态码下固定不变，`message` 是具体原因。
   license:
     name: MIT
     url: https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE
@@ -60,12 +63,15 @@ paths:
               schema:
                 type: object
                 additionalProperties: false
-                required: [status, error]
+                required: [status, error, message]
                 properties:
                   status:
                     type: string
                     enum: [unhealthy]
                   error:
+                    type: string
+                    enum: [service unavailable]
+                  message:
                     type: string
         '429':
           $ref: '#/components/responses/TooManyRequests'
@@ -78,11 +84,16 @@ paths:
       description: 诗词、作者、朝代总数，以及按朝代、体裁的分布。简繁两套数据的统计一致，因此不接受 `lang` 参数。
       responses:
         '200':
-          description: 统计数据（注意：本接口不包在 `data` 中）
+          description: 统计数据
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Statistics'
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Statistics'
         '400':
           $ref: '#/components/responses/BadRequest'
         '429':
@@ -276,11 +287,16 @@ paths:
         - $ref: '#/components/parameters/dynasty'
       responses:
         '200':
-          description: 一首诗词（注意：本接口不包在 `data` 中）
+          description: 一首诗词
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Poem'
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Poem'
         '400':
           $ref: '#/components/responses/BadRequest'
         '404':
@@ -585,30 +601,28 @@ components:
           schema:
             $ref: '#/components/schemas/Error'
     TooManyRequests:
-      description: 请求过于频繁
+      description: 请求过于频繁，`error` 为 `rate limit exceeded`
       content:
         application/json:
           schema:
-            type: object
-            additionalProperties: false
-            required: [error, message]
-            properties:
-              error:
-                type: string
-              message:
-                type: string
+            $ref: '#/components/schemas/Error'
 
   schemas:
     Error:
       type: object
       additionalProperties: false
-      required: [error]
+      required: [error, message]
       properties:
         error:
           type: string
-          description: 可读的错误信息
+          description: 状态码的简短说明，同一状态码下固定不变，可用于分类处理
+          examples: [bad request, not found, rate limit exceeded]
+        message:
+          type: string
+          description: 具体的出错原因，供人阅读，措辞可能调整，不要据此判断
       examples:
-        - error: 'unknown query parameter(s): dynastyId; supported: dynasty, dynasty_id, lang, page, page_size, q, type'
+        - error: bad request
+          message: 'unknown query parameter(s): dynastyId; supported: dynasty, dynasty_id, lang, page, page_size, q, type'
 
     Pagination:
       type: object
@@ -830,50 +844,8 @@ components:
         poems_by_dynasty:
           type: array
           items:
-            type: object
-            additionalProperties: false
-            required: [id, name, poem_count, author_count, created_at]
-            properties:
-              id:
-                type: integer
-                format: int64
-              name:
-                type: string
-              name_en:
-                type: string
-              start_year:
-                type: integer
-              end_year:
-                type: integer
-              poem_count:
-                type: integer
-              author_count:
-                type: integer
-              created_at:
-                type: string
-                format: date-time
+            $ref: '#/components/schemas/DynastyWithStats'
         poems_by_type:
           type: array
           items:
-            type: object
-            additionalProperties: false
-            required: [id, name, category, poem_count, created_at]
-            properties:
-              id:
-                type: integer
-                format: int64
-              name:
-                type: string
-              category:
-                type: string
-              lines:
-                type: integer
-              chars_per_line:
-                type: integer
-              description:
-                type: string
-              poem_count:
-                type: integer
-              created_at:
-                type: string
-                format: date-time
+            $ref: '#/components/schemas/PoetryTypeWithStats'

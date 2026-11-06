@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -15,15 +16,26 @@ func parseID(c *gin.Context, param, entityName string) (int64, bool) {
 	idStr := c.Param(param)
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid " + entityName + " ID"})
+		respondError(c, http.StatusBadRequest, "invalid "+entityName+" ID")
 		return 0, false
 	}
 	return id, true
 }
 
 // respondError 以指定状态码返回 JSON 格式的错误响应。
+//
+// 与限流中间件的格式一致：error 是状态码的简短说明（如 "bad request"、"not found"），
+// 同一状态码下固定不变，便于客户端分类处理；message 是这次出错的具体原因，供人阅读。
 func respondError(c *gin.Context, status int, message string) {
-	c.JSON(status, gin.H{"error": message})
+	c.JSON(status, errorBody(status, message))
+}
+
+// errorBody 构造错误响应体，也供不经 respondError 输出的错误（如健康检查）使用。
+func errorBody(status int, message string) gin.H {
+	return gin.H{
+		"error":   strings.ToLower(http.StatusText(status)),
+		"message": message,
+	}
 }
 
 // respondOK 返回携带数据的 JSON 成功响应。
