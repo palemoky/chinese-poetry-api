@@ -44,15 +44,7 @@ var langAliases = map[string]Lang{
 	"traditional": LangHant,
 }
 
-// ParseLang 把字符串解析为 Lang，无法识别时回落到简体中文。
-func ParseLang(s string) Lang {
-	if lang, ok := langAliases[s]; ok {
-		return lang
-	}
-	return LangHans
-}
-
-// LookupLang 的解析逻辑与 ParseLang 相同，但会额外返回 s 是否为已知写法，
+// LookupLang 把字符串解析为 Lang，并返回 s 是否为已知写法，
 // 便于调用方直接拒绝拼写错误，而不是悄悄按 zh-Hans 处理。
 func LookupLang(s string) (Lang, bool) {
 	lang, ok := langAliases[s]

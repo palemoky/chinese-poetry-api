@@ -39,16 +39,6 @@ func NormalizeTextArray(texts []string) []string {
 	return result
 }
 
-// TrimAllWhitespace 移除文本中的所有空白字符。
-func TrimAllWhitespace(text string) string {
-	return strings.Map(func(r rune) rune {
-		if unicode.IsSpace(r) {
-			return -1
-		}
-		return r
-	}, text)
-}
-
 // placeholderPhrases 是原始数据中表示「本篇无正文」的占位串，导入时应当整条跳过。
 var placeholderPhrases = []string{
 	"无正文。",
@@ -69,18 +59,6 @@ func IsPlaceholderContent(paragraphs []string) bool {
 		}
 	}
 	return false
-}
-
-// NormalizePointer 归一化字符串指针，归一化后为空则返回 nil。
-func NormalizePointer(text *string) *string {
-	if text == nil {
-		return nil
-	}
-	normalized := NormalizeText(*text)
-	if normalized == "" {
-		return nil
-	}
-	return &normalized
 }
 
 // isClosingQuote 判断 r 是否为中文右引号或右括号类符号。
