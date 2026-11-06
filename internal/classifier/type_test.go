@@ -564,3 +564,27 @@ func TestClassifyPoetryTypeWithDataset(t *testing.T) {
 		})
 	}
 }
+
+func intPtr(i int) *int {
+	return &i
+}
+
+// 没有数据集映射与词牌时，按标题识别乐府诗，标题简繁皆可。
+func TestClassifyPoetryTypeWithDatasetYuefuTitles(t *testing.T) {
+	lines := []string{"君不见黄河之水天上来，奔流到海不复回。"}
+	for _, title := range []string{"将进酒", "琵琶行", "燕歌行", "涼州詞", "塞下曲辞", "拟古乐府"} {
+		t.Run(title, func(t *testing.T) {
+			got := ClassifyPoetryTypeWithDataset(lines, "", "tang", title)
+			assert.Equal(t, "乐府诗", got.TypeName)
+			assert.Equal(t, "唐诗", got.Category)
+		})
+	}
+
+	// 标题不是乐府题时按结构判定
+	got := ClassifyPoetryTypeWithDataset([]string{"床前明月光，疑是地上霜。", "举头望明月，低头思故乡。"}, "", "tang", "静夜思")
+	assert.Equal(t, "五言绝句", got.TypeName)
+
+	// 有词牌时判为词，不看标题
+	got = ClassifyPoetryTypeWithDataset(lines, "长相思", "songci", "长相思")
+	assert.Equal(t, TypeCi, got.TypeName)
+}

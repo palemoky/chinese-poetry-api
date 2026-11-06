@@ -95,16 +95,3 @@ func BenchmarkToSimplifiedArray(b *testing.B) {
 		})
 	}
 }
-
-// BenchmarkConvertPoemToTraditional 测量 ConvertPoemToTraditional 的性能。
-func BenchmarkConvertPoemToTraditional(b *testing.B) {
-	title := "静夜思"
-	author := "李白"
-	content := "床前明月光，疑是地上霜。举头望明月，低头思故乡。"
-	rhythmic := ""
-
-	b.ResetTimer()
-	for b.Loop() {
-		_, _, _, _, _ = ConvertPoemToTraditional(title, author, content, rhythmic)
-	}
-}
