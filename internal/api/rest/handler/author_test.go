@@ -134,7 +134,7 @@ func TestGetAuthor(t *testing.T) {
 			authorID:       "999999",
 			expectedStatus: http.StatusNotFound,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "Author not found", resp["error"])
+				assert.Equal(t, "author not found", resp["message"])
 			},
 		},
 		{
@@ -142,7 +142,7 @@ func TestGetAuthor(t *testing.T) {
 			authorID:       "invalid",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Equal(t, "Invalid author ID", resp["error"])
+				assert.Equal(t, "invalid author ID", resp["message"])
 			},
 		},
 	}
@@ -215,7 +215,7 @@ func TestPaginationBoundariesREST(t *testing.T) {
 			query:          "?pageSize=10",
 			expectedStatus: http.StatusBadRequest,
 			checkResponse: func(t *testing.T, resp map[string]any) {
-				assert.Contains(t, resp["error"], "pageSize")
+				assert.Contains(t, resp["message"], "pageSize")
 			},
 		},
 		{

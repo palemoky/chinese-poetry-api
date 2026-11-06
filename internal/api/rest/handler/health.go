@@ -14,18 +14,12 @@ func HealthHandler(db *database.DB) gin.HandlerFunc {
 		// 检查数据库连接是否可用
 		sqlDB, err := db.DB.DB()
 		if err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unhealthy",
-				"error":  "failed to get database connection",
-			})
+			respondUnhealthy(c, "failed to get database connection")
 			return
 		}
 
 		if err := sqlDB.Ping(); err != nil {
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unhealthy",
-				"error":  "database connection failed",
-			})
+			respondUnhealthy(c, "database connection failed")
 			return
 		}
 
@@ -33,6 +27,13 @@ func HealthHandler(db *database.DB) gin.HandlerFunc {
 			"status": "healthy",
 		})
 	}
+}
+
+// respondUnhealthy 返回 503，在通用错误格式之外附带 status 字段，与健康时的响应对应。
+func respondUnhealthy(c *gin.Context, message string) {
+	body := errorBody(http.StatusServiceUnavailable, message)
+	body["status"] = "unhealthy"
+	c.JSON(http.StatusServiceUnavailable, body)
 }
 
 // StatsHandler 返回全库的整体统计数据。
@@ -48,12 +49,10 @@ func StatsHandler(repo *database.Repository) gin.HandlerFunc {
 
 		stats, err := repo.WithContext(c.Request.Context()).GetStatistics()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": "failed to get statistics",
-			})
+			respondError(c, http.StatusInternalServerError, "failed to get statistics")
 			return
 		}
 
-		c.JSON(http.StatusOK, stats)
+		respondOK(c, formatStatistics(stats))
 	}
 }
