@@ -112,12 +112,14 @@ func FuzzSplitBySentence(f *testing.F) {
 		// 不应 panic
 		result := splitBySentence(input)
 
-		// 每一项结果都应非空且为合法 UTF-8
+		// 每一项结果都应非空；输入为合法 UTF-8 时，切分结果也应合法
+		// （非法字节只会原样保留，不应要求输出比输入更合法）
+		validInput := utf8.ValidString(input)
 		for i, s := range result {
 			if s == "" {
 				t.Errorf("splitBySentence(%q)[%d] returned empty string", input, i)
 			}
-			if !utf8.ValidString(s) {
+			if validInput && !utf8.ValidString(s) {
 				t.Errorf("splitBySentence(%q)[%d] returned invalid UTF-8: %q", input, i, s)
 			}
 		}
