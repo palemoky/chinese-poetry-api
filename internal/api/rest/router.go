@@ -79,6 +79,7 @@ func SetupRouter(cfg *config.Config, db *database.DB, repo *database.Repository,
 	{
 		// 每次结果都可能不同的接口不缓存
 		v1.Match(readMethods, "/health", middleware.NoStore(), handler.HealthHandler(db))
+		v1.Match(readMethods, "/openapi.yaml", serveOpenAPISpec)
 
 		poemHandler := handler.NewPoemHandler(repo)
 		v1.Match(readMethods, "/poems/random", middleware.NoStore(), poemHandler.RandomPoem)

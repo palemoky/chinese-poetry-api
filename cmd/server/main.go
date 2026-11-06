@@ -152,6 +152,7 @@ func main() {
 		logger.Info("Server started",
 			zap.Int("port", cfg.Server.Port),
 			zap.String("rest_api", fmt.Sprintf("http://localhost:%d/api/v1", cfg.Server.Port)),
+			zap.String("openapi", fmt.Sprintf("http://localhost:%d/api/v1/openapi.yaml", cfg.Server.Port)),
 			zap.String("graphql", fmt.Sprintf("http://localhost:%d/graphql", cfg.Server.Port)),
 			zap.String("mcp", fmt.Sprintf("http://localhost:%d/mcp", cfg.Server.Port)),
 		)

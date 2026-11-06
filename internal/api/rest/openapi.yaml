@@ -1,0 +1,879 @@
+openapi: 3.2.0
+info:
+  title: 中国古诗词 API
+  version: v1
+  description: |
+    中国古诗词 REST API，收录唐诗、宋词、元曲等近 40 万首诗词。
+
+    - **简繁体**：所有带 `lang` 参数的接口都可在简体（`zh-Hans`，默认）与繁体（`zh-Hant`）间切换。
+    - **未知参数会被拒绝**：传入接口不支持的查询参数时返回 400，并在错误信息中列出支持的参数，
+      避免写错的过滤条件被悄悄忽略。
+    - **ID 不稳定**：作者、朝代、体裁的 ID 在每次数据发布时都可能变化，不要长期保存；
+      诗词不返回 ID。需要稳定引用时请使用名称。
+    - **缓存**：除 `/health` 与 `/poems/random` 外，响应都带 `Cache-Control` 与 `ETag`，
+      数据只在发布时更新，可用 `If-None-Match` 做条件请求（命中返回 304）。
+    - **限流**：服务按客户端 IP 限流，超出时返回 429。
+  license:
+    name: MIT
+    url: https://github.com/palemoky/chinese-poetry-api/blob/main/LICENSE
+externalDocs:
+  description: GitHub 仓库
+  url: https://github.com/palemoky/chinese-poetry-api
+servers:
+  - url: /api/v1
+tags:
+  - name: poems
+    description: 诗词
+  - name: authors
+    description: 作者
+  - name: dynasties
+    description: 朝代
+  - name: types
+    description: 体裁
+  - name: meta
+    description: 服务状态与统计
+
+paths:
+  /health:
+    get:
+      tags: [meta]
+      operationId: getHealth
+      summary: 健康检查
+      description: 检查数据库连接是否可用。为方便探针附加防缓存参数，本接口不校验查询参数。
+      responses:
+        '200':
+          description: 服务正常
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+        '503':
+          description: 数据库不可用
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status, error]
+                properties:
+                  status:
+                    type: string
+                    enum: [unhealthy]
+                  error:
+                    type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /stats:
+    get:
+      tags: [meta]
+      operationId: getStats
+      summary: 全库统计
+      description: 诗词、作者、朝代总数，以及按朝代、体裁的分布。简繁两套数据的统计一致，因此不接受 `lang` 参数。
+      responses:
+        '200':
+          description: 统计数据（注意：本接口不包在 `data` 中）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistics'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /poems:
+    get:
+      tags: [poems]
+      operationId: listPoems
+      summary: 诗词列表
+      description: |
+        按条件分页列出诗词，过滤参数与 `/poems/random` 相同。
+
+        支持两种翻页方式，二者互斥：
+        - 页码分页（`page` + `page_size`）：可直接跳页，但 `page × page_size` 不能超过 10000；
+        - 游标分页（`after` + `page_size`）：把上一页 `pagination.next_cursor` 回传给 `after`，没有深度限制。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/page_size'
+        - $ref: '#/components/parameters/after'
+        - $ref: '#/components/parameters/author_id'
+        - $ref: '#/components/parameters/author'
+        - $ref: '#/components/parameters/type_id'
+        - $ref: '#/components/parameters/type_name'
+        - $ref: '#/components/parameters/dynasty_id'
+        - $ref: '#/components/parameters/dynasty'
+      responses:
+        '200':
+          description: 一页诗词
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poem'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /poems/search:
+    get:
+      tags: [poems]
+      operationId: searchPoems
+      summary: 关键词搜索
+      description: 按关键词搜索诗词，结果按相关度排序，选本收录的名篇靠前。可用 `dynasty` 或 `dynasty_id` 限定朝代。只支持页码分页。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+        - name: q
+          in: query
+          required: true
+          description: 搜索关键词
+          schema:
+            type: string
+            minLength: 1
+          example: 明月
+        - name: type
+          in: query
+          description: 搜索范围（注意：与 `/poems` 上表示体裁的 `type` 含义不同）
+          schema:
+            type: string
+            enum: [all, title, content, author]
+            default: all
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/page_size'
+        - $ref: '#/components/parameters/dynasty_id'
+        - $ref: '#/components/parameters/dynasty'
+      responses:
+        '200':
+          description: 一页搜索结果
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poem'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /poems/semantic:
+    get:
+      tags: [poems]
+      operationId: semanticSearchPoems
+      summary: 语义检索
+      description: |
+        按意思检索诗词，例如「下雪天一个老人独自在小船上钓鱼」、英文描述或记不全的诗句。
+        结果按相关度排序，不分页。服务端未启用语义检索时返回 503。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+        - name: q
+          in: query
+          required: true
+          description: 用自然语言描述想找的诗，最多 200 字
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          example: 下雪天一个老人独自在小船上钓鱼
+        - name: limit
+          in: query
+          description: 返回的诗词数
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 20
+      responses:
+        '200':
+          description: 按相关度排序的诗词
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Poem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+        '502':
+          description: 向量嵌入服务不可用
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: 服务端未启用语义检索
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /poems/random:
+    get:
+      tags: [poems]
+      operationId: getRandomPoem
+      summary: 随机诗词
+      description: |
+        按可选条件随机返回一首诗词，过滤参数与 `/poems` 相同。
+
+        也可用 `char` 随机取一首含有该字的诗（飞花令等场景），此时只能搭配 `lang`，不能叠加其他过滤条件。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+        - name: char
+          in: query
+          description: 单个汉字，返回正文中含有该字的诗词
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1
+          example: 春
+        - $ref: '#/components/parameters/author_id'
+        - $ref: '#/components/parameters/author'
+        - $ref: '#/components/parameters/type_id'
+        - $ref: '#/components/parameters/type_name'
+        - $ref: '#/components/parameters/dynasty_id'
+        - $ref: '#/components/parameters/dynasty'
+      responses:
+        '200':
+          description: 一首诗词（注意：本接口不包在 `data` 中）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Poem'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /authors:
+    get:
+      tags: [authors]
+      operationId: listAuthors
+      summary: 作者列表
+      description: 分页列出作者，只支持页码分页。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/page_size'
+      responses:
+        '200':
+          description: 一页作者
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data, pagination]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AuthorWithStats'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /authors/{id}:
+    get:
+      tags: [authors]
+      operationId: getAuthor
+      summary: 作者详情
+      description: 按 ID 返回作者，含生平简介。
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/lang'
+      responses:
+        '200':
+          description: 作者
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/AuthorDetail'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /dynasties:
+    get:
+      tags: [dynasties]
+      operationId: listDynasties
+      summary: 朝代列表
+      parameters:
+        - $ref: '#/components/parameters/lang'
+      responses:
+        '200':
+          description: 全部朝代及其诗词、作者数
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DynastyWithStats'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /dynasties/{id}:
+    get:
+      tags: [dynasties]
+      operationId: getDynasty
+      summary: 朝代详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/lang'
+      responses:
+        '200':
+          description: 朝代
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/Dynasty'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /types:
+    get:
+      tags: [types]
+      operationId: listPoetryTypes
+      summary: 体裁列表
+      description: 全部体裁，如五言绝句、七言律诗、宋词、元曲。`category` 为所属分类（如「唐诗」），也可作为 `type` 过滤值。
+      parameters:
+        - $ref: '#/components/parameters/lang'
+      responses:
+        '200':
+          description: 全部体裁及其诗词数
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PoetryTypeWithStats'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /types/{id}:
+    get:
+      tags: [types]
+      operationId: getPoetryType
+      summary: 体裁详情
+      parameters:
+        - $ref: '#/components/parameters/id'
+        - $ref: '#/components/parameters/lang'
+      responses:
+        '200':
+          description: 体裁
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [data]
+                properties:
+                  data:
+                    $ref: '#/components/schemas/PoetryType'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /openapi.yaml:
+    get:
+      tags: [meta]
+      operationId: getOpenAPISpec
+      summary: 本文档
+      description: 返回本 OpenAPI 文档，可导入 Swagger UI、Postman 或代码生成工具。
+      responses:
+        '200':
+          description: OpenAPI 3.2 文档
+          content:
+            application/yaml: {}
+
+components:
+  parameters:
+    lang:
+      name: lang
+      in: query
+      description: 简繁体。另接受别名 `zh_Hans`、`hans`、`sc`、`simplified` 与 `zh_Hant`、`hant`、`tc`、`traditional`。
+      schema:
+        type: string
+        enum: [zh-Hans, zh-Hant]
+        default: zh-Hans
+    page:
+      name: page
+      in: query
+      description: 页码，从 1 开始；不能与 `after` 同时使用，且 `page × page_size` 不能超过 10000
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    page_size:
+      name: page_size
+      in: query
+      description: 每页条数
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    after:
+      name: after
+      in: query
+      description: 游标，取自上一页响应的 `pagination.next_cursor`；不能与 `page` 同时使用
+      schema:
+        type: string
+    author_id:
+      name: author_id
+      in: query
+      description: 按作者 ID 过滤，与 `author` 同时给出时以 ID 为准
+      schema:
+        type: integer
+        format: int64
+    author:
+      name: author
+      in: query
+      description: 按作者名过滤。同名作者不止一位时参考 `dynasty`，未给朝代则取作品最多者
+      schema:
+        type: string
+      example: 李白
+    type_id:
+      name: type_id
+      in: query
+      description: 按体裁 ID 过滤，可重复给出，多个值为「或」关系；与 `type` 同时给出时以 ID 为准
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: integer
+          format: int64
+    type_name:
+      name: type
+      in: query
+      description: 按体裁名过滤，如「五言绝句」；也可用分类名（如「唐诗」）涵盖整个分类。可重复给出，多个值为「或」关系
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+      example: [五言绝句]
+    dynasty_id:
+      name: dynasty_id
+      in: query
+      description: 按朝代 ID 过滤，与 `dynasty` 同时给出时以 ID 为准
+      schema:
+        type: integer
+        format: int64
+    dynasty:
+      name: dynasty
+      in: query
+      description: 按朝代名过滤
+      schema:
+        type: string
+      example: 唐
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+
+  responses:
+    BadRequest:
+      description: 参数错误，如未知参数、取值越界、ID 格式错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: 资源不存在，或按名称给出的作者、朝代、体裁查不到，或没有符合条件的诗词
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    InternalError:
+      description: 服务端错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    TooManyRequests:
+      description: 请求过于频繁
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            required: [error, message]
+            properties:
+              error:
+                type: string
+              message:
+                type: string
+
+  schemas:
+    Error:
+      type: object
+      additionalProperties: false
+      required: [error]
+      properties:
+        error:
+          type: string
+          description: 可读的错误信息
+      examples:
+        - error: 'unknown query parameter(s): dynastyId; supported: dynasty, dynasty_id, lang, page, page_size, q, type'
+
+    Pagination:
+      type: object
+      additionalProperties: false
+      required: [page_size, total]
+      properties:
+        page:
+          type: integer
+          description: 当前页码，仅页码分页时返回
+        page_size:
+          type: integer
+        total:
+          type: integer
+          format: int64
+          description: 符合条件的总数
+        total_pages:
+          type: integer
+          description: 总页数，仅页码分页时返回
+        has_next_page:
+          type: boolean
+          description: 是否还有下一页，仅支持游标分页的接口（`/poems`）返回
+        next_cursor:
+          type: string
+          description: 下一页的游标，传给 `after`；没有下一页时省略
+
+    Poem:
+      type: object
+      additionalProperties: false
+      description: 诗词。不含 ID：诗词 ID 每次数据发布都可能变化。
+      required: [title, content, author, dynasty, type]
+      properties:
+        title:
+          type: string
+          examples: [静夜思]
+        content:
+          type: array
+          description: 正文，按句或段落拆分
+          items:
+            type: string
+          examples: [[床前明月光，疑是地上霜。, 举头望明月，低头思故乡。]]
+        author:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [id, name]
+          properties:
+            id:
+              type: integer
+              format: int64
+            name:
+              type: string
+              examples: [李白]
+        dynasty:
+          anyOf:
+            - $ref: '#/components/schemas/Dynasty'
+            - type: 'null'
+        type:
+          type: [object, 'null']
+          additionalProperties: false
+          required: [id, name, category]
+          properties:
+            id:
+              type: integer
+              format: int64
+            name:
+              type: string
+              examples: [五言绝句]
+            category:
+              type: string
+              examples: [唐诗]
+            description:
+              type: string
+
+    Dynasty:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          examples: [唐]
+        name_en:
+          type: string
+          examples: [Tang]
+        start_year:
+          type: integer
+          examples: [618]
+        end_year:
+          type: integer
+          examples: [907]
+
+    DynastyWithStats:
+      type: object
+      additionalProperties: false
+      required: [id, name, poem_count, author_count]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        name_en:
+          type: string
+        start_year:
+          type: integer
+        end_year:
+          type: integer
+        poem_count:
+          type: integer
+        author_count:
+          type: integer
+
+    Author:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          examples: [李白]
+        dynasty:
+          type: string
+          description: 朝代名
+          examples: [唐]
+
+    AuthorWithStats:
+      type: object
+      additionalProperties: false
+      required: [id, name, poem_count]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        dynasty:
+          type: string
+          description: 朝代名
+        poem_count:
+          type: integer
+
+    AuthorDetail:
+      type: object
+      additionalProperties: false
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        dynasty:
+          type: string
+          description: 朝代名
+        description:
+          type: string
+          description: 生平简介
+
+    PoetryType:
+      type: object
+      additionalProperties: false
+      required: [id, name, category]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+          examples: [七言律诗]
+        category:
+          type: string
+          examples: [唐诗]
+        lines:
+          type: integer
+          description: 句数
+        chars_per_line:
+          type: integer
+          description: 每句字数
+        description:
+          type: string
+
+    PoetryTypeWithStats:
+      type: object
+      additionalProperties: false
+      required: [id, name, category, poem_count]
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        category:
+          type: string
+        lines:
+          type: integer
+        chars_per_line:
+          type: integer
+        description:
+          type: string
+        poem_count:
+          type: integer
+
+    Statistics:
+      type: object
+      additionalProperties: false
+      required: [total_poems, total_authors, total_dynasties, poems_by_dynasty, poems_by_type]
+      properties:
+        total_poems:
+          type: integer
+        total_authors:
+          type: integer
+        total_dynasties:
+          type: integer
+        poems_by_dynasty:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, poem_count, author_count, created_at]
+            properties:
+              id:
+                type: integer
+                format: int64
+              name:
+                type: string
+              name_en:
+                type: string
+              start_year:
+                type: integer
+              end_year:
+                type: integer
+              poem_count:
+                type: integer
+              author_count:
+                type: integer
+              created_at:
+                type: string
+                format: date-time
+        poems_by_type:
+          type: array
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, name, category, poem_count, created_at]
+            properties:
+              id:
+                type: integer
+                format: int64
+              name:
+                type: string
+              category:
+                type: string
+              lines:
+                type: integer
+              chars_per_line:
+                type: integer
+              description:
+                type: string
+              poem_count:
+                type: integer
+              created_at:
+                type: string
+                format: date-time
