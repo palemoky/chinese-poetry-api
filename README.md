@@ -23,7 +23,7 @@
 - **海量数据**: 包含唐诗、宋词、元曲等近 40 万首诗词
 - **强大搜索**: 支持全文搜索、标题/内容/作者分类搜索
 - **双语支持**: 同一数据库同时存储简体和繁体中文，通过 `?lang=` 参数切换
-- **多种接口**: 支持 REST API、GraphQL 和 MCP
+- **多种接口**: 支持 REST API（附 OpenAPI 文档）、GraphQL 和 MCP
 - **限流保护**: 内置 IP 限流，防止滥用
 - **容器化**: Docker 镜像开箱即用，支持多架构（amd64/arm64）
 - **智能分类**: 按朝代、作者、诗词类型自动分类
@@ -135,6 +135,8 @@ curl "http://localhost:1279/api/v1/types"
 # 诗词体裁详情
 curl "http://localhost:1279/api/v1/types/10"
 ```
+
+完整的接口说明见 OpenAPI 3.0 文档：`http://localhost:1279/api/v1/openapi.yaml`。可以导入 Swagger UI、Postman、Apifox，或者用 openapi-generator 生成各语言的客户端。
 
 ### GraphQL API
 
