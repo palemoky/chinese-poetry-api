@@ -33,7 +33,7 @@ jobs:
         run: go mod download
 
       - name: Build processor
-        run: go build -tags fts5 -o processor ./cmd/processor
+        run: go build -tags sqlite_fts5 -o processor ./cmd/processor
         env:
           CGO_ENABLED: 1
 

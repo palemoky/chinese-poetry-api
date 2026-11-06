@@ -187,14 +187,14 @@ bench:
 	@$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -bench=. -benchmem ./...
 
 ## fuzz: 运行模糊测试
+FUZZ_TARGETS := FuzzToTraditional FuzzToSimplified FuzzToTraditionalArray \
+	FuzzClassifyPoetryType FuzzRemovePunctuation FuzzSplitBySentence
 fuzz:
 	@echo "$(BLUE)运行模糊测试...$(NC)"
-	@echo "$(YELLOW)测试 classifier 包...$(NC)"
-	@$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -fuzz='^FuzzToTraditional$$' -fuzztime=10s ./internal/classifier/ || true
-	@$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -fuzz='^FuzzToSimplified$$' -fuzztime=10s ./internal/classifier/ || true
-	@$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -fuzz='^FuzzClassifyPoetryType$$' -fuzztime=10s ./internal/classifier/ || true
-	@echo "$(YELLOW)测试 search 包...$(NC)"
-	@$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -fuzz='^FuzzIsPinyinQuery$$' -fuzztime=10s ./internal/search/ || true
+	@set -e; for t in $(FUZZ_TARGETS); do \
+		echo "$(YELLOW)$$t$(NC)"; \
+		$(GO_BUILD_FLAGS) go test -tags $(GO_TAGS) -run='^$$' -fuzz="^$$t$$" -fuzztime=10s ./internal/classifier/; \
+	done
 	@echo "$(GREEN)✓ 模糊测试完成$(NC)"
 
 ## graphql-gen: 生成GraphQL代码

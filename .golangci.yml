@@ -7,8 +7,7 @@ run:
   timeout: 5m
   tests: true
   build-tags:
-    # 与 Makefile 的 GO_TAGS 保持一致。mattn/go-sqlite3 认的标签是 sqlite_fts5，
-    # 此处原为 fts5，不匹配任何构建约束。
+    # 与 Makefile 的 GO_TAGS 保持一致，让 lint 也覆盖依赖 FTS5 的代码。
     - sqlite_fts5
 
 linters:
