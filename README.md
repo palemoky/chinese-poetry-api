@@ -136,7 +136,7 @@ curl "http://localhost:1279/api/v1/types"
 curl "http://localhost:1279/api/v1/types/10"
 ```
 
-完整的接口说明见 OpenAPI 3.0 文档：`http://localhost:1279/api/v1/openapi.yaml`。可以导入 Swagger UI、Postman、Apifox，或者用 openapi-generator 生成各语言的客户端。
+完整的接口说明见 OpenAPI 3.2 文档：`http://localhost:1279/api/v1/openapi.yaml`。可以导入 Swagger UI、Postman、Apifox，或者用 openapi-generator 生成各语言的客户端。
 
 ### GraphQL API
 

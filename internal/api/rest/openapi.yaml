@@ -1,4 +1,4 @@
-openapi: 3.0.3
+openapi: 3.2.0
 info:
   title: 中国古诗词 API
   version: v1
@@ -470,7 +470,7 @@ paths:
       description: 返回本 OpenAPI 文档，可导入 Swagger UI、Postman 或代码生成工具。
       responses:
         '200':
-          description: OpenAPI 3.0 文档
+          description: OpenAPI 3.2 文档
           content:
             application/yaml: {}
 
@@ -607,8 +607,8 @@ components:
         error:
           type: string
           description: 可读的错误信息
-      example:
-        error: 'unknown query parameter(s): dynastyId; supported: dynasty, dynasty_id, lang, page, page_size, q, type'
+      examples:
+        - error: 'unknown query parameter(s): dynastyId; supported: dynasty, dynasty_id, lang, page, page_size, q, type'
 
     Pagination:
       type: object
@@ -642,16 +642,15 @@ components:
       properties:
         title:
           type: string
-          example: 静夜思
+          examples: [静夜思]
         content:
           type: array
           description: 正文，按句或段落拆分
           items:
             type: string
-          example: [床前明月光，疑是地上霜。, 举头望明月，低头思故乡。]
+          examples: [[床前明月光，疑是地上霜。, 举头望明月，低头思故乡。]]
         author:
-          type: object
-          nullable: true
+          type: [object, 'null']
           additionalProperties: false
           required: [id, name]
           properties:
@@ -660,14 +659,13 @@ components:
               format: int64
             name:
               type: string
-              example: 李白
+              examples: [李白]
         dynasty:
-          allOf:
+          anyOf:
             - $ref: '#/components/schemas/Dynasty'
-          nullable: true
+            - type: 'null'
         type:
-          type: object
-          nullable: true
+          type: [object, 'null']
           additionalProperties: false
           required: [id, name, category]
           properties:
@@ -676,10 +674,10 @@ components:
               format: int64
             name:
               type: string
-              example: 五言绝句
+              examples: [五言绝句]
             category:
               type: string
-              example: 唐诗
+              examples: [唐诗]
             description:
               type: string
 
@@ -693,16 +691,16 @@ components:
           format: int64
         name:
           type: string
-          example: 唐
+          examples: [唐]
         name_en:
           type: string
-          example: Tang
+          examples: [Tang]
         start_year:
           type: integer
-          example: 618
+          examples: [618]
         end_year:
           type: integer
-          example: 907
+          examples: [907]
 
     DynastyWithStats:
       type: object
@@ -735,11 +733,11 @@ components:
           format: int64
         name:
           type: string
-          example: 李白
+          examples: [李白]
         dynasty:
           type: string
           description: 朝代名
-          example: 唐
+          examples: [唐]
 
     AuthorWithStats:
       type: object
@@ -784,10 +782,10 @@ components:
           format: int64
         name:
           type: string
-          example: 七言律诗
+          examples: [七言律诗]
         category:
           type: string
-          example: 唐诗
+          examples: [唐诗]
         lines:
           type: integer
           description: 句数

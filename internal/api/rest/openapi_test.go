@@ -43,6 +43,7 @@ func loadOpenAPISpec(t *testing.T) *openapi3.T {
 func TestOpenAPISpecIsValid(t *testing.T) {
 	doc := loadOpenAPISpec(t)
 	require.NoError(t, doc.Validate(context.Background()))
+	assert.True(t, doc.IsOpenAPI32OrLater(), "spec should declare OpenAPI 3.2, got %s", doc.OpenAPI)
 	require.Len(t, doc.Servers, 1)
 	assert.Equal(t, apiPrefix, doc.Servers[0].URL)
 }
@@ -333,6 +334,13 @@ func seedOpenAPITestData(t *testing.T, db *database.DB, repo *database.Repositor
 				TypeID:    &typeID,
 			}))
 		}
+
+		// 作者、朝代、体裁都缺失的诗，覆盖 Poem 中这三个字段为 null 的情形
+		require.NoError(t, r.InsertPoem(&database.Poem{
+			ID:      1003,
+			Title:   "无题",
+			Content: datatypes.JSON(`["白日依山尽，黄河入海流。"]`),
+		}))
 	}
 }
 
