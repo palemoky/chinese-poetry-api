@@ -83,6 +83,25 @@ func formatPoetryTypeWithStats(t *database.PoetryTypeWithStats) map[string]any {
 	return result
 }
 
+// formatStatistics 把全库统计整理成 API 响应结构，其中的朝代与体裁与列表接口格式相同，不含 created_at。
+func formatStatistics(s *database.Statistics) map[string]any {
+	byDynasty := make([]map[string]any, len(s.PoemsByDynasty))
+	for i := range s.PoemsByDynasty {
+		byDynasty[i] = formatDynastyWithStats(&s.PoemsByDynasty[i])
+	}
+	byType := make([]map[string]any, len(s.PoemsByType))
+	for i := range s.PoemsByType {
+		byType[i] = formatPoetryTypeWithStats(&s.PoemsByType[i])
+	}
+	return map[string]any{
+		"total_poems":      s.TotalPoems,
+		"total_authors":    s.TotalAuthors,
+		"total_dynasties":  s.TotalDynasties,
+		"poems_by_dynasty": byDynasty,
+		"poems_by_type":    byType,
+	}
+}
+
 // formatPoem 把诗词整理成 API 响应结构，关联对象以嵌套形式呈现。
 //
 // 不含诗词 ID：ID 在导入时按顺序分配，每次数据发布都可能变化，

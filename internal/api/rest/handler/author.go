@@ -38,13 +38,13 @@ func (h *AuthorHandler) ListAuthors(c *gin.Context) {
 
 	authors, err := repo.GetAuthorsWithStats(pagination.PageSize, pagination.Offset())
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to fetch authors")
+		respondError(c, http.StatusInternalServerError, "failed to fetch authors")
 		return
 	}
 
 	total, err := repo.CountAuthors()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to count authors")
+		respondError(c, http.StatusInternalServerError, "failed to count authors")
 		return
 	}
 
@@ -76,7 +76,7 @@ func (h *AuthorHandler) GetAuthor(c *gin.Context) {
 
 	author, err := repo.GetAuthorByID(id)
 	if err != nil {
-		respondError(c, http.StatusNotFound, "Author not found")
+		respondError(c, http.StatusNotFound, "author not found")
 		return
 	}
 

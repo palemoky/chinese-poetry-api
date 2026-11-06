@@ -43,7 +43,7 @@ func TestListPoemsRejectsDeepPagination(t *testing.T) {
 	t.Run("beyond the limit is rejected", func(t *testing.T) {
 		code, resp := getPoems(t, router, "?page=102&page_size=100")
 		assert.Equal(t, http.StatusBadRequest, code)
-		assert.Contains(t, resp["error"], "pagination too deep")
+		assert.Contains(t, resp["message"], "pagination too deep")
 	})
 
 	t.Run("a huge page number is rejected rather than scanned", func(t *testing.T) {
@@ -116,12 +116,12 @@ func TestListPoemsRejectsBadCursor(t *testing.T) {
 		// 客户端最容易犯的错：把游标当成可以自己构造的行号
 		code, resp := getPoems(t, router, "?after=100")
 		assert.Equal(t, http.StatusBadRequest, code)
-		assert.Contains(t, resp["error"], "cursor")
+		assert.Contains(t, resp["message"], "cursor")
 	})
 
 	t.Run("page and after cannot be combined", func(t *testing.T) {
 		code, resp := getPoems(t, router, "?page=2&after="+database.EncodePoemCursor(1))
 		assert.Equal(t, http.StatusBadRequest, code)
-		assert.Contains(t, resp["error"], "mutually exclusive")
+		assert.Contains(t, resp["message"], "mutually exclusive")
 	})
 }

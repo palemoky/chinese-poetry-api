@@ -202,7 +202,9 @@ func TestRandomConsistency(t *testing.T) {
 				require.Equal(t, http.StatusOK, restResp.Code)
 
 				var restResult struct {
-					Title string `json:"title"`
+					Data struct {
+						Title string `json:"title"`
+					} `json:"data"`
 				}
 				err := json.Unmarshal(restResp.Body.Bytes(), &restResult)
 				require.NoError(t, err)
@@ -223,7 +225,7 @@ func TestRandomConsistency(t *testing.T) {
 				err = graphqlClient.Post(query, &graphqlResult)
 				require.NoError(t, err)
 				// 两者应从同一份数据中取词。结果随机，无法比对具体是哪首，但都应返回诗词
-				assert.NotEmpty(t, restResult.Title)
+				assert.NotEmpty(t, restResult.Data.Title)
 				assert.NotEmpty(t, graphqlResult.RandomPoem.Title)
 			}
 		})

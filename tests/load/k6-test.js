@@ -39,7 +39,7 @@ export default function () {
     const randomRes = http.get(`${BASE_URL}/api/v1/poems/random`);
     check(randomRes, {
         'random poem status 200': (r) => r.status === 200,
-        'random poem has title': (r) => JSON.parse(r.body).title !== undefined,
+        'random poem has title': (r) => JSON.parse(r.body).data.title !== undefined,
     }) || errorRate.add(1);
 
     sleep(1);
@@ -50,7 +50,7 @@ export default function () {
         'filtered random status 200': (r) => r.status === 200,
         'filtered random has author': (r) => {
             const body = JSON.parse(r.body);
-            return body.author && body.author.name === '李白';
+            return body.data.author && body.data.author.name === '李白';
         },
     }) || errorRate.add(1);
 

@@ -68,7 +68,7 @@ func TestSemanticSearchHandler(t *testing.T) {
 
 	code, body = get("/failing?q=x")
 	assert.Equal(t, http.StatusBadGateway, code)
-	assert.Equal(t, "embedding service unavailable", body["error"])
+	assert.Equal(t, "embedding service unavailable", body["message"])
 
 	code, _ = get("/disabled?q=x")
 	assert.Equal(t, http.StatusServiceUnavailable, code)

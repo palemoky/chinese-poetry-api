@@ -33,7 +33,7 @@ func (h *DynastyHandler) ListDynasties(c *gin.Context) {
 
 	dynasties, err := repo.GetDynastiesWithStats()
 	if err != nil {
-		respondError(c, http.StatusInternalServerError, "Failed to fetch dynasties")
+		respondError(c, http.StatusInternalServerError, "failed to fetch dynasties")
 		return
 	}
 
@@ -65,7 +65,7 @@ func (h *DynastyHandler) GetDynasty(c *gin.Context) {
 
 	dynasty, err := repo.GetDynastyByID(id)
 	if err != nil {
-		respondError(c, http.StatusNotFound, "Dynasty not found")
+		respondError(c, http.StatusNotFound, "dynasty not found")
 		return
 	}
 
