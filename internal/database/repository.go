@@ -18,7 +18,6 @@ type RepositoryInterface interface {
 	InsertPoem(poem *Poem) error
 	BatchInsertPoems(poems []*Poem, batchSize int) error
 	BatchInsertPoemsWithTransaction(poems []*Poem, transactionSize, batchSize int, progress *mpb.Progress) error
-	UpsertPoem(poem *Poem) error
 	GetPoemByID(id string) (*Poem, error)
 	CountPoems() (int, error)
 	CountAuthors() (int, error)

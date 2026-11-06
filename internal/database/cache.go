@@ -168,21 +168,6 @@ func (r *CachedRepository) CreateAuthorWithID(id int64, name string, dynastyID i
 	return got, nil
 }
 
-// ClearCache 清空全部缓存。
-func (r *CachedRepository) ClearCache() {
-	r.dynastyCacheMu.Lock()
-	r.dynastyCache = make(map[string]int64)
-	r.dynastyCacheMu.Unlock()
-
-	r.typeCacheMu.Lock()
-	r.typeCache = make(map[string]int64)
-	r.typeCacheMu.Unlock()
-
-	r.authorCacheMu.Lock()
-	r.authorCache = make(map[string]int64)
-	r.authorCacheMu.Unlock()
-}
-
 // GetCacheStats 返回各类缓存当前的条目数量。
 func (r *CachedRepository) GetCacheStats() map[string]int {
 	r.dynastyCacheMu.RLock()

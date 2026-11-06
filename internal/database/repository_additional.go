@@ -165,25 +165,6 @@ func (r *Repository) GetDynastyByName(name string) (*Dynasty, error) {
 	return &dynasty, err
 }
 
-// GetPoemsByDynasty 查询指定朝代的诗词。排序理由同 GetPoemsByAuthor。
-func (r *Repository) GetPoemsByDynasty(dynastyID int64, limit, offset int) ([]Poem, error) {
-	var poems []Poem
-	err := r.conn().Table(r.poemsTable()).
-		Where("dynasty_id = ?", dynastyID).
-		Order("id ASC").
-		Limit(limit).
-		Offset(offset).
-		Find(&poems).Error
-	if err != nil {
-		return nil, err
-	}
-
-	if err := r.loadPoemRelations(poems); err != nil {
-		return nil, err
-	}
-	return poems, nil
-}
-
 // GetPoetryTypesWithStats 返回体裁列表及各自的作品数量。
 func (r *Repository) GetPoetryTypesWithStats() ([]PoetryTypeWithStats, error) {
 	typeTable := r.poetryTypesTable()

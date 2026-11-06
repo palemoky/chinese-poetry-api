@@ -652,19 +652,6 @@ func convertSQLToTraditional(sql string) (string, error) {
 	return strings.Join(parts, "'"), nil
 }
 
-// GetSchemaVersion 返回当前的 schema 版本号，未记录时返回 0。
-func (db *DB) GetSchemaVersion() (int, error) {
-	var version int
-	err := db.Raw(`SELECT value FROM metadata WHERE key = ?`, "schema_version").Scan(&version).Error
-	if err == gorm.ErrRecordNotFound {
-		return 0, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	return version, nil
-}
-
 // Close 关闭数据库连接。
 func (db *DB) Close() error {
 	sqlDB, err := db.DB.DB()

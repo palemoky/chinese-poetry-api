@@ -285,17 +285,3 @@ func (r *Repository) BatchInsertPoemsWithTransaction(poems []*Poem, transactionS
 
 	return nil
 }
-
-// UpsertPoem 插入诗词，若已存在则更新（用于处理重复数据）。
-func (r *Repository) UpsertPoem(poem *Poem) error {
-	err := r.conn().Table(r.poemsTable()).Clauses(clause.OnConflict{
-		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"title", "content", "author_id", "dynasty_id", "type_id"}),
-	}).Create(poem).Error
-	if err != nil {
-		return err
-	}
-
-	r.db.invalidateCaches()
-	return nil
-}
